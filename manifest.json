@@ -1,0 +1,2482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capture</title>
+<style>
+/**
+ * ====================================================================
+ * SECTION 1 - CSS STYLES
+ * ====================================================================
+ * 
+ * // Section 1.1 - Global styles (html, body, font-family) //
+ * // Section 1.2 - Top bar & GPC display styling //
+ * // Section 1.3 - Editor/Preview container styling //
+ * // Section 1.4 - Toolbar styling //
+ * // Section 1.5 - Dropdown styling //
+ * // Section 1.6 - Sidebar styling //
+ * // Section 1.7 - Preview-specific styles (code blocks, tables, lists, headings, backlinks, highlights, date stamps, RTL Hebrew) //
+ *
+ * ====================================================================
+ * SECTION 2 - HTML STRUCTURE
+ * ====================================================================
+ * 
+ * // Section 2.1 - Top bar with mode toggle //
+ * // Section 2.2 - GPC display and buttons //
+ * // Section 2.3 - Editor container with textarea and preview div //
+ * // Section 2.4 - Sidebar with navigation items //
+ * // Section 2.5 - Toolbar with action buttons //
+ * // Section 2.6 - Floating dropdowns (H, T, Date, Table, Highlight) //
+ *
+ * ====================================================================
+ * SECTION 3 - JAVASCRIPT
+ * ====================================================================
+ *
+ * ================================
+ * 3.1 VAULT DB (IndexedDB)
+ * ================================
+ * 
+ * // Section 3.1.1 - Database setup (open, get, set, list, remove methods) //
+ *
+ * ================================
+ * 3.2 EDITOR CORE CLASS
+ * ================================
+ * 
+ * // Section 3.2.1 - Constructor & Initialization //
+ * // Section 3.2.2 - Event Handlers //
+ * // Section 3.2.3 - Core Functionality //
+ * // Section 3.2.4 - Note Management //
+ * // Section 3.2.5 - Preview Rendering //
+ * // Section 3.2.6 - Table Operations //
+ * // Section 3.2.7 - Task Management //
+ * // Section 3.2.8 - UI Enhancements //
+ * // Section 3.2.9 - Toolbar Handlers //
+ * // Section 3.2.10 - Auto-Continue Lists //
+ * // Section 3.2.11 - Date Stamps //
+  * // Section 3.2.12 - Export/Import System //
+  * // Section 3.2.13 - Reminder System //
+ *
+ * ================================
+ * 3.3 GPC CALENDAR CLASS
+ * ================================
+ * 
+ * // Section 3.3.1 - Calendar configuration //
+ * // Section 3.3.2 - Heptad mapping //
+ * // Section 3.3.3 - Core calculations //
+ * // Section 3.3.4 - Display updates //
+ * // Section 3.3.5 - Button event handling //
+ *
+ * ====================================================================
+ * SECTION 4 - INITIALIZATION
+ * ====================================================================
+ * 
+ * // Section 4.1 - DOMContentLoaded event handler //
+
+
+ * SECTION 1 - CSS STYLES
+ * ====================================================================
+ *  
+ 
+/* ========== Section 1.1 - Global styles (html, body, font-family) ========== */
+html, body { height: 100%; margin: 0; padding: 0; font-family: Inter, Roboto, Arial, sans-serif; }
+body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px; box-sizing: border-box; }
+
+/* ========== Section 1.2 - Top bar & GPC display styling ========== */
+#top-bar { position: fixed; top: 10px; right: 10px; z-index: 1000; }
+#mode-toggle { font-size: 22px; background: none; border: none; cursor: pointer; }
+#gpc-display { font-weight: bold; margin-bottom: 12px; font-size: 18px; }
+
+#gpc-buttons { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+#gpc-buttons button { font-size: 1em; padding: 8px 12px; cursor: pointer; border-radius: 6px; border: 1px solid #ccc; background: #f9f9f9; transition: background 0.2s ease; }
+#gpc-buttons button:hover { background: #eee; }
+#gpc-buttons button.active { background: #111; color: #fff; border-color: #111; }
+
+/* ========== Section 1.3 - EDITOR/PREVIEW ========== */
+#editor-container { flex: 1; display: flex; flex-direction: column; margin-bottom: 60px; }
+#editor, #preview { flex: 1; width: 100%; box-sizing: border-box; border: 1px solid #ddd; font-family: "Courier New", monospace; font-size: 16px; line-height: 1.4; background: #fff; overflow: auto; white-space: pre-wrap; }
+#editor { display: block; padding: 20px; border-radius: 8px; }
+#preview { display: none; padding: 20px; border-radius: 8px; }
+
+/* ========== Section 1.4 - TOOLBAR ========== */
+#toolbar { display: none; position: fixed; bottom: 0; left: 0; width: 100%; background: #eee; padding: 6px 0; border-top: 1px solid #ccc; z-index: 1000; overflow-x: auto; }
+#toolbar-inner { display: inline-flex; gap: 8px; padding: 0 10px; padding-right: 140px; }
+#toolbar button { flex-shrink: 0; padding: 8px 12px; border-radius: 6px; border: 1px solid #aaa; cursor: pointer; background: #fff; font-size: 16px; }
+
+/* ========== Section 1.5 - DROPDOWNS ========== */
+.floating-dropdown { display: none; position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 -8px 20px rgba(0,0,0,0.2); z-index: 999999999; min-width: 120px; }
+.floating-dropdown button { display: block; width: 100%; text-align: center; padding: 12px; border: none; background: none; cursor: pointer; font-size: 15px; border-bottom: 1px solid #eee; }
+.floating-dropdown button:last-child { border-bottom: none; }
+.floating-dropdown button:hover { background: #f0f0f0; }
+.floating-dropdown.open { display: block; }
+#floating-table-dropdown { min-width: 160px; }
+
+/* ========== Section 1.6 - SIDEBAR ========== */
+#sidebar { width: 250px; background: #f0f0f0; position: fixed; top: 0; bottom: 0; left: -250px; padding: 1em; overflow-y: auto; z-index: 100; box-shadow: 2px 0 6px rgba(0,0,0,0.2); transition: left 0.25s ease, opacity 0.25s ease; pointer-events: none; opacity: 0; }
+#sidebar.open { left: 0; pointer-events: auto; opacity: 1; }
+
+.sidebar-item { font-size: 1.2em; padding: 14px 20px; margin-bottom: 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s ease, transform 0.1s ease; user-select: none; }
+.sidebar-item:hover { background: #e0e0e0; transform: translateX(2px); }
+.sidebar-item.active { background: #d0d0d0; font-weight: 600; }
+
+.note-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #e5e5e5; transition: background 0.2s; }
+.note-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-item .icons { display: flex; align-items: center; gap: 4px; }
+.note-item .delete-note { cursor: pointer; color: #c00; font-size: 0.9em; user-select: none; margin-left: 8px; }
+.note-item:hover .delete-note { color: #f00; }
+.note-item.active { background: #ffeb3b !important; font-weight: bold; }
+
+/* ========== Section 1.7 - PREVIEW STYLES ========== */
+
+/* Add to your CSS section */
+.folder-item {
+  background-color: #f0f0f0;
+  border-left: 3px solid #666;
+  padding-left: 12px;
+  font-weight: 600;
+}
+
+.folder-item:hover {
+  background-color: #e8e8e8;
+}
+
+.folder-item.active {
+  background-color: #ffeaa7 !important;
+}
+
+
+/* Task List Styles */
+.task-item.task-completed {
+  opacity: 0.7;
+  text-decoration: line-through;
+  color: #666;
+  background-color: rgba(0,0,0,0.03);
+}
+
+.task-item {
+  cursor: grab;
+  transition: all 0.2s;
+  padding: 3px 5px;
+  border-radius: 4px;
+  list-style-type: none;
+  position: relative;
+  padding-left: 25px;
+  margin: 2px 0;
+}
+
+.task-item input[type="checkbox"] {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.task-item.dragging {
+  opacity: 0.7;
+  background: rgba(100, 149, 237, 0.4);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.task-item.task-completed {
+  opacity: 0.7;
+  text-decoration: line-through;
+  color: #666;
+}
+
+.task-list {
+  padding-left: 0;
+  margin: 8px 0;
+}
+
+/* Drag end */
+
+#preview pre { position: relative; background: #f5f5f5; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: "Courier New", monospace; }
+.copy-btn { position: absolute; top: 4px; right: 4px; padding: 4px 6px; font-size: 14px; cursor: pointer; border: none; background: #eee; border-radius: 4px; z-index: 10; }
+
+#preview table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+#preview th, #preview td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+#preview th { background-color: #f2f2f2; }
+
+#preview ul, #preview ol { padding-left: 1.6em; margin: 0.4em 0; }
+#preview li { margin-bottom: 0.15em; line-height: 1.35; }
+
+#preview li.task-unchecked { cursor: grab; padding: 3px 5px; border-radius: 5px; transition: background 0.2s; }
+#preview li.task-unchecked:active { cursor: grabbing; }
+#preview li.task-unchecked.dragging { opacity: 0.7; background: rgba(100, 149, 237, 0.4) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 10; }
+#preview li.task-unchecked.drag-over { background: rgba(100, 149, 237, 0.15); border-top: 2px solid cornflowerblue; }
+
+#preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { 
+  cursor: pointer; user-select: none; position: relative; padding-left: 1.2em; 
+}
+#preview h2 { margin-left: 1.2em; } #preview h3 { margin-left: 2.4em; } 
+#preview h4 { margin-left: 3.6em; } #preview h5 { margin-left: 4.8em; } 
+#preview h6 { margin-left: 6em; }
+
+h1::before, h2::before, h3::before, h4::before, h5::before, h6::before { 
+  content: '▶'; position: absolute; left: 0; transition: transform 0.2s ease; font-size: 0.9em; top: 0.05em; 
+}
+h1.collapsed::before, h2.collapsed::before, h3.collapsed::before, 
+h4.collapsed::before, h5.collapsed::before, h6.collapsed::before { transform: rotate(0deg); }
+h1:not(.collapsed)::before, h2:not(.collapsed)::before, h3:not(.collapsed)::before, 
+h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::before { transform: rotate(90deg); }
+.collapsed + .collapsible-content { display: none; }
+
+#preview .backlinks { margin: 2em 0 1em 0; padding: 0.5em 0; border-top: 1px solid #e5e5e5; }
+#preview .backlinks h4 { margin: 0 0 0.8em 0; font-size: 1em; color: #666; font-weight: 400; }
+#preview .backlinks ul { margin: 0; padding-left: 0; list-style: none; }
+#preview .backlinks li { margin: 0.4em 0; }
+#preview .backlinks a.backlink { color: #1a73e8; text-decoration: none; font-weight: 500; padding: 0.1em 0.3em; border-radius: 3px; border-bottom: 1px solid transparent; transition: all 0.15s ease; }
+#preview .backlinks a.backlink:hover { background: rgba(26,115,232,0.08); border-bottom-color: #1a73e8; transform: translateX(1px); }
+
+#preview .highlight { background-color: yellow; }
+#preview .highlight.pink { background-color: #ffc0cb !important; }
+#preview .highlight.orange { background-color: #ffdab9 !important; }
+#preview .highlight.yellow { background-color: #ffff99 !important; }
+#preview .highlight.green { background-color: #90ee90 !important; }
+#preview .highlight.blue { background-color: #add8e6 !important; }
+#preview .highlight.purple { background-color: #e6ccff !important; }
+#preview .highlight.gray { background-color: #d3d3d3 !important; }
+#preview .highlight.brown { background-color: #d2b48c !important; }
+
+#preview .gpc-stamp { font-family: "Times New Roman", Times, serif !important; text-decoration: none !important; }
+#preview .gregorian-stamp { font-family: Helvetica, Arial, sans-serif !important; text-decoration: none !important; }
+
+.custom-rtl-hebrew { direction: rtl !important; text-align: right !important; unicode-bidi: isolate !important; }
+.custom-rtl-hebrew * { unicode-bidi: isolate; }
+.custom-rtl-hebrew li { display: flex; flex-direction: row-reverse; align-items: flex-start; }
+.custom-rtl-hebrew li input[type="checkbox"] { order: 2; margin-right: 0; margin-left: 8px; flex-shrink: 0; }
+
+/* Section 1.8 - Folder CSS*/
+.folder-item {
+  background-color: #f0f0f0;
+  border-left: 3px solid #666;
+  padding-left: 12px;
+  font-weight: 600;
+}
+
+.folder-item:hover {
+  background-color: #e8e8e8;
+}
+
+.folder-item.active {
+  background-color: #ffeaa7 !important;
+}
+
+/* Add to Section 1.8 - Folder CSS */
+.note-item .action-btn {
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-left: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.note-item:hover .action-btn {
+  opacity: 1;
+}
+
+.note-item .rename-note {
+  color: #0066cc;
+}
+
+.note-item .move-note {
+  color: #008800;
+}
+
+.note-item .action-btn:hover {
+  transform: scale(1.1);
+}
+
+
+</style>
+</head>
+<body>
+  
+  
+<!-- ========== Section 2 - UI STRUCTURE ========== -->
+<!-- ========== Section 2.1 - TOP BAR with Google mode========== -->
+<div id="top-bar"><button id="mode-toggle" title="View / Edit">✏️</button></div>
+
+<!-- ========== Section 2.2 - GPC DISPLAY and buttons ========== -->
+<div id="gpc-display"></div>
+
+<div id="gpc-buttons">
+  <button data-mode="DOY" class="active">DOY</button>
+  <button data-mode="DOS">DOS</button>
+  <button data-mode="DOM">DOM</button>
+  <button data-mode="HEPTAD">Heptad</button>
+  <button id="sidebar-toggle" title="Toggle Sidebar">📁</button>
+</div>
+
+<!-- ========== Section 2.3 - EDITOR CONTAINER ========== -->
+<div id="editor-container">
+  <textarea id="editor" placeholder="Capture…"># 🪷 Welcome to Lotus  
+**Your Personal Knowledge Base Powered by the Global Perennial Calendar**
+
+[🗓️ Go to Today → Current Day in GPC](https://www.gpc364.com/p/today.html?m=1)
+
+Capture thoughts, tasks, and time—right here, aligned with the ancient 364-day rhythm.
+
+
+
+
+
+
+     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+**Quick Starts**  
+- [[Inbox]] — Daily / uncategorized capture  
+- [[Today]] — Today's dedicated note  
+- [[2026-Q1]] — Quarterly planning hub  
+
+***
+
+# Quick Manual
+
+## Intro
+
+> Headings are collapsible! Tap any heading to toggle sections (try it now using the toolbar).
+
+Switch modes easily:  
+- Click the **pencil ✏️** (top right) to edit.  
+- The **eye 👁️** means you're in view/read mode.
+
+Explore the toolbar for powerful tools—like quick clipboards:
+
+```
+Hello world
+```
+
+Highlight text → tap the clipboard icon to save snippets for reuse.
+
+## Dates & The Global Perennial Calendar (GPC)
+
+The current GPC date always appears at the top. Our date generator is precise and reliable for over a million years.
+
+Today's display includes:  
+- **Day of Year**  
+- **Day of Season**  
+- **Day of Month**  
+- **Heptad** (our 7-day week cycle, labeled with playing-card suits)  
+- **Civil (Gregorian) Date**
+
+Example:  
+🟠 **302**  
+🟠 **Q4 29**  
+🟠 **10.29**  
+♠️ **4**  
+**2026-01-15**
+
+> Pro tip: Tap **Heptad** at the top to include it automatically in date stamps from the toolbar.
+
+With Heptad enabled:  
+🟠 **302 ♠️ 4**  
+🟠 **Q4 29 ♠️ 4**  
+🟠 **10.29 ♠️ 4**  
+♠️ **4**  
+**2026-01-15 ♠️ 4**
+
+Heptads represent our fixed weekly structure—52 perfect weeks per year, inspired by ancient perennial systems.
+
+## Tables & Calculators
+
+Tables support simple built-in calculations with +, -, *.
+
+Example:
+
+|    | Bananas 🍌 |
+|----|-----------|
+| Marry   | 5         |
+| Tom     | 6         |
+| Kumar   | 7         |
+| **Remaining** | **100 - @Σ** |
+| **Σ** | **+**     |
+
+- **@Σ** references the total from the Σ row (Marry + Tom + Kumar = 18).  
+- Remaining becomes **100 - 18 = 82**.  
+- Use **@** to cross-reference other calculator cells/tables.
+
+## Lists
+
+Bullets, numbers, and checkboxes—all fully supported.
+
+- Item 1  
+- Item 2  
+- Item 3  
+
+1. Marry  
+2. Tom  
+3. Kumar  
+
+- [ ] Apples 🍎  
+- [ ] Oranges 🍊  
+- [ ] Bananas 🍌  
+
+> Checkboxes are interactive: drag to reorder, click to toggle. Great for tasks!
+
+## Wikilinks & External Links
+
+Wikilinks are the heart of this system—turn any word into a page link.
+
+Toolbar → far-right icon (🗒️ page symbol) → create [[Today]] instantly.
+
+Rename for clarity using a pipe |:  
+[[Today|Daily Journal]]
+
+For external sites: highlight text → tap the **🔗** link icon.
+
+Example: [[Today]] takes you straight to your current daily note.
+
+## Final Thoughts
+
+I hope this app becomes a trusted companion on your journey.  
+
+For over 15 years, I've studied the Dead Sea Scrolls, ancient timekeeping systems, and modern productivity masters like Brian Tracy. This tool is the result—a digital home for perennial wisdom in a chaotic world.
+
+A gentle reminder pops up every Wednesday: **Backup your notes** (safety first!).
+
+Enjoy exploring.  
+
+> May you have a calm mind and useful thoughts.  
+> May you accomplish great things with little energy.</textarea>
+  <div id="preview"></div>
+</div>
+
+<!-- ========== Section 2.4 - SIDEBAR ========== -->
+<div id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-item">🔍 Search</div>
+    <div class="sidebar-item" id="recent-btn">🗒️ Notes</div>
+    <div id="recent-list" style="margin-top:8px;"></div>
+    <div class="sidebar-item" id="create-folder-btn">📁 New Folder</div> <!-- Add this line -->
+    <div class="sidebar-item">⚙ System</div>
+       <div class="sidebar-item" data-action="export-all">📤 Export All</div>
+   <div class="sidebar-item" data-action="import-all">📥 Import All</div>
+  </div>
+</div>
+
+
+<!-- ========== Section 2.5 - TOOLBAR ========== -->
+<div id="toolbar">
+  <div id="toolbar-inner">
+    <button data-action="undo">↶</button>
+    <button data-action="redo">↷</button>
+    <button id="t-button">T ▼</button>
+    <button data-action="highlight">🖍</button>
+    <button id="highlight-button">🎨 ▼</button>
+    <button data-action="quote">❝</button>
+    <button data-action="code">📋</button>
+    <button id="h-button">H ▼</button>
+    <button id="date-button">📅 ▼</button>
+    <button id="table-button">▦ ▼</button>
+    <button data-action="ul">•</button>
+    <button data-action="ol">1.</button>
+    <button data-action="checkbox">☑</button>
+    <button data-action="link">🔗</button>
+    <button data-action="wikilink">📄</button>
+    <button id="comment-btn">💬</button>
+  </div>
+</div>
+
+<!-- ========== Section 2.6 - DROPDOWNS ========== -->
+<div id="floating-h-dropdown" class="floating-dropdown">
+  <button data-action="h1">H1</button>
+  <button data-action="h2">H2</button>
+  <button data-action="h3">H3</button>
+  <button data-action="h4">H4</button>
+  <button data-action="h5">H5</button>
+  <button data-action="h6">H6</button>
+</div>
+
+<div id="floating-t-dropdown" class="floating-dropdown">
+  <button data-action="bold"><b>B</b></button>
+  <button data-action="italic"><i>I</i></button>
+  <button data-action="underline"><u>U</u></button>
+  <button data-action="strike">S</button>
+  <button data-action="sub">X₂</button>
+  <button data-action="sup">X²</button>
+</div>
+
+<div id="floating-date-dropdown" class="floating-dropdown">
+  <button data-stamp="doy">DOY</button>
+  <button data-stamp="dos">DOS</button>
+  <button data-stamp="dom">DOM</button>
+  <button data-stamp="heptad">Heptad</button>
+  <button data-stamp="gregorian">Civil Date</button>
+</div>
+
+<div id="floating-table-dropdown" class="floating-dropdown">
+  <button data-action="add-table">Add table</button>
+  <button data-action="add-row">+ Row</button>
+  <button data-action="del-row">- Row</button>
+  <button data-action="add-col">+ Col</button>
+  <button data-action="del-col">- Col</button>
+  <button data-action="add-calc">🧮 Calculator</button>
+  <button data-action="row-up">Row ↑</button>
+  <button data-action="row-down">Row ↓</button>
+  <button data-action="col-left">Col ←</button>
+  <button data-action="col-right">Col →</button>
+</div>
+
+<div id="floating-highlight-dropdown" class="floating-dropdown">
+  <button data-color="pink">pink</button>
+  <button data-color="orange">orange</button>
+  <button data-color="yellow">yellow</button>
+  <button data-color="green">green</button>
+  <button data-color="blue">blue</button>
+  <button data-color="purple">purple</button>
+  <button data-color="gray">gray</button>
+  <button data-color="brown">brown</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script>
+
+ // ====================================================================
+ // SECTION 3 - JAVASCRIPT
+ // ====================================================================
+ //
+ 
+// =============================================
+// Section 3.1 - VAULT DB (SINGLE SOURCE OF TRUTH)
+// =============================================
+const VaultDB = (() => {
+  const DB_NAME = "capture-vault";
+  const STORE = "notes";
+  const VERSION = 1;
+  let db = null;
+  
+  function open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, VERSION);
+      
+      req.onupgradeneeded = e => {
+        const database = e.target.result;
+        if (!database.objectStoreNames.contains(STORE)) {
+          database.createObjectStore(STORE, { keyPath: "name" });
+        }
+      };
+      
+      req.onsuccess = () => {
+        db = req.result;
+        resolve();
+      };
+      
+      req.onerror = () => reject(req.error);
+    });
+  }
+  
+  async function get(name) {
+    if (!db) await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const store = tx.objectStore(STORE);
+      const req = store.get(name);
+      req.onsuccess = () => resolve(req.result?.content || null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  
+  async function set(name, content) {
+    if (!db) await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put({ name, content });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  
+  async function list() {
+    if (!db) await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).getAllKeys();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  
+  async function remove(name) {
+    if (!db) await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(name);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  
+  // Fixed createFolder method - properly reference the set function
+  async function createFolder(name) {
+    // Just create a note with folder prefix
+    return await set(`📁 ${name}`, `# ${name}\n\nFolder contents...`);
+  }
+  
+  return { 
+    open, get, set, list, remove,
+    createFolder
+  };
+})();
+
+
+// =============================================
+// Section 3.2 - EDITOR CORE (FIXED FUNCTIONALITY)
+// =============================================
+class EditorCore {
+  constructor() {
+    this.editor = document.getElementById('editor');
+    this.preview = document.getElementById('preview');
+    this.currentNote = "Home";
+    this.history = [];
+    this.historyIndex = -1;
+    this.noteCache = {};
+    this.backlinksMap = {};
+    
+    this.init();
+  }
+  
+  async init() {
+  // Section 3.2.1 - Initialize database and load first note
+  await VaultDB.open();
+  
+  // Initialize UI events
+  this.initEditorEvents();
+  this.initToolbarEvents();
+  this.initDropdownEvents();
+  this.initSidebarEvents();
+  this.initExportImport(); // ADD THIS LINE
+  
+// Load initial note
+let content = await VaultDB.get(this.currentNote);
+if (!content) {
+  content = this.editor.value; // Use what's already in the textarea
+  await VaultDB.set(this.currentNote, content);
+}
+
+  
+  this.editor.value = content;
+  this.noteCache[this.currentNote] = content;
+  this.pushHistory(true);
+  await this.updatePreviewAndSave();
+}
+
+  
+  // ===== Section 3.2.2 - EVENT INITIALIZATION =====
+  initEditorEvents() {
+    this.editor.addEventListener('input', () => {
+      this.pushHistory();
+      this.updatePreviewAndSave();
+    });
+    
+    this.editor.addEventListener('keydown', (e) => {
+      this.handleAutoContinue(e);
+    });
+    
+    // Wikilink clicks in preview
+    this.preview.addEventListener('click', async (e) => {
+      const wikiLink = e.target.closest('.wikilink, .backlink');
+      if (!wikiLink) return;
+      
+      e.preventDefault();
+      const noteName = wikiLink.dataset.note?.trim();
+      if (noteName) await this.switchToNote(noteName);
+    });
+  }
+  
+  initToolbarEvents() {
+    const toolbar = document.getElementById('toolbar');
+    toolbar.addEventListener('click', (e) => {
+      this.handleToolbarClick(e);
+    });
+    
+    document.getElementById('mode-toggle').addEventListener('click', () => {
+      this.toggleEditMode();
+    });
+  }
+  
+  initDropdownEvents() {
+    const dropdowns = ['h', 't', 'date', 'highlight', 'table'];
+    
+    dropdowns.forEach(type => {
+      const button = document.getElementById(`${type}-button`);
+      const dropdown = document.getElementById(`floating-${type}-dropdown`);
+      
+      if (button && dropdown) {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.closeAllDropdowns();
+          dropdown.classList.toggle('open');
+        });
+        
+        dropdown.addEventListener('click', (e) => {
+          this.handleDropdownClick(type, e);
+          dropdown.classList.remove('open');
+        });
+      }
+    });
+    
+    document.addEventListener('click', () => this.closeAllDropdowns());
+  }
+  
+  initSidebarEvents() {
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+  
+  sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    if (sidebar.classList.contains('open')) {
+      this.loadRecentNotes();
+    }
+  });
+  
+  document.getElementById('recent-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await this.loadRecentNotes();
+  });
+  
+  // Add folder creation handler
+  document.getElementById('create-folder-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const folderName = prompt('Enter folder name:');
+    if (folderName) {
+      try {
+        await VaultDB.createFolder(folderName);
+        await this.loadRecentNotes(); // Refresh the list
+        console.log("Folder created:", folderName);
+      } catch (err) {
+        console.error("Folder creation failed:", err);
+        alert("Couldn't create folder: " + err.message);
+      }
+    }
+  });
+  
+  // Updated note deletion handler with folder support
+  // Updated note handler with rename, move, and delete support
+document.getElementById('recent-list').addEventListener('click', async (e) => {
+  const renameBtn = e.target.closest('.rename-note');
+  const moveBtn = e.target.closest('.move-note');
+  const deleteBtn = e.target.closest('.delete-note');
+  const noteItem = e.target.closest('.note-item');
+  
+  if (!noteItem) return;
+  
+  const noteName = noteItem.dataset.note;
+  
+  if (renameBtn) {
+    e.stopPropagation();
+    await this.renameNote(noteName);
+  } else if (moveBtn) {
+    e.stopPropagation();
+    await this.moveNote(noteName);
+  } else if (deleteBtn) {
+    e.stopPropagation();
+    // Special message for folders
+    const isFolder = noteName.startsWith('📁 ');
+    const message = isFolder ? 
+      `Delete folder "${noteName.replace('📁 ', '')}" and all its contents?` : 
+      `Delete note "${noteName}"?`;
+    
+    if (!confirm(message)) return;
+    
+    await this.deleteNote(noteName);
+  } else {
+    await this.switchToNote(noteName);
+  }
+});
+
+}
+
+  
+  // ===== Section 3.2.3 - CORE FUNCTIONALITY =====
+  pushHistory(force = false) {
+    const value = this.editor.value;
+    if (!force && this.history[this.historyIndex] === value) return;
+    
+    this.history.splice(this.historyIndex + 1);
+    this.history.push(value);
+    
+    if (this.history.length > 100) this.history.shift();
+    else this.historyIndex++;
+  }
+  
+  undo() {
+    if (this.historyIndex <= 0) return;
+    this.historyIndex--;
+    this.editor.value = this.history[this.historyIndex];
+    this.updatePreviewAndSave();
+  }
+  
+  redo() {
+    if (this.historyIndex >= this.history.length - 1) return;
+    this.historyIndex++;
+    this.editor.value = this.history[this.historyIndex];
+    this.updatePreviewAndSave();
+  }
+  
+  toggleEditMode() {
+    const editMode = this.editor.style.display !== 'none';
+    
+    if (editMode) {
+      this.editor.style.display = 'none';
+      this.preview.style.display = 'block';
+      document.getElementById('toolbar').style.display = 'none';
+      document.getElementById('mode-toggle').textContent = '👁';
+    } else {
+      this.editor.style.display = 'block';
+      this.preview.style.display = 'none';
+      document.getElementById('toolbar').style.display = 'block';
+      document.getElementById('mode-toggle').textContent = '✏️';
+    }
+    
+    this.closeAllDropdowns();
+  }
+  
+  closeAllDropdowns() {
+    document.querySelectorAll('.floating-dropdown').forEach(dd => {
+      dd.classList.remove('open');
+    });
+  }
+  
+  // Add these methods to the EditorCore class
+
+// Helper method to insert text at cursor
+insertAtCursor(text) {
+  const start = this.editor.selectionStart;
+  this.editor.value = this.editor.value.substring(0, start) + text + this.editor.value.substring(this.editor.selectionEnd);
+  this.editor.selectionStart = this.editor.selectionEnd = start + text.length;
+  this.updatePreviewAndSave();
+}
+
+// Remove list prefix helper (for auto-continue lists)
+removeListPrefix(lineStart, prefix) {
+  const end = this.editor.value.indexOf('\n', lineStart);
+  const lineText = this.editor.value.substring(lineStart, end === -1 ? undefined : end);
+  this.editor.value = this.editor.value.substring(0, lineStart) + 
+                     lineText.substring(prefix.length) + 
+                     this.editor.value.substring(end === -1 ? this.editor.value.length : end);
+  this.editor.selectionStart = this.editor.selectionEnd = lineStart;
+  this.updatePreviewAndSave();
+}
+
+// Insert new list line helper (for auto-continue lists)
+insertNewListLine(cursor, prefix) {
+  // Insert new line with prefix at cursor position
+  this.editor.value = this.editor.value.substring(0, cursor) + 
+                     '\n' + prefix + 
+                     this.editor.value.substring(cursor);
+  
+  // Position cursor after the prefix
+  this.editor.selectionStart = this.editor.selectionEnd = cursor + prefix.length + 1;
+  this.updatePreviewAndSave();
+}
+
+  
+// ===== Section 3.2.4 - NOTE MANAGEMENT =====
+async switchToNote(noteName) {
+    if (!noteName || noteName === this.currentNote) return;
+    
+    // Save current note
+    await VaultDB.set(this.currentNote, this.editor.value);
+    this.noteCache[this.currentNote] = this.editor.value;
+    
+    // Load new note
+    let content = this.noteCache[noteName];
+    if (content === undefined) {
+        content = await VaultDB.get(noteName);
+        if (content === null) {
+            // If note doesn't exist, check if it's in a folder
+            const folderNote = await this.findNoteInFolders(noteName);
+            if (folderNote) {
+                noteName = folderNote; // Use the full path
+                content = await VaultDB.get(noteName);
+            } else {
+                content = `# ${noteName}\n\n`;
+                await VaultDB.set(noteName, content);
+            }
+        }
+        this.noteCache[noteName] = content;
+    }
+    
+    this.currentNote = noteName;
+    this.editor.value = content;
+    this.pushHistory(true);
+    await this.updatePreviewAndSave();
+    this.updateActiveNoteUI();
+}
+
+async findNoteInFolders(noteName) {
+    const notes = await VaultDB.list();
+    // Find note in any folder (format: "📁 folder/note")
+    return notes.find(n => n.endsWith(`/${noteName}`));
+}
+
+async deleteNote(noteName) {
+    if (!noteName || noteName === 'Home') return alert('Cannot delete Home');
+    if (!confirm(`Delete "${noteName.replace(/^📁 [^/]+\//, '')}"?`)) return;
+    
+    try {
+        await VaultDB.remove(noteName);
+        delete this.noteCache[noteName];
+        
+        if (this.currentNote === noteName) {
+            await this.switchToNote('Home');
+        }
+        
+        await this.loadRecentNotes();
+    } catch (err) {
+        console.error('Delete failed:', err);
+        alert('Delete failed');
+    }
+}
+
+async renameNote(oldName) {
+    if (oldName === 'Home') return;
+    
+    const isFolder = oldName.startsWith('📁 ') && !oldName.includes('/');
+    const currentDisplayName = isFolder ? oldName.replace('📁 ', '') : oldName.split('/').pop();
+    
+    const newName = prompt(`Rename "${currentDisplayName}" to:`, currentDisplayName);
+    if (!newName || newName.trim() === '') return;
+    
+    let finalNewName;
+    if (isFolder) {
+        finalNewName = `📁 ${newName.trim()}`;
+    } else {
+        const folder = oldName.includes('/') ? oldName.split('/')[0] : null;
+        finalNewName = folder ? `${folder}/${newName.trim()}` : newName.trim();
+    }
+    
+    if (finalNewName === oldName) return;
+    
+    try {
+        const content = await VaultDB.get(oldName);
+        if (content === null) {
+            alert('Note not found');
+            return;
+        }
+        
+        let newContent = content;
+        if (content.startsWith(`# ${currentDisplayName}`)) {
+            newContent = content.replace(`# ${currentDisplayName}`, `# ${newName.trim()}`);
+        }
+        
+        await VaultDB.set(finalNewName, newContent);
+        
+        // Update backlinks using the display name (without folder prefix)
+        await this.updateBacklinksForRename(oldName, finalNewName);
+        
+        await VaultDB.remove(oldName);
+        
+        if (this.noteCache[oldName]) {
+            this.noteCache[finalNewName] = newContent;
+            delete this.noteCache[oldName];
+        }
+        
+        if (this.currentNote === oldName) {
+            this.currentNote = finalNewName;
+            this.editor.value = newContent;
+            this.pushHistory(true);
+            await this.updatePreviewAndSave();
+        }
+        
+        await this.loadRecentNotes();
+    } catch (err) {
+        console.error('Rename failed:', err);
+        alert('Rename failed: ' + err.message);
+    }
+}
+
+async moveNote(noteName) {
+    if (noteName === 'Home') return alert('Cannot move Home');
+    
+    const notes = await VaultDB.list();
+    const folders = notes.filter(n => n.startsWith('📁 ') && !n.includes('/')).sort();
+    
+    if (folders.length === 0) {
+        alert('No folders available to move into. Create a folder first.');
+        return;
+    }
+    
+    const noteDisplayName = noteName.includes('/') ? noteName.split('/')[1] : noteName;
+    const targetFolder = prompt(`Move "${noteDisplayName}" to folder:\n\nAvailable folders: ${folders.map(f => f.replace('📁 ', '')).join(', ')}\n\nEnter folder name (leave empty for root):`, '');
+    
+    if (targetFolder === null) return;
+    
+    let newName = noteName;
+    
+    if (targetFolder && targetFolder.trim() !== '') {
+        const foundFolder = folders.find(f => 
+            f.replace('📁 ', '').toLowerCase() === targetFolder.trim().toLowerCase()
+        );
+        
+        if (!foundFolder) {
+            alert(`Folder "${targetFolder}" not found`);
+            return;
+        }
+        
+        newName = `${foundFolder}/${noteDisplayName}`;
+    } else {
+        // Moving to root - remove folder prefix if exists
+        newName = noteDisplayName;
+    }
+    
+    if (newName === noteName) return;
+    
+    try {
+        const content = await VaultDB.get(noteName);
+        if (content === null) {
+            alert('Note not found');
+            return;
+        }
+        
+        // Check if note already exists at destination
+        const existingNote = await VaultDB.get(newName);
+        if (existingNote !== null) {
+            alert(`Note "${noteDisplayName}" already exists in destination`);
+            return;
+        }
+        
+        await VaultDB.set(newName, content);
+        await this.updateBacklinksForRename(noteName, newName);
+        await VaultDB.remove(noteName);
+        
+        if (this.noteCache[noteName]) {
+            this.noteCache[newName] = content;
+            delete this.noteCache[noteName];
+        }
+        
+        if (this.currentNote === noteName) {
+            this.currentNote = newName;
+            this.editor.value = content;
+            this.pushHistory(true);
+            await this.updatePreviewAndSave();
+        }
+        
+        await this.loadRecentNotes();
+    } catch (err) {
+        console.error('Move failed:', err);
+        alert('Move failed: ' + err.message);
+    }
+}
+
+async updateBacklinksForRename(oldName, newName) {
+    const allNotes = await VaultDB.list();
+    const oldDisplayName = oldName.includes('/') ? oldName.split('/')[1] : oldName;
+    const newDisplayName = newName.includes('/') ? newName.split('/')[1] : newName;
+    
+    for (const note of allNotes) {
+        if (note === oldName || note === newName) continue;
+        
+        const content = await VaultDB.get(note);
+        if (content) {
+            // Match wikilinks with or without folder prefix - AUTOMATICALLY ADD ALIASES
+            const updatedContent = content.replace(
+                new RegExp(`\\[\\[\\s*(${oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${oldDisplayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?:\\||\\]\\])`, 'g'),
+                (match) => {
+                    // If moving to folder, automatically add alias with simple name
+                    if (newName.includes('/') && oldDisplayName === newDisplayName) {
+                        return `[[${newName}|${newDisplayName}]]`;
+                    }
+                    // Otherwise keep existing logic
+                    if (match.includes(`[[${oldName}`)) {
+                        return match.replace(`[[${oldName}`, `[[${newName}`);
+                    } else {
+                        return match.replace(`[[${oldDisplayName}`, `[[${newDisplayName}`);
+                    }
+                }
+            );
+            
+            if (updatedContent !== content) {
+                await VaultDB.set(note, updatedContent);
+                if (this.noteCache[note]) {
+                    this.noteCache[note] = updatedContent;
+                }
+            }
+        }
+    }
+    
+    if (this.backlinksMap[oldName]) {
+        this.backlinksMap[newName] = this.backlinksMap[oldName];
+        delete this.backlinksMap[oldName];
+    }
+}
+
+
+async loadRecentNotes() {
+    const recentList = document.getElementById('recent-list');
+    try {
+        const notes = await VaultDB.list();
+        const validNotes = notes.filter(n => n && n !== '__folders__');
+        
+        // Separate folders and root-level notes
+        const folders = validNotes.filter(n => n.startsWith('📁 ') && !n.includes('/'));
+        const rootNotes = validNotes.filter(n => !n.startsWith('📁 ') && !n.includes('/'));
+        
+        // Check if we're viewing a folder
+        const isViewingFolder = this.currentNote.startsWith('📁 ') && !this.currentNote.includes('/');
+        
+        let html = '';
+        
+        // Always show folders first
+        folders.sort((a, b) => a.localeCompare(b));
+        html += folders.map(folder => `
+            <div class="note-item folder-item ${folder === this.currentNote ? 'active' : ''}" data-note="${folder}">
+                <span class="title">${folder}</span>
+                <span class="icons">
+                    <span class="action-btn rename-note" title="Rename">✏️</span>
+                    <span class="action-btn move-note" title="Move">🚚</span>
+                    <span class="delete-note" title="Delete Folder">🗑</span>
+                </span>
+            </div>
+        `).join('');
+        
+        // Show notes based on current view
+        if (isViewingFolder) {
+            // Show notes in current folder
+            const folderNotes = validNotes
+                .filter(n => n.startsWith(`${this.currentNote}/`))
+                .map(n => ({
+                    fullName: n,
+                    displayName: n.split('/')[1]
+                }))
+                .sort((a, b) => a.displayName.localeCompare(b.displayName));
+            
+            html += folderNotes.map(note => `
+                <div class="note-item ${note.fullName === this.currentNote ? 'active' : ''}" data-note="${note.fullName}">
+                    <span class="title">${note.displayName}</span>
+                    <span class="icons">
+                        <span class="action-btn rename-note" title="Rename">✏️</span>
+                        <span class="action-btn move-note" title="Move">🚚</span>
+                        <span class="delete-note" title="Delete">🗑</span>
+                    </span>
+                </div>
+            `).join('');
+        } else {
+            // Show root-level notes (excluding Home's rename button)
+            rootNotes
+                .filter(n => n !== 'Home')
+                .sort((a, b) => a.localeCompare(b))
+                .forEach(note => {
+                    html += `
+                        <div class="note-item ${note === this.currentNote ? 'active' : ''}" data-note="${note}">
+                            <span class="title">${note}</span>
+                            <span class="icons">
+                                <span class="action-btn rename-note" title="Rename">✏️</span>
+                                <span class="action-btn move-note" title="Move">🚚</span>
+                                <span class="delete-note" title="Delete">🗑</span>
+                            </span>
+                        </div>
+                    `;
+                });
+            
+            // Always show Home at the top without rename button
+            html = `
+                <div class="note-item ${'Home' === this.currentNote ? 'active' : ''}" data-note="Home">
+                    <span class="title">Home</span>
+                    <span class="icons">
+                        <span class="action-btn move-note" title="Move">🚚</span>
+                    </span>
+                </div>
+            ` + html;
+        }
+        
+        if (html === '') {
+            html = '<div class="note-item">No notes yet</div>';
+        }
+        
+        recentList.innerHTML = html;
+        
+        // Add click handler for folders
+        document.querySelectorAll('.note-item.folder-item').forEach(item => {
+            item.addEventListener('click', async (e) => {
+                if (e.target.closest('.action-btn, .delete-note')) return;
+                const folderName = item.dataset.note;
+                
+                // Toggle folder view: if already viewing this folder, go back to root
+                if (this.currentNote === folderName) {
+                    await this.switchToNote('Home');
+                } else {
+                    // Switch to folder view
+                    this.currentNote = folderName;
+                }
+                await this.loadRecentNotes();
+            });
+        });
+        
+    } catch (err) {
+        console.error('Error loading notes:', err);
+        recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
+    }
+}
+
+updateActiveNoteUI() {
+    document.querySelectorAll('.note-item.active').forEach(el => {
+        el.classList.remove('active');
+    });
+    document.querySelectorAll(`.note-item[data-note="${this.currentNote}"]`).forEach(el => {
+        el.classList.add('active');
+    });
+}
+
+
+  // ===== Section 3.2.5 - PREVIEW RENDERING =====
+  async updatePreviewAndSave() {
+  try {
+    const raw = this.editor.value;
+    this.noteCache[this.currentNote] = raw;
+    
+    // Update backlinks
+    this.updateBacklinks(this.currentNote, raw);
+    
+    // Process markdown
+    // In updatePreviewAndSave(), modify this part:
+let html = this.renderWikilinks(raw);
+html = this.processHighlights(html);
+html = this.processSubSuperScript(html);
+
+// Convert markdown tasks to HTML before parsing
+html = html.replace(
+  /^- \[([ xX])\] (.*)/gm,
+  '<li class="task-item"><input type="checkbox" $1/>$2</li>'
+);
+
+html = marked.parse(html);
+
+// Ensure task lists have the proper class
+html = html.replace(/<ul>/g, '<ul class="task-list">');
+
+
+    html = this.processGPCStamps(html);
+    
+    // Update preview
+    this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
+    
+    // Apply behaviors
+    this.addCopyButtons();
+    this.makeCheckboxesInteractive();
+    this.makeTasksDraggable();
+    this.wrapHeadingsForCollapse();
+    this.applyRTL();
+    this.recalcTables();
+    
+    // Save after delay
+    clearTimeout(this.saveTimeout);
+    this.saveTimeout = setTimeout(async () => {
+      await VaultDB.set(this.currentNote, raw);
+    }, 500);
+    
+  } catch (error) {
+    console.error('Preview error:', error);
+  }
+}
+
+  
+  renderWikilinks(text) {
+    return text.replace(/\[\[([^\|\]]+)(?:\|([^\]]+))?\]\]/g, 
+      (m, page, alias) => {
+        const note = page.trim();
+        const label = alias ? alias.trim() : note;
+        return `<a href="#" class="wikilink" data-note="${note}">${label}</a>`;
+      }
+    );
+  }
+  
+  processHighlights(html) {
+    return html.replace(/==(\w+):([\s\S]+?)==/g, '<span class="highlight $1">$2</span>')
+              .replace(/==([\s\S]+?)==/g, '<span class="highlight">$1</span>');
+  }
+  
+  processSubSuperScript(html) {
+    return html.replace(/~([\s\S]+?)~/g, '<sub>$1</sub>')
+              .replace(/\^([\s\S]+?)\^/g, '<sup>$1</sup>');
+  }
+  
+  processGPCStamps(html) {
+    const gpcPattern = /(🟠|🟤|🌺|⚫|🟢|🔵|🟣)\s\d{3}|Q\d \d{2}|\d{2}\.\d{2}|(♣️|♦️|♥️|♠️)\s*\d+/g;
+    const gregPattern = /\d{4}-\d{2}-\d{2}/g;
+    
+    html = html.replace(gpcPattern, '<span class="gpc-stamp">$&</span>');
+    html = html.replace(gregPattern, '<span class="gregorian-stamp">$&</span>');
+    return html;
+  }
+  
+  updateBacklinks(currentNote, text) {
+    for (const note in this.backlinksMap) {
+      this.backlinksMap[note].delete(currentNote);
+      if (this.backlinksMap[note].size === 0) delete this.backlinksMap[note];
+    }
+    
+    const matches = [...text.matchAll(/\[\[([^\|\]]+)(?:\|[^\]]+)?\]\]/g)];
+    matches.forEach(match => {
+      const linkedNote = match[1].trim();
+      if (!this.backlinksMap[linkedNote]) this.backlinksMap[linkedNote] = new Set();
+      this.backlinksMap[linkedNote].add(currentNote);
+    });
+  }
+  
+  renderBacklinks(note) {
+    const links = this.backlinksMap[note] ? Array.from(this.backlinksMap[note]) : [];
+    if (links.length === 0) return '';
+    
+    return `
+      <div class="backlinks">
+        <h4>Backlinks</h4>
+        <ul>${links.map(linkNote => 
+          `<li><a href="#" class="backlink" data-note="${linkNote}">${linkNote}</a></li>`
+        ).join('')}</ul>
+      </div>
+    `;
+  }
+  
+// ===== Section 3.2.6 - TABLE OPERATIONS (FINAL, WORKING) =====
+
+// ---------- TABLE DETECTION ----------
+
+getTableAtCursor() {
+  const cursor = this.editor.selectionStart;
+  const text = this.editor.value;
+  const lines = text.split('\n');
+
+  const currentLine =
+    text.substring(0, cursor).split('\n').length - 1;
+
+  let start = currentLine;
+  while (start > 0 && lines[start].trim().startsWith('|')) start--;
+  if (!lines[start].trim().startsWith('|')) start++;
+
+  let end = start;
+  while (end < lines.length && lines[end].trim().startsWith('|')) end++;
+  end--;
+
+  if (end - start < 2) return null;
+
+  return { lines, start, end, currentLine };
+}
+
+getColumnIndex(table) {
+  const line = table.lines[table.currentLine];
+  const cursor = this.editor.selectionStart;
+  const lineStart =
+    this.editor.value.lastIndexOf('\n', cursor - 1) + 1;
+  const offset = cursor - lineStart;
+
+  let pipes = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '|') {
+      if (i >= offset) break;
+      pipes++;
+    }
+  }
+  return Math.max(0, pipes - 1);
+}
+
+splitRow(line) {
+  return line.slice(1, -1).split('|');
+}
+
+joinRow(cells) {
+  return '|' + cells.join('|') + '|';
+}
+
+// ---------- ACTION DISPATCH ----------
+
+handleTableAction(action) {
+  if (action === 'add-table') {
+    this.insertTable();
+    return;
+  }
+
+  const table = this.getTableAtCursor();
+  if (!table) return;
+
+  const actions = {
+    'add-row':   () => this.addRow(table),
+    'del-row':   () => this.deleteRow(table),
+    'add-col':   () => this.addColumn(table),
+    'del-col':   () => this.deleteColumn(table),
+    'row-up':    () => this.moveRowUp(table),
+    'row-down':  () => this.moveRowDown(table),
+    'col-left':  () => this.moveColumnLeft(table),
+    'col-right': () => this.moveColumnRight(table),
+    'add-calc':  () => this.addCalculator(table)
+  };
+
+  actions[action]?.();
+  this.editor.value = table.lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+// ---------- ROW OPS ----------
+
+addRow(table) {
+  const cols = this.splitRow(table.lines[table.start]).length;
+  table.lines.splice(
+    table.currentLine + 1,
+    0,
+    this.joinRow(Array(cols).fill('   '))
+  );
+}
+
+deleteRow(table) {
+  if (table.currentLine <= table.start + 1) return;
+  table.lines.splice(table.currentLine, 1);
+}
+
+moveRowUp(table) {
+  if (table.currentLine <= table.start + 1) return;
+  const i = table.currentLine;
+  [table.lines[i - 1], table.lines[i]] =
+  [table.lines[i], table.lines[i - 1]];
+}
+
+moveRowDown(table) {
+  if (table.currentLine >= table.end) return;
+  const i = table.currentLine;
+  [table.lines[i + 1], table.lines[i]] =
+  [table.lines[i], table.lines[i + 1]];
+}
+
+// ---------- COLUMN OPS ----------
+
+addColumn(table) {
+  const col = this.getColumnIndex(table);
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    cells.splice(col + 1, 0, i === table.start + 1 ? '---' : '   ');
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+deleteColumn(table) {
+  const col = this.getColumnIndex(table);
+  const cols = this.splitRow(table.lines[table.start]).length;
+  if (cols <= 1) return;
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    cells.splice(col, 1);
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+moveColumnLeft(table) {
+  const col = this.getColumnIndex(table);
+  if (col === 0) return;
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    [cells[col - 1], cells[col]] = [cells[col], cells[col - 1]];
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+moveColumnRight(table) {
+  const col = this.getColumnIndex(table);
+  const max = this.splitRow(table.lines[table.start]).length - 1;
+  if (col >= max) return;
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    [cells[col], cells[col + 1]] = [cells[col + 1], cells[col]];
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+// ---------- INSERT ----------
+
+insertTable() {
+  const table =
+`|    |    |
+|----|----|
+|    |    |`;
+
+  const cursor = this.editor.selectionStart;
+  const before = this.editor.value.slice(0, cursor);
+  const after = this.editor.value.slice(cursor);
+
+  this.editor.value =
+    before +
+    (before.endsWith('\n') || !before ? '' : '\n') +
+    table +
+    (after.startsWith('\n') ? '' : '\n') +
+    after;
+
+  this.editor.selectionStart =
+  this.editor.selectionEnd =
+    before.length + 6;
+
+  this.updatePreviewAndSave();
+}
+
+// ---------- CALCULATOR INSERT ----------
+
+addCalculator(table) {
+  const cols = this.splitRow(table.lines[table.start]).length;
+  const row = this.joinRow(['Σ', ...Array(cols - 1).fill('+')]);
+  table.lines.splice(table.end + 1, 0, row);
+}
+
+// ---------- CALCULATOR ENGINE (CORRECT) ----------
+
+recalcTables() {
+  this.preview.querySelectorAll('table').forEach(table => {
+    const rows = Array.from(table.rows);
+    if (rows.length < 2) return;
+
+    const col = 1;
+
+    const rowType = row => {
+      const first = row.cells[0]?.textContent.trim();
+      if (first === 'Σ') return 'total';
+      if (first === 'Remaining') return 'formula'; // Special case for formula rows
+      return 'data'; // All other rows are treated as data
+    };
+
+    const sumDataAbove = idx => {
+      let sum = 0;
+      for (let i = 1; i < idx; i++) { // Start from 1 to skip header
+        if (rowType(rows[i]) !== 'formula' && rowType(rows[i]) !== 'total') {
+          const v = parseFloat(rows[i].cells[col]?.textContent);
+          if (!isNaN(v)) sum += v;
+        }
+      }
+      return sum;
+    };
+
+    // formulas first - skip header row (index 0)
+    rows.forEach((row, i) => {
+      if (i === 0) return; // Skip header
+      if (rowType(row) !== 'formula') return;
+
+      const cell = row.cells[col];
+      const m = cell.textContent.trim()
+        .match(/^([+\-]?\d*\.?\d+)\s*([+\-*/])\s*@Σ$/);
+      if (!m) return;
+
+      const base = parseFloat(m[1]);
+      const op = m[2];
+      const sum = sumDataAbove(i);
+
+      const result =
+        op === '+' ? base + sum :
+        op === '-' ? base - sum :
+        op === '*' ? base * sum :
+        sum ? base / sum : 0;
+
+      cell.innerHTML = `<strong style="color:#0066cc">${result}</strong>`;
+    });
+
+    // totals last - skip header row (index 0)
+    rows.forEach((row, i) => {
+      if (i === 0) return; // Skip header
+      if (rowType(row) !== 'total') return;
+
+      const total = sumDataAbove(i);
+      row.cells[0].innerHTML = `<strong>Total</strong>`;
+      row.cells[col].innerHTML = `<strong style="color:green">${total}</strong>`;
+    });
+  });
+}
+
+
+
+  
+// ===== Section 3.2.7 - TASK MANAGEMENT (IMPROVED) =====
+makeCheckboxesInteractive() {
+  this.preview.querySelectorAll('li.task-item input[type="checkbox"]').forEach(checkbox => {
+    checkbox.disabled = false;
+    
+    // Set initial state based on markdown
+    const taskText = checkbox.closest('li').textContent.trim();
+    const lines = this.editor.value.split('\n');
+    const line = lines.find(line => line.includes(taskText) && /^- \[[ xX]\]/.test(line));
+    if (line) {
+      checkbox.checked = line.match(/^- \[([ xX])\] /)[1] === 'x';
+      checkbox.closest('li').classList.toggle('task-completed', checkbox.checked);
+    }
+    
+    checkbox.addEventListener('change', (e) => {
+      const taskItem = e.target.closest('li');
+      const isChecked = e.target.checked;
+      
+      // Update visual state
+      taskItem.classList.toggle('task-completed', isChecked);
+      
+      // Update the markdown source
+      this.updateTaskInEditor(taskItem, isChecked);
+      
+      // Reorder tasks if needed
+      this.reorderTasksAfterCheck(taskItem, isChecked);
+    });
+  });
+}
+
+updateTaskInEditor(taskItem, isChecked) {
+  const taskText = taskItem.textContent.trim();
+  const lines = this.editor.value.split('\n');
+  
+  // Find the matching line
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(taskText) && /^- \[[ xX]\]/.test(lines[i])) {
+      // Update the checkbox state
+      lines[i] = lines[i].replace(
+        /^(- \[)([ xX])(\] .*)/, 
+        `$1${isChecked ? 'x' : ' '}$3`
+      );
+      break;
+    }
+  }
+  
+  // Update the editor value
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave(); // Ensure preview is updated with changes
+}
+
+reorderTasksAfterCheck(taskItem, isChecked) {
+  const taskList = taskItem.parentNode;
+  if (!taskList) return;
+
+  // Move checked items to the bottom, unchecked to the top
+  if (isChecked) {
+    taskList.appendChild(taskItem); // Move checked item to bottom
+  } else {
+    // Insert unchecked item before the first completed task
+    const firstCompleted = taskList.querySelector('.task-completed');
+    if (firstCompleted) {
+      taskList.insertBefore(taskItem, firstCompleted);
+    } else {
+      // If no completed tasks, append to the end
+      taskList.appendChild(taskItem);
+    }
+  }
+  
+  // Synchronize editor content with updated task order
+  this.updateTasksOrderInEditor();
+}
+
+updateTasksOrderInEditor() {
+  const taskItems = Array.from(this.preview.querySelectorAll('li.task-item'));
+  const lines = this.editor.value.split('\n');
+
+  // Create a new lines array, updating it with the correct task order
+  const newLines = lines.map((line) => {
+    if (/^- \[[ xX]\]/.test(line)) {
+      const index = taskItems.findIndex(item => line.includes(item.textContent.trim()));
+      if (index !== -1) {
+        const checkbox = taskItems[index].querySelector('input');
+        const isChecked = checkbox.checked;
+        return line.replace(
+          /^(- \[)([ xX])(\] .*)/,
+          `$1${isChecked ? 'x' : ' '}$3`
+        );
+      }
+    }
+    return line; // Return the line as is if it's not a task
+  });
+
+  this.editor.value = newLines.join('\n'); // Update editor content
+  this.pushHistory(); // Keep track of changes for undo/redo
+}
+
+makeTasksDraggable() {
+  let draggedItem = null;
+
+  const handleDragStart = (e) => {
+    draggedItem = e.target.closest('li');
+    draggedItem.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    const targetItem = e.target.closest('li.task-item');
+    if (!targetItem || targetItem === draggedItem) return;
+
+    const rect = targetItem.getBoundingClientRect();
+    const offset = e.clientY - rect.top;
+    const midpoint = rect.height / 2;
+
+    if (offset < midpoint) {
+      targetItem.parentNode.insertBefore(draggedItem, targetItem);
+    } else {
+      targetItem.parentNode.insertBefore(draggedItem, targetItem.nextSibling);
+    }
+  };
+
+  const handleDragEnd = () => {
+    if (draggedItem) {
+      draggedItem.classList.remove('dragging');
+      this.updateTasksOrderInEditor(); // Synchronize order back to the editor
+      draggedItem = null; // Reset dragged item
+    }
+  };
+
+  this.preview.querySelectorAll('li.task-item').forEach(item => {
+    item.draggable = true;
+    item.addEventListener('dragstart', handleDragStart);
+    item.addEventListener('dragover', handleDragOver);
+    item.addEventListener('dragend', handleDragEnd);
+  });
+}
+
+
+
+
+  
+  // ===== Section 3.2.8 - UI ENHANCEMENTS =====
+  addCopyButtons() {
+    this.preview.querySelectorAll('pre').forEach(block => {
+      if (block.querySelector('.copy-btn')) return;
+      
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = '📋';
+      btn.onclick = () => {
+        navigator.clipboard.writeText(block.textContent).then(() => {
+          btn.textContent = '✅';
+          setTimeout(() => btn.textContent = '📋', 1000);
+        });
+      };
+      
+      block.appendChild(btn);
+    });
+  }
+  
+  wrapHeadingsForCollapse() {
+    this.preview.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
+      if (h.dataset.processed) return;
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = 'collapsible-content';
+      
+      let next = h.nextElementSibling;
+      while (next && (!next.tagName || !next.tagName.match(/^H[1-6]$/) || parseInt(next.tagName[1]) > parseInt(h.tagName[1]))) {
+        const temp = next.nextElementSibling;
+        wrapper.appendChild(next);
+        next = temp;
+      }
+      
+      h.after(wrapper);
+      h.addEventListener('click', () => h.classList.toggle('collapsed'));
+      h.dataset.processed = true;
+    });
+  }
+  
+  applyRTL() {
+    this.preview.querySelectorAll('p, li, td, th').forEach(el => {
+      if (/[\u0590-\u05FF]/.test(el.textContent)) {
+        el.classList.add('custom-rtl-hebrew');
+      } else {
+        el.classList.remove('custom-rtl-hebrew');
+      }
+    });
+  }
+  
+// ===== Section 3.2.9 - TOOLBAR HANDLERS =====
+handleToolbarClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  
+  const action = btn.dataset.action;
+  e.preventDefault();
+  
+  // Handle special actions
+  if (action === 'undo') return this.undo();
+  if (action === 'redo') return this.redo();
+  if (action === 'checkbox') return this.toggleCheckbox();
+  if (action === 'quote') return this.wrapSelection('> ', '');
+  if (action === 'code') return this.wrapSelection('```\n', '\n```');
+  if (action === 'link') return this.insertLink();
+  if (action === 'wikilink') return this.insertWikilink();
+  if (action === 'ul') return this.insertBullet();
+  if (action === 'ol') return this.insertNumberedList();
+  if (action === 'highlight') return this.wrapSelection('==', '==');
+  
+  // Handle formatting
+  const formats = {
+    'bold': ['**', '**'],
+    'italic': ['*', '*'], 
+    'underline': ['<u>', '</u>'],
+    'strike': ['~~', '~~'],
+    'sub': ['~', '~'],
+    'sup': ['^', '^']
+  };
+  
+  if (formats[action]) {
+    const [before, after] = formats[action];
+    this.wrapSelection(before, after);
+  }
+}
+
+// ===== TOOLBAR ACTION METHODS =====
+insertLink() {
+  const url = prompt('Enter URL:', 'https://');
+  const text = prompt('Enter link text:', this.getSelectedText() || '');
+  if (url) {
+    const link = `[${text}](${url})`;
+    this.replaceSelection(text ? link : url);
+  }
+}
+
+insertWikilink() {
+  const noteName = prompt('Note name:', this.getSelectedText() || '');
+  if (noteName) {
+    const wikilink = `[[${noteName}]]`;
+    this.replaceSelection(wikilink);
+  }
+}
+
+insertBullet() {
+  const cursor = this.editor.selectionStart;
+  const lines = this.editor.value.split('\n');
+  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
+  const line = lines[lineIndex];
+  
+  // Check if line already has a bullet
+  if (/^\s*- /.test(line)) {
+    // Remove bullet and preserve indentation
+    const indent = (line.match(/^(\s*)/) || [''])[0];
+    lines[lineIndex] = indent + line.substring(indent.length + 2);
+  } else {
+    // Add bullet with proper indentation
+    const indent = (line.match(/^(\s*)/) || [''])[0];
+    const content = line.trim() === '' ? '' : ' ' + line.substring(indent.length).trim();
+    lines[lineIndex] = indent + '-' + content;
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+insertNumberedList() {
+  const cursor = this.editor.selectionStart;
+  const lines = this.editor.value.split('\n');
+  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
+  const line = lines[lineIndex];
+  
+  // Check if line already has a number
+  if (/^\s*\d+\. /.test(line)) {
+    // Remove number and preserve indentation
+    const indent = (line.match(/^(\s*)/) || [''])[0];
+    lines[lineIndex] = indent + line.substring(indent.length + line.match(/^\s*(\d+)\. /)[0].length);
+  } else {
+    // Add number with proper indentation
+    const indent = (line.match(/^(\s*)/) || [''])[0];
+    const content = line.trim() === '' ? '' : ' ' + line.substring(indent.length).trim();
+    lines[lineIndex] = indent + '1.' + content;
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+getSelectedText() {
+  return this.editor.value.substring(this.editor.selectionStart, this.editor.selectionEnd);
+}
+
+replaceSelection(text) {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  this.editor.value = this.editor.value.substring(0, start) + text + this.editor.value.substring(end);
+  this.editor.selectionStart = this.editor.selectionEnd = start + text.length;
+  this.updatePreviewAndSave();
+}
+
+handleDropdownClick(type, e) {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  
+  const action = btn.dataset.action || btn.dataset.stamp || btn.dataset.color;
+  if (!action) return;
+  
+  switch(type) {
+    case 'h': this.applyHeading(action); break;
+    case 't': this.applyTextFormat(action); break;
+    case 'date': this.insertDateStamp(action); break;
+    case 'highlight': this.applyHighlight(action); break;
+    case 'table': this.handleTableAction(action); break;
+  }
+}
+
+toggleCheckbox() {
+  const cursor = this.editor.selectionStart;
+  const lines = this.editor.value.split('\n');
+  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
+  const line = lines[lineIndex];
+  
+  // Check if line already has a checkbox
+  const checkboxMatch = line.match(/^(\s*)- \[[ xX]\] /);
+  
+  if (checkboxMatch) {
+    // Remove the checkbox
+    lines[lineIndex] = line.replace(/^(\s*)- \[[ xX]\] /, '$1');
+  } else {
+    // Add a checkbox with proper indentation
+    const indent = (line.match(/^(\s*)/) || [''])[0];
+    lines[lineIndex] = indent + '- [ ] ' + line.substring(indent.length).trim();
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+applyHeading(level) {
+  this.wrapLineWithPrefix('#'.repeat(parseInt(level.slice(1))) + ' ');
+}
+
+applyTextFormat(action) {
+  const formats = {
+    'bold': ['**', '**'],
+    'italic': ['*', '*'], 
+    'underline': ['<u>', '</u>'],
+    'strike': ['~~', '~~'],
+    'sub': ['~', '~'],
+    'sup': ['^', '^']
+  };
+  
+  const [before, after] = formats[action] || ['', ''];
+  this.wrapSelection(before, after);
+}
+
+applyHighlight(color) {
+  this.wrapSelection(`==${color}:`, '==');
+}
+
+wrapLineWithPrefix(prefix) {
+  const cursor = this.editor.selectionStart;
+  const lines = this.editor.value.split('\n');
+  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
+  
+  if (lines[lineIndex].startsWith(prefix)) {
+    lines[lineIndex] = lines[lineIndex].substring(prefix.length);
+  } else {
+    lines[lineIndex] = prefix + lines[lineIndex];
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+wrapSelection(before, after) {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  const selected = this.editor.value.substring(start, end);
+  const isWrapped = selected.startsWith(before) && selected.endsWith(after);
+  const newText = isWrapped ? selected.slice(before.length, -after.length) : before + selected + after;
+  
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start + (isWrapped ? 0 : before.length);
+  this.editor.selectionEnd = this.editor.selectionStart + newText.length - before.length - after.length;
+  this.updatePreviewAndSave();
+}
+
+  
+// ===== Section 3.2.10 - AUTO-CONTINUE LISTS =====
+handleAutoContinue(e) {
+  if (e.key !== 'Enter' || e.shiftKey) return;
+  
+  const cursor = this.editor.selectionStart;
+  const textBefore = this.editor.value.substring(0, cursor);
+  const lineStart = textBefore.lastIndexOf('\n') + 1;
+  const line = textBefore.substring(lineStart);
+  
+  const ulMatch = line.match(/^(\s*)- /);
+  const olMatch = line.match(/^(\s*)(\d+)\. /);
+  const taskMatch = line.match(/^(\s*)- \[[ xX]\] /);
+  
+  // Check if cursor is at the end of the line
+  const textAfter = this.editor.value.substring(cursor);
+  const lineEnd = textAfter.indexOf('\n');
+  const restOfLine = lineEnd === -1 ? textAfter : textAfter.substring(0, lineEnd);
+  const isCursorAtEnd = restOfLine.trim() === '';
+  
+  if ((taskMatch && line.substring(taskMatch[0].length).trim() === '') || 
+      (ulMatch && line.substring(ulMatch[0].length).trim() === '') || 
+      (olMatch && line.substring(olMatch[0].length).trim() === '')) {
+    // Remove bullet/number/checkbox if cursor is at end of an empty line
+    e.preventDefault();
+    const prefix = taskMatch ? taskMatch[0] : (ulMatch ? ulMatch[0] : olMatch[0]);
+    this.removeListPrefix(lineStart, prefix);
+  } else if (taskMatch || ulMatch || olMatch) {
+    // Continue the list (create new item)
+    e.preventDefault();
+    
+    if (taskMatch) {
+      // Handle checkbox list - continue with unchecked checkbox
+      const indent = taskMatch[1];
+      const prefix = '- [ ] ';
+      this.insertNewListLine(cursor, indent + prefix);
+    } else if (ulMatch) {
+      // Handle bullet list
+      const indent = ulMatch[1];
+      const prefix = '- ';
+      this.insertNewListLine(cursor, indent + prefix);
+    } else if (olMatch) {
+      // Handle numbered list - increment the number
+      const indent = olMatch[1];
+      const currentNum = parseInt(olMatch[2]);
+      const prefix = (currentNum + 1) + '. ';
+      this.insertNewListLine(cursor, indent + prefix);
+    }
+  }
+}
+
+
+removeListPrefix(lineStart, prefix) {
+  const end = this.editor.value.indexOf('\n', lineStart);
+  const lineText = this.editor.value.substring(lineStart, end === -1 ? undefined : end);
+  this.editor.value = this.editor.value.substring(0, lineStart) + 
+                     lineText.substring(prefix.length) + 
+                     this.editor.value.substring(end === -1 ? this.editor.value.length : end);
+  this.editor.selectionStart = this.editor.selectionEnd = lineStart;
+  this.updatePreviewAndSave();
+}
+
+insertNewListLine(cursor, prefix) {
+  // Insert new line with prefix at cursor position
+  this.editor.value = this.editor.value.substring(0, cursor) + 
+                     '\n' + prefix + 
+                     this.editor.value.substring(cursor);
+  
+  // Position cursor after the prefix
+  this.editor.selectionStart = this.editor.selectionEnd = cursor + prefix.length + 1;
+  this.updatePreviewAndSave();
+}
+
+  
+  // ===== Section 3.2.11 - DATE STAMPS =====
+  insertDateStamp(type) {
+    const { doyToday } = GPCCalendar.calculateGPC();
+    const weekEmoji = GPCCalendar.weekEmojis[(doyToday - 1) % 7] || '';
+    const heptad = GPCCalendar.heptadMap[doyToday] || '';
+    
+    let stamp = '';
+    
+    // If Heptad mode is enabled
+    if (GPCCalendar.heptadEnabled) {
+      switch(type) {
+        case 'doy': 
+          stamp = `${weekEmoji} ${String(doyToday).padStart(3, '0')} ${heptad}`;
+          break;
+        case 'dos': 
+          const quarter = Math.floor((doyToday - 1) / 91) + 1;
+          const dayInSeason = ((doyToday - 1) % 91) + 1;
+          stamp = `${weekEmoji} Q${quarter} ${String(dayInSeason).padStart(2, '0')} ${heptad}`;
+          break;
+        case 'dom':
+          let remaining = doyToday, monthIndex = 0;
+          for (let i = 0; i < GPCCalendar.gpcMonths.length; i++) {
+            if (remaining <= GPCCalendar.gpcMonths[i].days) { 
+              monthIndex = i; 
+              break; 
+            }
+            remaining -= GPCCalendar.gpcMonths[i].days;
+          }
+          stamp = `${weekEmoji} ${String(monthIndex + 1).padStart(2, '0')}.${String(remaining).padStart(2, '0')} ${heptad}`;
+          break;
+        case 'heptad': 
+          stamp = heptad;
+          break;
+        case 'gregorian': 
+          const date = new Date();
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          stamp = `${year}-${month}-${day} ${heptad}`;
+          break;
+      }
+    } else {
+      // Normal mode (Heptad disabled)
+      switch(type) {
+        case 'doy': 
+          stamp = `${weekEmoji} ${String(doyToday).padStart(3, '0')}`; 
+          break;
+        case 'dos': 
+          const quarter = Math.floor((doyToday - 1) / 91) + 1;
+          const dayInSeason = ((doyToday - 1) % 91) + 1;
+          stamp = `${weekEmoji} Q${quarter} ${String(dayInSeason).padStart(2, '0')}`;
+          break;
+        case 'dom':
+          let remaining = doyToday, monthIndex = 0;
+          for (let i = 0; i < GPCCalendar.gpcMonths.length; i++) {
+            if (remaining <= GPCCalendar.gpcMonths[i].days) { 
+              monthIndex = i; 
+              break; 
+            }
+            remaining -= GPCCalendar.gpcMonths[i].days;
+          }
+          stamp = `${weekEmoji} ${String(monthIndex + 1).padStart(2, '0')}.${String(remaining).padStart(2, '0')}`;
+          break;
+        case 'heptad': 
+          stamp = heptad;
+          break;
+        case 'gregorian': 
+          const date = new Date();
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          stamp = `${year}-${month}-${day}`;
+          break;
+      }
+    }
+    
+    this.insertAtCursor(stamp);
+  }
+
+  
+  insertAtCursor(text) {
+    const start = this.editor.selectionStart;
+    this.editor.value = this.editor.value.substring(0, start) + text + this.editor.value.substring(this.editor.selectionEnd);
+    this.editor.selectionStart = this.editor.selectionEnd = start + text.length;
+    this.updatePreviewAndSave();
+  }
+
+// ===== Section 3.2.12 - Export/Import System =====
+initExportImport() {
+  document.querySelector('[data-action="export-all"]').addEventListener('click', () => {
+    this.exportAllNotes();
+  });
+  
+  document.querySelector('[data-action="import-all"]').addEventListener('click', () => {
+    this.importAllNotes();
+  });
+}
+
+// Export all notes as zip
+async exportAllNotes() {
+  console.log('Export function called');
+  
+  try {
+    // Show loading indicator
+    const exportBtn = document.querySelector('[data-action="export-all"]');
+    const originalText = exportBtn.textContent;
+    exportBtn.textContent = '⏳ Exporting...';
+    exportBtn.disabled = true;
+    
+    // Ensure JSZip is loaded
+    if (typeof JSZip === 'undefined') {
+      console.error('JSZip is undefined!');
+      throw new Error('JSZip library not loaded. Check if the script tag is loading.');
+    }
+    
+    console.log('JSZip loaded:', typeof JSZip);
+    
+    const notes = await VaultDB.list();
+    console.log('Notes found:', notes.length, notes);
+    
+    if (notes.length === 0) {
+      alert('No notes to export!');
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      return;
+    }
+    
+    const zip = new JSZip();
+    console.log('Zip instance created');
+
+    // Add each note to the zip file
+    for (const note of notes) {
+      try {
+        const content = await VaultDB.get(note);
+        if (!content) {
+          console.warn(`Note ${note} has no content, skipping`);
+          continue;
+        }
+        
+        // Sanitize filename
+        const safeNoteName = note.replace(/[\/\\:*?"<>|]/g, '_');
+        console.log(`Adding note to zip: ${safeNoteName}.md`);
+        zip.file(`${safeNoteName}.md`, content);
+      } catch (err) {
+        console.error(`Error exporting note ${note}:`, err);
+      }
+    }
+
+    // Generate the zip file
+    console.log('Generating zip file...');
+    const content = await zip.generateAsync({ type: "blob" });
+    console.log('Zip generated, size:', content.size, 'bytes');
+    
+    if (content.size === 0) {
+      alert('Export failed: Generated zip file is empty!');
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      return;
+    }
+    
+    // Create download link
+    const today = new Date();
+    const dateString = today.toISOString().slice(0, 10);
+    const filename = `CaptureNotes-${dateString}.zip`;
+    const url = URL.createObjectURL(content);
+    
+    console.log('Creating download link:', filename);
+    
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    
+    document.body.appendChild(a);
+    console.log('Triggering download...');
+    a.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      console.log('Export complete! File should download as:', filename);
+    }, 100);
+    
+  } catch (err) {
+    console.error('Export failed:', err);
+    alert('Export failed: ' + (err.message || 'Unknown error'));
+    
+    // Reset button text
+    const exportBtn = document.querySelector('[data-action="export-all"]');
+    if (exportBtn) {
+      exportBtn.textContent = '📤 Export All';
+      exportBtn.disabled = false;
+    }
+  }
+}
+
+
+// Import all notes from zip
+async importAllNotes() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.zip';
+  
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm('⚠️ WARNING: This will replace ALL existing notes. Continue?')) return;
+    
+    try {
+      // Show loading indicator
+      const importBtn = document.querySelector('[data-action="import-all"]');
+      const originalText = importBtn.textContent;
+      importBtn.textContent = '⏳ Importing...';
+      
+      const zip = new JSZip();
+      const result = await zip.loadAsync(file);
+
+      // Clear existing notes first
+      const existingNotes = await VaultDB.list();
+      for (const note of existingNotes) {
+        await VaultDB.remove(note);
+      }
+
+      // Import each file
+      for (const filename in result.files) {
+        if (result.files[filename].dir) continue;
+        const content = await result.files[filename].async('text');
+        const noteName = filename.replace('.md', '');
+        await VaultDB.set(noteName, content);
+      }
+
+      alert('✅ Import complete! Refreshing notes...');
+      await this.switchToNote('Home');
+      await this.loadRecentNotes();
+      
+    } catch (err) {
+      console.error('Import failed:', err);
+      alert('❌ Import failed: ' + err.message);
+    } finally {
+      // Reset button text
+      const importBtn = document.querySelector('[data-action="import-all"]');
+      importBtn.textContent = originalText || '📥 Import All';
+    }
+  };
+  
+  input.click();
+}
+
+
+// ===== Section 3.2.13 - Reminder System =====
+initReminders() {
+  this.showWednesdayReminder();
+}
+
+showWednesdayReminder() {
+  const today = new Date();
+  if (today.getDay() === 3) { // Wednesday (0=Sunday, 3=Wednesday)
+    const lastShown = localStorage.getItem('lastWednesdayReminder');
+    const todayString = today.toDateString();
+    
+    if (lastShown !== todayString) {
+      setTimeout(() => {
+        if (confirm('📅 Wednesday Reminder: Clearing your browser cache could dissolve notes not yet backed up. Export your notes now to avoid data loss.\n\nClick OK to export, Cancel to dismiss.')) {
+          this.exportAllNotes();
+        }
+        localStorage.setItem('lastWednesdayReminder', todayString);
+      }, 2000); // Show after 2 seconds
+    }
+  }
+}
+
+} // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
+
+
+// =============================================
+// Section 3.3 - GPC CALENDAR (YOUR ORIGINAL LOGIC)
+// =============================================
+// Section 3.3.1 - Calendar Configuration
+class GPCCalendar {
+  static gpcMonths = [
+    { name: 'Unspring', days: 30 }, { name: 'Duspring', days: 30 }, { name: 'Trispring', days: 31 },
+    { name: 'Quadsum', days: 30 }, { name: 'Fivesum', days: 30 }, { name: 'Sixsum', days: 31 },
+    { name: 'Sepafall', days: 30 }, { name: 'Oktafall', days: 30 }, { name: 'Novafall', days: 31 },
+    { name: 'Dekawint', days: 30 }, { name: 'Elvawint', days: 30 }, { name: 'Dozawint', days: 31 }
+  ];
+  
+   // Section 3.3.2 - Heptad mapping
+  static baseMode = "DOY";
+  static heptadEnabled = false;
+  static epochDate = new Date(Date.UTC(1982, 2, 24));
+  static epochYear = 5979;
+  static weekEmojis = ['🟠','🟤','🌺','⚫','🟢','🔵','🟣'];
+  static heptadMap = {};
+  static suitEmojis = ['♣️','♦️','♥️','♠️'];
+  static baseStartDOYs = [
+    1,8,15,22,31,38,45,52,61,68,75,82,89,92,99,106,113,122,129,136,143,152,159,166,173,180,
+    183,190,197,204,213,220,227,234,243,250,257,264,271,274,281,288,295,304,311,318,325,334,341,348,355,362
+  ];
+  
+  static init() {
+    this.initHeptadMap();
+    this.initEvents();
+    this.updateGPC();
+    setInterval(() => this.updateGPC(), 60000);
+  }
+  
+  static initHeptadMap() {
+    let weekNum = 1;
+    for(let s = 0; s < 4; s++) {
+      const suit = this.suitEmojis[s];
+      for(let w = 0; w < 13; w++) {
+        let startDOY = this.baseStartDOYs[s * 13 + w];
+        const isLongWeek = (w === 3 || w === 7 || w === 11);
+        const daysInWeek = isLongWeek ? 9 : 7;
+        
+        for(let d = 0; d < daysInWeek; d++) {
+          const doy = startDOY + d;
+          if(doy <= 364) this.heptadMap[doy] = suit + ' ' + weekNum;
+        }
+        weekNum++;
+      }
+      weekNum = 1;
+    }
+  }
+  
+  // Section 3.3.3 - Core calculations
+  static calculateGPC() {
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    let remainingDays = Math.floor((todayUTC - this.epochDate.getTime()) / 86400000);
+    let gpcYear = this.epochYear;
+    
+    while(true) {
+      const rel = gpcYear - this.epochYear;
+      let leapDays = 0;
+      if(rel % 7 === 6) leapDays += 7;
+      if(rel % 49 === 48) leapDays += 7;
+      if((rel + 29) % 70 === 0) leapDays += 7;
+      const yearLength = 364 + leapDays;
+      if(remainingDays < yearLength) break;
+      remainingDays -= yearLength;
+      gpcYear++;
+    }
+    
+    const doyToday = Math.max(1, Math.min(364, remainingDays + 1));
+    return { gpcYear, doyToday };
+  }
+  
+    // Section 3.3.4 - Display Updates
+  static updateGPC() {
+    const { doyToday } = this.calculateGPC();
+    const emoji = this.weekEmojis[(doyToday - 1) % 7] || '';
+    let mainText = '';
+    
+    if(this.baseMode === 'DOY') {
+      mainText = String(doyToday).padStart(3, '0');
+    } else if(this.baseMode === 'DOM') {
+      let remaining = doyToday, monthIndex = 0;
+      for(let i = 0; i < this.gpcMonths.length; i++) {
+        if(remaining <= this.gpcMonths[i].days) { 
+          monthIndex = i; 
+          break; 
+        }
+        remaining -= this.gpcMonths[i].days;
+      }
+      mainText = String(monthIndex + 1).padStart(2, '0') + '.' + String(remaining).padStart(2, '0');
+    } else if(this.baseMode === 'DOS') {
+      const quarter = Math.floor((doyToday - 1) / 91) + 1;
+      const dayInSeason = ((doyToday - 1) % 91) + 1;
+      mainText = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
+    }
+    
+    let heptadText = this.heptadEnabled ? ' ' + (this.heptadMap[doyToday] || '') : '';
+    document.getElementById('gpc-display').textContent = emoji + ' ' + mainText + heptadText;
+  }
+  
+  // Section 3.3.5 - Button event handling
+  static initEvents() {
+    document.querySelectorAll('#gpc-buttons button[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        
+        if(mode === 'HEPTAD') {
+          this.heptadEnabled = !this.heptadEnabled;
+          btn.classList.toggle('active', this.heptadEnabled);
+        } else {
+          this.baseMode = mode;
+          document.querySelectorAll('#gpc-buttons button[data-mode]').forEach(b => {
+            if(b.dataset.mode !== 'HEPTAD') b.classList.toggle('active', b === btn);
+          });
+        }
+        
+        this.updateGPC();
+      });
+    });
+  }
+}
+
+// =============================================
+// Section 4 - INITIALIZATION
+// =============================================
+ // Section 4.1 - DOMContentLoaded event handler
+document.addEventListener('DOMContentLoaded', async () => {
+  GPCCalendar.init();
+  window.editorCore = new EditorCore();
+});
+</script>
+</body>
+</html>
