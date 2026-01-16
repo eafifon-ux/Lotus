@@ -2154,7 +2154,7 @@ insertNewListLine(cursor, prefix) {
     this.updatePreviewAndSave();
   }
 
-// ===== Section 3.2.12 - Export/Import System =====
+// ===== Section 3.2.12 - Export/Import System (FIXED) =====
 initExportImport() {
   document.querySelector('[data-action="export-all"]').addEventListener('click', () => {
     this.exportAllNotes();
@@ -2165,7 +2165,7 @@ initExportImport() {
   });
 }
 
-// Export all notes as zip
+// Fixed export method - properly handles folder structure
 async exportAllNotes() {
   console.log('Export function called');
   
@@ -2182,8 +2182,6 @@ async exportAllNotes() {
       throw new Error('JSZip library not loaded. Check if the script tag is loading.');
     }
     
-    console.log('JSZip loaded:', typeof JSZip);
-    
     const notes = await VaultDB.list();
     console.log('Notes found:', notes.length, notes);
     
@@ -2197,21 +2195,37 @@ async exportAllNotes() {
     const zip = new JSZip();
     console.log('Zip instance created');
 
-    // Add each note to the zip file
+    // Add each note to the zip file with proper folder structure
     for (const note of notes) {
       try {
         const content = await VaultDB.get(note);
         if (!content) {
-          console.warn(`Note ${note} has no content, skipping`);
+          console.warn('Note ' + note + ' has no content, skipping');
           continue;
         }
         
-        // Sanitize filename
-        const safeNoteName = note.replace(/[\/\\:*?"<>|]/g, '_');
-        console.log(`Adding note to zip: ${safeNoteName}.md`);
-        zip.file(`${safeNoteName}.md`, content);
+        // Handle folder structure properly
+        let filePath;
+        if (note.includes('/')) {
+          // This is a note inside a folder - maintain the folder structure
+          const parts = note.split('/');
+          const folderName = parts[0];
+          const noteFileName = parts[1];
+          
+          // Create folder if it doesn't exist
+          if (!zip.folder(folderName)) {
+            zip.folder(folderName);
+          }
+          filePath = folderName + '/' + noteFileName + '.md';
+        } else {
+          // Regular note in root
+          filePath = note + '.md';
+        }
+        
+        console.log('Adding note to zip: ' + filePath);
+        zip.file(filePath, content);
       } catch (err) {
-        console.error(`Error exporting note ${note}:`, err);
+        console.error('Error exporting note ' + note + ':', err);
       }
     }
 
@@ -2230,10 +2244,8 @@ async exportAllNotes() {
     // Create download link
     const today = new Date();
     const dateString = today.toISOString().slice(0, 10);
-    const filename = `CaptureNotes-${dateString}.zip`;
+    const filename = 'CaptureNotes-' + dateString + '.zip';
     const url = URL.createObjectURL(content);
-    
-    console.log('Creating download link:', filename);
     
     const a = document.createElement('a');
     a.style.display = 'none';
@@ -2252,7 +2264,7 @@ async exportAllNotes() {
       exportBtn.disabled = false;
       console.log('Export complete! File should download as:', filename);
     }, 100);
-    
+      
   } catch (err) {
     console.error('Export failed:', err);
     alert('Export failed: ' + (err.message || 'Unknown error'));
@@ -2266,25 +2278,24 @@ async exportAllNotes() {
   }
 }
 
-
-// Import all notes from zip
+// Fixed import method - properly handles folder structure
 async importAllNotes() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.zip';
-  
+
   input.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (!confirm('⚠️ WARNING: This will replace ALL existing notes. Continue?')) return;
-    
+
     try {
       // Show loading indicator
       const importBtn = document.querySelector('[data-action="import-all"]');
       const originalText = importBtn.textContent;
       importBtn.textContent = '⏳ Importing...';
-      
+
       const zip = new JSZip();
       const result = await zip.loadAsync(file);
 
@@ -2294,18 +2305,35 @@ async importAllNotes() {
         await VaultDB.remove(note);
       }
 
-      // Import each file
+      // Import each file with proper folder handling
       for (const filename in result.files) {
         if (result.files[filename].dir) continue;
+
         const content = await result.files[filename].async('text');
         const noteName = filename.replace('.md', '');
-        await VaultDB.set(noteName, content);
+
+        // Handle folder structure during import
+        if (filename.includes('/')) {
+          // This is a note inside a folder
+          const parts = filename.split('/');
+          if (parts.length === 2) {
+            const folderName = parts[0];
+            const actualNoteName = parts[1].replace('.md', '');
+
+            // Reconstruct the proper folder structure
+            const fullNoteName = `${folderName}/${actualNoteName}`;
+            await VaultDB.set(fullNoteName, content);
+          }
+        } else {
+          // Regular note
+          await VaultDB.set(noteName, content);
+        }
       }
 
       alert('✅ Import complete! Refreshing notes...');
       await this.switchToNote('Home');
       await this.loadRecentNotes();
-      
+
     } catch (err) {
       console.error('Import failed:', err);
       alert('❌ Import failed: ' + err.message);
@@ -2315,9 +2343,11 @@ async importAllNotes() {
       importBtn.textContent = originalText || '📥 Import All';
     }
   };
-  
+
   input.click();
 }
+
+
 
 
 // ===== Section 3.2.13 - Reminder System =====
