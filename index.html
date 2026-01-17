@@ -296,7 +296,13 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   
 <!-- ========== Section 2 - UI STRUCTURE ========== -->
 <!-- ========== Section 2.1 - TOP BAR with Google mode========== -->
-<div id="top-bar"><button id="mode-toggle" title="View / Edit">✏️</button></div>
+<div id="top-bar">
+  <button id="mode-toggle" title="View / Edit">✏️</button>
+  <div id="offline-alert" style="display:none; position:fixed; top:10px; left:10px; background:#ffcc00; padding:6px 12px; border-radius:4px; font-size:14px; z-index:10000;">
+    ⚠️ Offline Mode
+  </div>
+</div>
+
 
 <!-- ========== Section 2.2 - GPC DISPLAY and buttons ========== -->
 <div id="gpc-display"></div>
@@ -311,7 +317,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 
 <!-- ========== Section 2.3 - EDITOR CONTAINER ========== -->
 <div id="editor-container">
-  <textarea id="editor" placeholder="Capture…"># Home 
+  <textarea id="editor" placeholder="Capture…"># Home
 
 [🗓️ Today](https://www.gpc364.com/p/today.html?m=1)
 [[📁 Boomerang/Manual|🗒️ Manual]]
@@ -334,9 +340,9 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 
 
 ## Steps
-- [ ] Read [[Manual]] 
-- [ ] Download Lotus.zip - paste into browser(optional)
-   
+- [ ] Read [[Manual]]
+- - [ ] Download Lotus.zip - paste into browser(optional)
+
 ```
 https://drive.google.com/uc?export=download&id=1MP-3bSmbNvgW7_yf7-RPYgu4o8174715
 ```
@@ -488,24 +494,34 @@ const VaultDB = (() => {
   }
   
   async function get(name) {
-    if (!db) await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, "readonly");
-      const store = tx.objectStore(STORE);
-      const req = store.get(name);
-      req.onsuccess = () => resolve(req.result?.content || null);
-      req.onerror = () => reject(req.error);
-    });
+    try {
+      if (!db) await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readonly");
+        const store = tx.objectStore(STORE);
+        const req = store.get(name);
+        req.onsuccess = () => resolve(req.result?.content || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (err) {
+      console.log('IndexedDB failed, falling back to localStorage:', err);
+      return localStorage.getItem(`note-${name}`);
+    }
   }
   
   async function set(name, content) {
-    if (!db) await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put({ name, content });
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    try {
+      if (!db) await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put({ name, content });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (err) {
+      console.log('IndexedDB failed, falling back to localStorage:', err);
+      localStorage.setItem(`note-${name}`, content);
+    }
   }
   
   async function list() {
@@ -541,6 +557,7 @@ const VaultDB = (() => {
 })();
 
 
+
 // =============================================
 // Section 3.2 - EDITOR CORE (FIXED FUNCTIONALITY)
 // =============================================
@@ -557,8 +574,8 @@ class EditorCore {
     this.init();
   }
   
-  async init() {
-  // Section 3.2.1 - Initialize database and load first note
+  // ===== Section 3.2.1 - Initialize database and load first note =====
+async init() {
   await VaultDB.open();
   
   // Initialize UI events
@@ -566,21 +583,34 @@ class EditorCore {
   this.initToolbarEvents();
   this.initDropdownEvents();
   this.initSidebarEvents();
-  this.initExportImport(); // ADD THIS LINE
+  this.initExportImport();
   
-// Load initial note
-let content = await VaultDB.get(this.currentNote);
-if (!content) {
-  content = this.editor.value; // Use what's already in the textarea
-  await VaultDB.set(this.currentNote, content);
-}
-
+  // Add offline support monitoring
+  window.addEventListener('offline', () => {
+    const alert = document.getElementById('offline-alert');
+    if (alert) alert.style.display = 'block';
+    console.log('📴 Offline mode activated');
+  });
+  
+  window.addEventListener('online', () => {
+    const alert = document.getElementById('offline-alert');
+    if (alert) alert.style.display = 'none';
+    console.log('📶 Online mode restored');
+  });
+  
+  // Load initial note
+  let content = await VaultDB.get(this.currentNote);
+  if (!content) {
+    content = this.editor.value;
+    await VaultDB.set(this.currentNote, content);
+  }
   
   this.editor.value = content;
   this.noteCache[this.currentNote] = content;
   this.pushHistory(true);
   await this.updatePreviewAndSave();
 }
+
 
   
   // ===== Section 3.2.2 - EVENT INITIALIZATION =====
@@ -2402,11 +2432,43 @@ class GPCCalendar {
 // =============================================
 // Section 4 - INITIALIZATION
 // =============================================
- // Section 4.1 - DOMContentLoaded event handler
+
+// Section 4.1 - DOMContentLoaded event handler
 document.addEventListener('DOMContentLoaded', async () => {
   GPCCalendar.init();
   window.editorCore = new EditorCore();
+  
+  // Section 4.2 - Offline Support Service Worker
+  if ('serviceWorker' in navigator) {
+    // Create inline service worker
+    const swScript = `
+      const CACHE_NAME = 'lotus-v1.1';
+      
+      self.addEventListener('install', (e) => {
+        console.log('📦 Installing Lotus Service Worker');
+        e.waitUntil(
+          caches.open(CACHE_NAME).then(cache => cache.addAll(['./']))
+        );
+      });
+      
+      self.addEventListener('fetch', (e) => {
+        e.respondWith(
+          caches.match(e.request).then(cached => cached || fetch(e.request))
+        );
+      });
+    `;
+    
+    try {
+      const blob = new Blob([swScript], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      await navigator.serviceWorker.register(swUrl);
+      console.log('✅ Offline support enabled');
+    } catch (err) {
+      console.log('❌ Offline support failed (private mode?)');
+    }
+  }
 });
+
 </script>
 </body>
 </html>
