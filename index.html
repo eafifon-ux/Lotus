@@ -389,6 +389,8 @@ https://drive.google.com/file/d/1MP-3bSmbNvgW7_yf7-RPYgu4o8174715/view?usp=drive
     <button data-action="checkbox">☑</button>
     <button data-action="link">🔗</button>
     <button data-action="wikilink">📄</button>
+    <!-- Add to Toolbar -->
+<button data-action="folder">📁</button>
   </div>
 </div>
 
@@ -1750,6 +1752,8 @@ handleToolbarClick(e) {
   if (action === 'code') return this.wrapSelection('```\n', '\n```');
   if (action === 'link') return this.insertLink();
   if (action === 'wikilink') return this.insertWikilink();
+if (action === 'folder') return this.insertFolderLink();
+
   if (action === 'ul') return this.insertBullet();
   if (action === 'ol') return this.insertNumberedList();
   if (action === 'highlight') return this.wrapSelection('==', '==');
@@ -1787,6 +1791,18 @@ insertWikilink() {
     this.replaceSelection(wikilink);
   }
 }
+
+insertFolderLink() {
+  const selectedText = this.getSelectedText();
+  if (!selectedText) {
+    alert('Please select text first');
+    return;
+  }
+  
+  const wikilink = `[[📁 Boomerang/${selectedText}|${selectedText}]]`;
+  this.replaceSelection(wikilink);
+}
+
 
 insertBullet() {
   const cursor = this.editor.selectionStart;
@@ -1859,6 +1875,8 @@ handleDropdownClick(type, e) {
     case 'table': this.handleTableAction(action); break;
   }
 }
+
+
 
 toggleCheckbox() {
   const cursor = this.editor.selectionStart;
