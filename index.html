@@ -341,7 +341,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 
 ## Steps
 - [ ] Read [[Manual]]
-- - [ ] Download Lotus.zip - paste into browser(optional)
+- [ ] Download Lotus.zip - paste into browser(optional)
 
 ```
 https://drive.google.com/uc?export=download&id=1MP-3bSmbNvgW7_yf7-RPYgu4o8174715
@@ -353,16 +353,6 @@ Or
 https://drive.google.com/file/d/1MP-3bSmbNvgW7_yf7-RPYgu4o8174715/view?usp=drivesdk
 ```
 
-
-## Working On
-✏️ Improve Checkboxes
-✏️ Improve Datestamps
-✏️ Improve Numbered Lists
-✏️ Improve Undo
-✏️ Comments
-✏️ References
-✏️ Search
-
 </textarea>
   <div id="preview"></div>
 </div>
@@ -370,7 +360,7 @@ https://drive.google.com/file/d/1MP-3bSmbNvgW7_yf7-RPYgu4o8174715/view?usp=drive
 <!-- ========== Section 2.4 - SIDEBAR ========== -->
 <div id="sidebar">
   <div class="sidebar-section">
-    <div class="sidebar-item">🔍 Search</div>
+   <div class="sidebar-item" id="back-btn">🔙 Back</div>
     <div class="sidebar-item" id="recent-btn">🗒️ Notes</div>
     <div id="recent-list" style="margin-top:8px;"></div>
     <div class="sidebar-item" id="create-folder-btn">📁 New Folder</div> <!-- Add this line -->
@@ -399,7 +389,6 @@ https://drive.google.com/file/d/1MP-3bSmbNvgW7_yf7-RPYgu4o8174715/view?usp=drive
     <button data-action="checkbox">☑</button>
     <button data-action="link">🔗</button>
     <button data-action="wikilink">📄</button>
-    <button id="comment-btn">💬</button>
   </div>
 </div>
 
@@ -701,6 +690,26 @@ async init() {
       }
     }
   });
+  
+  // Add back button handler
+document.getElementById('back-btn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  
+  // If we're in a folder, go back to root
+  if (this.currentNote.includes('/')) {
+    await this.switchToNote('Home');
+  } else if (this.currentNote.startsWith('📁 ') && !this.currentNote.includes('/')) {
+    // If we're viewing a folder, go back to root
+    await this.switchToNote('Home');
+  } else {
+    // If we're already at root, show message or do nothing
+    console.log('Already at root');
+  }
+  
+  // Close sidebar after navigation
+  sidebar.classList.remove('open');
+});
+
   
   // Updated note deletion handler with folder support
   // Updated note handler with rename, move, and delete support
