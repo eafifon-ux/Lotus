@@ -557,8 +557,9 @@ class EditorCore {
     this.editor = document.getElementById('editor');
     this.preview = document.getElementById('preview');
     this.currentNote = "Home";
-    this.history = [];
-    this.historyIndex = -1;
+    this.history = {}; // History per note
+this.currentHistoryIndex = {}; // Current position per note
+
     this.noteCache = {};
     this.backlinksMap = {};
     
@@ -601,6 +602,94 @@ async init() {
   this.pushHistory(true);
   await this.updatePreviewAndSave();
 }
+
+pushHistory(force = false) {
+  const value = this.editor.value;
+  
+  // Initialize history for new note if needed
+  if (!this.history[this.currentNote]) {
+    this.history[this.currentNote] = [];
+    this.currentHistoryIndex[this.currentNote] = -1;
+  }
+
+  const history = this.history[this.currentNote];
+  const index = this.currentHistoryIndex[this.currentNote];
+
+  // Don't push if identical to latest history item
+  if (!force && history[index] === value) return;
+
+  // Clear forward history
+  history.splice(index + 1);
+  
+  // Add new state
+  history.push(value);
+  if (history.length > 100) history.shift();
+
+  // Update index
+  this.currentHistoryIndex[this.currentNote] = history.length - 1;
+}
+
+undo() {
+  if (!this.history[this.currentNote]) return;
+  
+  const history = this.history[this.currentNote];
+  const index = this.currentHistoryIndex[this.currentNote];
+
+  if (index <= 0) return; // Can't undo past first state
+  
+  // Move back in history
+  this.currentHistoryIndex[this.currentNote]--;
+  this.editor.value = history[index - 1];
+  this.updatePreviewAndSave();
+}
+
+redo() {
+  if (!this.history[this.currentNote]) return;
+  
+  const history = this.history[this.currentNote];
+  const index = this.currentHistoryIndex[this.currentNote];
+
+  if (index >= history.length - 1) return; // Can't redo past latest state
+  
+  // Move forward in history
+  this.currentHistoryIndex[this.currentNote]++;
+  this.editor.value = history[index + 1];
+  this.updatePreviewAndSave();
+}
+
+async switchToNote(noteName) {
+  if (!noteName || noteName === this.currentNote) return;
+
+  // Save current note content
+  if (this.currentNote) {
+    await VaultDB.set(this.currentNote, this.editor.value);
+    this.noteCache[this.currentNote] = this.editor.value;
+  }
+
+  // Load new note content
+  let content = this.noteCache[noteName];
+  if (!content) {
+    content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+    this.noteCache[noteName] = content;
+  }
+
+  // Update state
+  this.currentNote = noteName;
+  this.editor.value = content;
+
+  // Initialize history for new note if needed
+  if (!this.history[noteName]) {
+    this.history[noteName] = [];
+    this.currentHistoryIndex[noteName] = -1;
+  }
+
+  // Push initial state
+  this.pushHistory();
+  this.updatePreviewAndSave();
+  this.updateActiveNoteUI();
+}
+
+
 
 
   
@@ -750,31 +839,7 @@ document.getElementById('recent-list').addEventListener('click', async (e) => {
 }
 
   
-  // ===== Section 3.2.3 - CORE FUNCTIONALITY =====
-  pushHistory(force = false) {
-    const value = this.editor.value;
-    if (!force && this.history[this.historyIndex] === value) return;
-    
-    this.history.splice(this.historyIndex + 1);
-    this.history.push(value);
-    
-    if (this.history.length > 100) this.history.shift();
-    else this.historyIndex++;
-  }
-  
-  undo() {
-    if (this.historyIndex <= 0) return;
-    this.historyIndex--;
-    this.editor.value = this.history[this.historyIndex];
-    this.updatePreviewAndSave();
-  }
-  
-  redo() {
-    if (this.historyIndex >= this.history.length - 1) return;
-    this.historyIndex++;
-    this.editor.value = this.history[this.historyIndex];
-    this.updatePreviewAndSave();
-  }
+
   
   toggleEditMode() {
     const editMode = this.editor.style.display !== 'none';
@@ -1740,11 +1805,10 @@ makeTasksDraggable() {
 handleToolbarClick(e) {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
-  
+
   const action = btn.dataset.action;
-  e.preventDefault();
-  
-  // Handle special actions
+
+  // Handle undo/redo
   if (action === 'undo') return this.undo();
   if (action === 'redo') return this.redo();
   if (action === 'checkbox') return this.toggleCheckbox();
