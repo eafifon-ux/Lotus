@@ -900,37 +900,7 @@ insertNewListLine(cursor, prefix) {
 
   
 // ===== Section 3.2.4 - NOTE MANAGEMENT =====
-async switchToNote(noteName) {
-    if (!noteName || noteName === this.currentNote) return;
-    
-    // Save current note
-    await VaultDB.set(this.currentNote, this.editor.value);
-    this.noteCache[this.currentNote] = this.editor.value;
-    
-    // Load new note
-    let content = this.noteCache[noteName];
-    if (content === undefined) {
-        content = await VaultDB.get(noteName);
-        if (content === null) {
-            // If note doesn't exist, check if it's in a folder
-            const folderNote = await this.findNoteInFolders(noteName);
-            if (folderNote) {
-                noteName = folderNote; // Use the full path
-                content = await VaultDB.get(noteName);
-            } else {
-                content = `# ${noteName}\n\n`;
-                await VaultDB.set(noteName, content);
-            }
-        }
-        this.noteCache[noteName] = content;
-    }
-    
-    this.currentNote = noteName;
-    this.editor.value = content;
-    this.pushHistory(true);
-    await this.updatePreviewAndSave();
-    this.updateActiveNoteUI();
-}
+
 
 async findNoteInFolders(noteName) {
     const notes = await VaultDB.list();
