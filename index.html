@@ -1232,16 +1232,21 @@ let html = this.renderWikilinks(raw);
 html = this.processHighlights(html);
 html = this.processSubSuperScript(html);
 
-// Convert markdown tasks to HTML before parsing
+// Convert markdown tasks to HTML before parsing with proper markdown support
 html = html.replace(
-  /^- \[([ xX])\] (.*)/gm,
-  '<li class="task-item"><input type="checkbox" $1/>$2</li>'
+  /^- \[([ xX])\] (.*)$/gm,
+  (match, checkbox, content) => {
+    // Process the content with inline markdown first
+    const processedContent = marked.parseInline(content.trim());
+    return `<li class="task-item"><input type="checkbox" ${checkbox === 'x' ? 'checked' : ''}/>${processedContent}</li>`;
+  }
 );
 
 html = marked.parse(html);
 
 // Ensure task lists have the proper class
 html = html.replace(/<ul>/g, '<ul class="task-list">');
+
 
 
     html = this.processGPCStamps(html);
@@ -1584,7 +1589,7 @@ recalcTables() {
 makeCheckboxesInteractive() {
   this.preview.querySelectorAll('li.task-item input[type="checkbox"]').forEach(checkbox => {
     checkbox.disabled = false;
-    
+
     // Set initial state based on markdown
     const taskText = checkbox.closest('li').textContent.trim();
     const lines = this.editor.value.split('\n');
@@ -1593,43 +1598,45 @@ makeCheckboxesInteractive() {
       checkbox.checked = line.match(/^- \[([ xX])\] /)[1] === 'x';
       checkbox.closest('li').classList.toggle('task-completed', checkbox.checked);
     }
-    
+
     checkbox.addEventListener('change', (e) => {
       const taskItem = e.target.closest('li');
       const isChecked = e.target.checked;
-      
+
       // Update visual state
       taskItem.classList.toggle('task-completed', isChecked);
-      
+
       // Update the markdown source
       this.updateTaskInEditor(taskItem, isChecked);
-      
+
       // Reorder tasks if needed
       this.reorderTasksAfterCheck(taskItem, isChecked);
     });
   });
 }
 
+
 updateTaskInEditor(taskItem, isChecked) {
-  const taskText = taskItem.textContent.trim();
+  const taskContent = taskItem.innerHTML; // Preserve nested markdown
   const lines = this.editor.value.split('\n');
-  
+
   // Find the matching line
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes(taskText) && /^- \[[ xX]\]/.test(lines[i])) {
       // Update the checkbox state
       lines[i] = lines[i].replace(
-        /^(- \[)([ xX])(\] .*)/, 
+        /^(- \[)([ xX])(\] .*)/,
         `$1${isChecked ? 'x' : ' '}$3`
       );
       break;
     }
   }
-  
+
   // Update the editor value
   this.editor.value = lines.join('\n');
   this.updatePreviewAndSave(); // Ensure preview is updated with changes
 }
+
 
 reorderTasksAfterCheck(taskItem, isChecked) {
   const taskList = taskItem.parentNode;
