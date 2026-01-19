@@ -1729,13 +1729,17 @@ makeTasksDraggable() {
       
       const btn = document.createElement('button');
       btn.className = 'copy-btn';
-      btn.textContent = '📋';
-      btn.onclick = () => {
-        navigator.clipboard.writeText(block.textContent).then(() => {
-          btn.textContent = '✅';
-          setTimeout(() => btn.textContent = '📋', 1000);
-        });
-      };
+      btn.textContent = '📋'; // Keep the clipboard emoji
+btn.onclick = () => {
+  const blockText = block.cloneNode(true); // Clone the block
+  blockText.querySelector('.copy-btn')?.remove(); // Remove the button from the clone
+  const textToCopy = blockText.textContent.trim(); // Copy only the cleaned text
+  navigator.clipboard.writeText(textToCopy).then(() => {
+    btn.textContent = '✅';
+    setTimeout(() => btn.textContent = '📋', 1000);
+  });
+};
+
       
       block.appendChild(btn);
     });
