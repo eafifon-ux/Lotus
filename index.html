@@ -1585,103 +1585,215 @@ recalcTables() {
 
 
   
-// ===== Section 3.2.7 - TASK MANAGEMENT (IMPROVED) =====
+// ===== Section 3.2.7 - TASK MANAGEMENT (PRESERVE LINKS FIX) =====
 makeCheckboxesInteractive() {
+  // Clear and reinitialize checkboxes
   this.preview.querySelectorAll('li.task-item input[type="checkbox"]').forEach(checkbox => {
-    checkbox.disabled = false;
+    const newCheckbox = checkbox.cloneNode(true);
+    checkbox.replaceWith(newCheckbox);
+  });
 
-    // Set initial state based on markdown
-    const taskText = checkbox.closest('li').textContent.trim();
+  // Initialize fresh checkboxes
+  this.preview.querySelectorAll('li.task-item input[type="checkbox"]').forEach((checkbox, previewIndex) => {
+    checkbox.disabled = false;
+    checkbox.dataset.previewIndex = previewIndex;
+    
+    // Set initial state
+    const taskItem = checkbox.closest('li');
+    const taskText = this.getTaskTextContent(taskItem);
     const lines = this.editor.value.split('\n');
-    const line = lines.find(line => line.includes(taskText) && /^- \[[ xX]\]/.test(line));
-    if (line) {
-      checkbox.checked = line.match(/^- \[([ xX])\] /)[1] === 'x';
-      checkbox.closest('li').classList.toggle('task-completed', checkbox.checked);
+    
+    let editorIndex = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const taskMatch = lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/);
+      if (taskMatch) {
+        const editorTaskText = this.getTaskTextContentFromLine(taskMatch[3]);
+        
+        if (editorIndex === previewIndex || this.taskTextsMatch(editorTaskText, taskText)) {
+          checkbox.checked = taskMatch[2].toLowerCase() === 'x';
+          taskItem.classList.toggle('task-completed', checkbox.checked);
+          break;
+        }
+        editorIndex++;
+      }
     }
 
     checkbox.addEventListener('change', (e) => {
-      const taskItem = e.target.closest('li');
+      e.preventDefault();
       const isChecked = e.target.checked;
-
-      // Update visual state
+      const taskItem = e.target.closest('li');
+      
       taskItem.classList.toggle('task-completed', isChecked);
-
-      // Update the markdown source
       this.updateTaskInEditor(taskItem, isChecked);
-
-      // Reorder tasks if needed
-      this.reorderTasksAfterCheck(taskItem, isChecked);
+      this.reorderTask(taskItem, isChecked);
     });
   });
 }
 
-
-updateTaskInEditor(taskItem, isChecked) {
-  const taskContent = taskItem.innerHTML; // Preserve nested markdown
-  const lines = this.editor.value.split('\n');
-
-  // Find the matching line
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes(taskText) && /^- \[[ xX]\]/.test(lines[i])) {
-      // Update the checkbox state
-      lines[i] = lines[i].replace(
-        /^(- \[)([ xX])(\] .*)/,
-        `$1${isChecked ? 'x' : ' '}$3`
-      );
-      break;
-    }
-  }
-
-  // Update the editor value
-  this.editor.value = lines.join('\n');
-  this.updatePreviewAndSave(); // Ensure preview is updated with changes
+getTaskTextContent(taskItem) {
+  // Get normalized text content from preview
+  const clone = taskItem.cloneNode(true);
+  const checkbox = clone.querySelector('input[type="checkbox"]');
+  if (checkbox) checkbox.remove();
+  
+  let text = clone.textContent.replace(/^\s*-\s*\[\s*[xX]?\s*\]\s*/, '').trim();
+  
+  // Preserve links - replace <a> tags with their href
+  clone.querySelectorAll('a').forEach(link => {
+    text = text.replace(link.textContent, `[${link.textContent}](${link.href})`);
+  });
+  
+  return text.trim();
 }
 
+getTaskTextContentFromLine(editorLine) {
+  // Normalize text content from editor
+  let text = editorLine.trim();
+  
+  // Transform markdown links into simplified format
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+  
+  // Remove formatting
+  text = text.replace(/\*\*(.*?)\*\*/g, '$1');
+  text = text.replace(/__(.*?)__/g, '$1');
+  
+  return text.trim();
+}
 
-reorderTasksAfterCheck(taskItem, isChecked) {
-  const taskList = taskItem.parentNode;
-  if (!taskList) return;
+taskTextsMatch(editorText, previewText) {
+  return this.normalizeTaskText(editorText) === this.normalizeTaskText(previewText);
+}
 
-  // Move checked items to the bottom, unchecked to the top
-  if (isChecked) {
-    taskList.appendChild(taskItem); // Move checked item to bottom
-  } else {
-    // Insert unchecked item before the first completed task
-    const firstCompleted = taskList.querySelector('.task-completed');
-    if (firstCompleted) {
-      taskList.insertBefore(taskItem, firstCompleted);
-    } else {
-      // If no completed tasks, append to the end
-      taskList.appendChild(taskItem);
+normalizeTaskText(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim()
+    .toLowerCase();
+}
+
+updateTaskInEditor(taskItem, isChecked) {
+  const taskText = this.getTaskTextContent(taskItem);
+  const lines = this.editor.value.split('\n');
+  let found = false;
+  
+  // Try matching based on normalized text
+  for (let i = 0; i < lines.length; i++) {
+    const taskMatch = lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/);
+    if (taskMatch) {
+      const editorTaskText = this.getTaskTextContentFromLine(taskMatch[3]);
+      
+      if (this.taskTextsMatch(editorTaskText, taskText)) {
+        // Found matching task - update checkbox while preserving formatting
+        lines[i] = lines[i].replace(
+          /^(- \[)([ xX])(\] )/,
+          `$1${isChecked ? 'x' : ' '}$3`
+        );
+        found = true;
+        break;
+      }
     }
   }
   
-  // Synchronize editor content with updated task order
-  this.updateTasksOrderInEditor();
-}
-
-updateTasksOrderInEditor() {
-  const taskItems = Array.from(this.preview.querySelectorAll('li.task-item'));
-  const lines = this.editor.value.split('\n');
-
-  // Create a new lines array, updating it with the correct task order
-  const newLines = lines.map((line) => {
-    if (/^- \[[ xX]\]/.test(line)) {
-      const index = taskItems.findIndex(item => line.includes(item.textContent.trim()));
-      if (index !== -1) {
-        const checkbox = taskItems[index].querySelector('input');
-        const isChecked = checkbox.checked;
-        return line.replace(
-          /^(- \[)([ xX])(\] .*)/,
-          `$1${isChecked ? 'x' : ' '}$3`
-        );
+  // Fallback: use preview index if text matching fails
+  if (!found) {
+    const checkbox = taskItem.querySelector('input[type="checkbox"]');
+    const previewIndex = parseInt(checkbox?.dataset.previewIndex || '0');
+    let taskCount = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const taskMatch = lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/);
+      if (taskMatch) {
+        if (taskCount === previewIndex) {
+          lines[i] = lines[i].replace(
+            /^(- \[)([ xX])(\] )/,
+            `$1${isChecked ? 'x' : ' '}$3`
+          );
+          break;
+        }
+        taskCount++;
       }
     }
-    return line; // Return the line as is if it's not a task
-  });
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
 
-  this.editor.value = newLines.join('\n'); // Update editor content
-  this.pushHistory(); // Keep track of changes for undo/redo
+syncTaskOrder() {
+  const taskItems = Array.from(this.preview.querySelectorAll('li.task-item'));
+  const lines = this.editor.value.split('\n');
+  
+  // Extract all tasks from editor preserving formatting
+  const editorTasks = [];
+  const nonTaskLines = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const taskMatch = lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/);
+    if (taskMatch) {
+      editorTasks.push({
+        index: i,
+        line: lines[i],
+        text: taskMatch[3].trim()
+      });
+    } else {
+      nonTaskLines.push(lines[i]);
+    }
+  }
+  
+  // Reorder tasks based on DOM with proper formatting
+  const reorderedTasks = [];
+  
+  taskItems.forEach(taskItem => {
+    const taskText = this.getTaskTextContent(taskItem);
+    const checkbox = taskItem.querySelector('input[type="checkbox"]');
+    const isChecked = checkbox ? checkbox.checked : false;
+    
+    // Find matching editor task
+    let matchedTask = null;
+    for (const editorTask of editorTasks) {
+      if (this.taskTextsMatch(this.getTaskTextContentFromLine(editorTask.text), taskText)) {
+        matchedTask = editorTask;
+        break;
+      }
+    }
+    
+    if (matchedTask) {
+      // Update checkbox while preserving original formatting
+      const updatedLine = matchedTask.line.replace(
+        /^(- \[)([ xX])(\] )/,
+        `$1${isChecked ? 'x' : ' '}$3`
+      );
+      reorderedTasks.push(updatedLine);
+    }
+  });
+  
+  // Rebuild document preserving non-task lines
+  const newLines = [];
+  let taskIndex = 0;
+  let nonTaskIndex = 0;
+  
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/)) {
+      if (taskIndex < reorderedTasks.length) {
+        newLines.push(reorderedTasks[taskIndex]);
+        taskIndex++;
+      }
+    } else {
+      newLines.push(lines[i]);
+    }
+  }
+  
+  // Add any remaining tasks
+  while (taskIndex < reorderedTasks.length) {
+    newLines.push(reorderedTasks[taskIndex]);
+    taskIndex++;
+  }
+  
+  this.editor.value = newLines.join('\n');
+  this.pushHistory();
+  this.updatePreviewAndSave();
 }
 
 makeTasksDraggable() {
@@ -1691,39 +1803,52 @@ makeTasksDraggable() {
     draggedItem = e.target.closest('li');
     draggedItem.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'task');
   };
 
   const handleDragOver = (e) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
     const targetItem = e.target.closest('li.task-item');
     if (!targetItem || targetItem === draggedItem) return;
 
     const rect = targetItem.getBoundingClientRect();
     const offset = e.clientY - rect.top;
-    const midpoint = rect.height / 2;
-
-    if (offset < midpoint) {
+    
+    if (offset < rect.height / 2) {
       targetItem.parentNode.insertBefore(draggedItem, targetItem);
     } else {
       targetItem.parentNode.insertBefore(draggedItem, targetItem.nextSibling);
     }
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (e) => {
+    e.preventDefault();
     if (draggedItem) {
       draggedItem.classList.remove('dragging');
-      this.updateTasksOrderInEditor(); // Synchronize order back to the editor
-      draggedItem = null; // Reset dragged item
+      this.syncTaskOrder();
+      draggedItem = null;
     }
   };
 
   this.preview.querySelectorAll('li.task-item').forEach(item => {
     item.draggable = true;
-    item.addEventListener('dragstart', handleDragStart);
-    item.addEventListener('dragover', handleDragOver);
-    item.addEventListener('dragend', handleDragEnd);
+    
+    // Remove old listeners
+    item.ondragstart = null;
+    item.ondragover = null;
+    item.ondragend = null;
+    
+    // Add new listeners
+    item.ondragstart = handleDragStart;
+    item.ondragover = handleDragOver;
+    item.ondragend = handleDragEnd;
   });
+  
+  console.log('Made', this.preview.querySelectorAll('li.task-item').length, 'tasks draggable with links support');
 }
+
 
 
 
