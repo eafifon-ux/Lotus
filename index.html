@@ -317,8 +317,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 
 <!-- ========== Section 2.3 - EDITOR CONTAINER ========== -->
 <div id="editor-container">
-  <textarea id="editor" placeholder="Capture…">
-# Home
+  <textarea id="editor" placeholder="Capture…"># Home
 
 [🗓️ Today](https://www.gpc364.com/p/today.html?m=1)
 [☯️ Balance](https://www.gpc364.com/2025/12/calendar_95.html)
@@ -1294,7 +1293,7 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
               .replace(/\^([\s\S]+?)\^/g, '<sup>$1</sup>');
   }
   
-    processGPCStamps(html) {
+  processGPCStamps(html) {
     // 1. First handle ALL emoji-triggered DOM patterns using their exact Unicode escapes
     const emojiPattern = /(\uD83D[\uDD35\uDFE0-\uDFE4]|\uD83C\uDF7A|\u26AB)\s(\d{2}\.\d{2})/g;
     html = html.replace(emojiPattern, '<span class="gpc-stamp">$1 $2</span>');
@@ -1306,7 +1305,8 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
     html = html.replace(/(Q\d \d{2}|\b\d{3}\b)/g, '<span class="gpc-stamp">$&</span>');
     
     return html;
- }
+}
+
   
   updateBacklinks(currentNote, text) {
     for (const note in this.backlinksMap) {
@@ -1923,7 +1923,13 @@ handleToolbarClick(e) {
   if (action === 'undo') return this.undo();
   if (action === 'redo') return this.redo();
   if (action === 'checkbox') return this.toggleCheckbox();
-  if (action === 'quote') return this.wrapSelection('> ', '');
+  if (action === 'quote') {
+  const cursor = this.editor.selectionStart;
+  const textBefore = this.editor.value.substring(0, cursor);
+  const lineStart = textBefore.lastIndexOf('\n') + 1;
+  this.formatLineAsQuote(lineStart);
+  return;
+}
   if (action === 'code') return this.wrapSelection('```\n', '\n```');
   if (action === 'link') return this.insertLink();
   if (action === 'wikilink') return this.insertWikilink();
@@ -2124,6 +2130,49 @@ wrapSelection(before, after) {
   this.editor.selectionEnd = this.editor.selectionStart + newText.length - before.length - after.length;
   this.updatePreviewAndSave();
 }
+
+// ===== NEW QUOTE INPUT HANDLER =====
+handleQuoteInput(e) {
+  // Only trigger when '>' is typed
+  if (e.key !== '>') return;
+  
+  const cursor = this.editor.selectionStart;
+  const textBefore = this.editor.value.substring(0, cursor);
+  const lineStart = textBefore.lastIndexOf('\n') + 1;
+  
+  // If we're already at start of line with '>', do nothing
+  if (textBefore.substring(lineStart).startsWith('>')) return;
+  
+  // If there's text before cursor on this line, move '>' to start
+  if (cursor > lineStart) {
+    e.preventDefault();
+    this.formatLineAsQuote(lineStart);
+  }
+}
+
+// Add this new method for quote formatting
+formatLineAsQuote(lineStart) {
+  // Get the current line content
+  const lineEnd = this.editor.value.indexOf('\n', lineStart);
+  const currentLine = this.editor.value.substring(
+    lineStart, 
+    lineEnd === -1 ? undefined : lineEnd
+  );
+  
+  // Rebuild the line with '>' at start
+  const newLine = '> ' + currentLine.replace(/^> ?/, '');
+  
+  // Update the editor content
+  this.editor.value = 
+    this.editor.value.substring(0, lineStart) + 
+    newLine + 
+    this.editor.value.substring(lineEnd === -1 ? this.editor.value.length : lineEnd);
+  
+  // Position cursor after the new quote marker
+  this.editor.selectionStart = this.editor.selectionEnd = lineStart + 2;
+  this.updatePreviewAndSave();
+}
+
 
   
 // ===== Section 3.2.10 - AUTO-CONTINUE LISTS =====
