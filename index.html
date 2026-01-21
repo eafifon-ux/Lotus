@@ -575,6 +575,9 @@ async init() {
   this.initDropdownEvents();
   this.initSidebarEvents();
   this.initExportImport();
+ // Initialize reminders
+this.initReminders();
+ 
   
   // Add offline support monitoring
   window.addEventListener('offline', () => {
