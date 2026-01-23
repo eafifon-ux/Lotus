@@ -1287,7 +1287,8 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
   
   processHighlights(html) {
     return html.replace(/==(\w+):([\s\S]+?)==/g, '<span class="highlight $1">$2</span>')
-              .replace(/==([\s\S]+?)==/g, '<span class="highlight">$1</span>');
+              .replace(/==([\s\S]+?)==/g, '<span class="highlight">$1</span>')
+     .replace(/~~([^~]+)~~/g, '<s>$1</s>'); // Add this line for strike-through
   }
   
   processSubSuperScript(html) {
