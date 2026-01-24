@@ -783,24 +783,21 @@ async switchToNote(noteName) {
     }
   });
   
-  // Add back button handler
+  // Replace the current back button handler with this:
 document.getElementById('back-btn').addEventListener('click', async (e) => {
   e.stopPropagation();
   
-  // If we're in a folder, go back to root
-  if (this.currentNote.includes('/')) {
-    await this.switchToNote('Home');
-  } else if (this.currentNote.startsWith('📁 ') && !this.currentNote.includes('/')) {
-    // If we're viewing a folder, go back to root
+  // Always go to Home, regardless of current location
+  if (this.currentNote !== 'Home') {
     await this.switchToNote('Home');
   } else {
-    // If we're already at root, show message or do nothing
-    console.log('Already at root');
+    console.log('Already at Home');
   }
   
   // Close sidebar after navigation
   sidebar.classList.remove('open');
 });
+
 
   
   // Updated note deletion handler with folder support
