@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,6 +91,23 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 #gpc-buttons button { font-size: 1em; padding: 8px 12px; cursor: pointer; border-radius: 6px; border: 1px solid #ccc; background: #f9f9f9; transition: background 0.2s ease; }
 #gpc-buttons button:hover { background: #eee; }
 #gpc-buttons button.active { background: #111; color: #fff; border-color: #111; }
+
+#gpc-display a.wikilink,
+#gpc-display a.wikilink:hover,
+#gpc-display a.wikilink:focus,
+#gpc-display a.wikilink:visited,
+#gpc-display a.wikilink:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    background: none !important;
+    cursor: default !important;           /* ← important: removes hand/pointer cursor */
+    border: none !important;
+}
+
+/* Optional: very subtle hint only when someone actually tries to interact */
+#gpc-display a.wikilink:active {
+    color: inherit;
+}
 
 /* ========== Section 1.3 - EDITOR/PREVIEW ========== */
 #editor-container { flex: 1; display: flex; flex-direction: column; margin-bottom: 60px; }
@@ -575,9 +591,9 @@ async init() {
   this.initDropdownEvents();
   this.initSidebarEvents();
   this.initExportImport();
- // Initialize reminders
+  // Initialize reminders
 this.initReminders();
- 
+
   
   // Add offline support monitoring
   window.addEventListener('offline', () => {
@@ -784,7 +800,7 @@ async switchToNote(noteName) {
     }
   });
   
-  // Replace the current back button handler with this:
+ // Replace the current back button handler with this:
 document.getElementById('back-btn').addEventListener('click', async (e) => {
   e.stopPropagation();
   
@@ -1286,7 +1302,7 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
   processHighlights(html) {
     return html.replace(/==(\w+):([\s\S]+?)==/g, '<span class="highlight $1">$2</span>')
               .replace(/==([\s\S]+?)==/g, '<span class="highlight">$1</span>')
-     .replace(/~~([^~]+)~~/g, '<s>$1</s>'); // Add this line for strike-through
+              .replace(/~~([^~]+)~~/g, '<s>$1</s>'); // Add this line for strike-through
   }
   
   processSubSuperScript(html) {
@@ -2655,8 +2671,16 @@ class GPCCalendar {
       mainText = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
     }
     
-    let heptadText = this.heptadEnabled ? ' ' + (this.heptadMap[doyToday] || '') : '';
-    document.getElementById('gpc-display').textContent = emoji + ' ' + mainText + heptadText;
+    let displayHtml = emoji + ' ' + mainText;
+
+if (this.heptadEnabled) {
+  const heptad = this.heptadMap[doyToday];
+  if (heptad) {
+    displayHtml += ` <a href="#" class="wikilink" data-note="📁 Boomerang/🎴Weeks - Heptad">${heptad}</a>`;
+  }
+}
+
+document.getElementById('gpc-display').innerHTML = displayHtml;
   }
   
   // Section 3.3.5 - Button event handling
@@ -2689,6 +2713,18 @@ class GPCCalendar {
 document.addEventListener('DOMContentLoaded', async () => {
   GPCCalendar.init();
   window.editorCore = new EditorCore();
+  
+  // Make GPC display wikilinks clickable (same behavior as in preview)
+document.getElementById('gpc-display').addEventListener('click', async (e) => {
+  const wikiLink = e.target.closest('.wikilink');
+  if (!wikiLink) return;
+  
+  e.preventDefault();
+  const noteName = wikiLink.dataset.note?.trim();
+  if (noteName) {
+    await window.editorCore.switchToNote(noteName);
+  }
+});
   
   // Section 4.2 - Offline Support Service Worker
   if ('serviceWorker' in navigator) {
