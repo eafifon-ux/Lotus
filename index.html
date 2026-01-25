@@ -2649,39 +2649,48 @@ class GPCCalendar {
   
     // Section 3.3.4 - Display Updates
   static updateGPC() {
-    const { doyToday } = this.calculateGPC();
-    const emoji = this.weekEmojis[(doyToday - 1) % 7] || '';
-    let mainText = '';
-    
-    if(this.baseMode === 'DOY') {
-      mainText = String(doyToday).padStart(3, '0');
-    } else if(this.baseMode === 'DOM') {
-      let remaining = doyToday, monthIndex = 0;
-      for(let i = 0; i < this.gpcMonths.length; i++) {
-        if(remaining <= this.gpcMonths[i].days) { 
-          monthIndex = i; 
-          break; 
-        }
-        remaining -= this.gpcMonths[i].days;
+  const { doyToday } = this.calculateGPC();
+  const emoji = this.weekEmojis[(doyToday - 1) % 7] || '';
+  let displayHtml = emoji + ' ';
+  
+  if (this.baseMode === 'DOY') {
+    const text = String(doyToday).padStart(3, '0');
+    displayHtml += text;
+  } else if (this.baseMode === 'DOS') {
+    const quarter = Math.floor((doyToday - 1) / 91) + 1;
+    const dayInSeason = ((doyToday - 1) % 91) + 1;
+    const text = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
+    displayHtml += text;
+  } else if (this.baseMode === 'DOM') {
+    let remaining = doyToday;
+    let monthIndex = 0;
+    for (let i = 0; i < this.gpcMonths.length; i++) {
+      if (remaining <= this.gpcMonths[i].days) {
+        monthIndex = i;
+        break;
       }
-      mainText = String(monthIndex + 1).padStart(2, '0') + '.' + String(remaining).padStart(2, '0');
-    } else if(this.baseMode === 'DOS') {
-      const quarter = Math.floor((doyToday - 1) / 91) + 1;
-      const dayInSeason = ((doyToday - 1) % 91) + 1;
-      mainText = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
+      remaining -= this.gpcMonths[i].days;
     }
+    const monthNum = String(monthIndex + 1).padStart(2, '0');
+    const dayNum = String(remaining).padStart(2, '0');
+    const dayNumber = parseInt(remaining, 10);
     
-    let displayHtml = emoji + ' ' + mainText;
-
-if (this.heptadEnabled) {
-  const heptad = this.heptadMap[doyToday];
-  if (heptad) {
-    displayHtml += ` <a href="#" class="wikilink" data-note="📁 Boomerang/🎴Weeks - Heptad">${heptad}</a>`;
+    const noteKey = '📁 Boomerang/' + dayNumber;
+    const text = monthNum + '.' + dayNum;
+    
+    displayHtml += '<a href="#" class="wikilink dom-day" data-note="' + noteKey + '">' + text + '</a>';
   }
+  
+  // Heptad only shown when the Heptad button is active
+  if (this.heptadEnabled) {
+    const heptad = this.heptadMap[doyToday];
+    if (heptad) {
+      displayHtml += ' <a href="#" class="wikilink heptad-link" data-note="📁 Boomerang/🎴Weeks - Heptad">' + heptad + '</a>';
+    }
+  }
+  
+  document.getElementById('gpc-display').innerHTML = displayHtml;
 }
-
-document.getElementById('gpc-display').innerHTML = displayHtml;
-  }
   
   // Section 3.3.5 - Button event handling
   static initEvents() {
