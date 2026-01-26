@@ -305,7 +305,23 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   transform: scale(1.1);
 }
 
+/* View stays clean white */
+#preview {
+  background: #ffffff;
+}
 
+/* Edit gets tiny psychological cues */
+#editor {
+  background: #fdfdf5;          /* just enough tint to feel different */
+  font-weight: 500;             /* thicker = "I'm active here" */
+  caret-color: #3b82f6;         /* blue blinking line = clear typing zone */
+  padding: 28px 24px;           /* more space = feels open/editable */
+}
+
+#editor:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.12);
+}
 </style>
 </head>
 <body>
