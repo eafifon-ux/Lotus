@@ -2738,6 +2738,7 @@ class GPCCalendar {
 document.addEventListener('DOMContentLoaded', async () => {
   GPCCalendar.init();
   window.editorCore = new EditorCore();
+  window.editorCore.toggleEditMode();   // flips from edit → view on load
   
   // Make GPC display wikilinks clickable (same behavior as in preview)
 document.getElementById('gpc-display').addEventListener('click', async (e) => {
