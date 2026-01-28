@@ -259,6 +259,32 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 #preview .gpc-stamp { font-family: "Times New Roman", Times, serif !important; text-decoration: none !important; }
 #preview .gregorian-stamp { font-family: Helvetica, Arial, sans-serif !important; text-decoration: none !important; }
 
+ /* Ordered lists: default LTR, RTL only when Hebrew is detected */
+#preview ol {
+    direction: ltr;
+    text-align: left;
+    list-style-position: outside;   /* better alignment in RTL */
+}
+
+/* Auto RTL for lists containing Hebrew */
+#preview ol:has([lang="he" i], [dir="rtl"], .custom-rtl-hebrew) {
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+/* Also apply to Hebrew-context lists */
+.custom-rtl-hebrew ol {
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+/* Fix numbering position in RTL */
+#preview ol[style*="direction: rtl"],
+#preview ol[dir="rtl"] {
+    padding-right: 2.5em;   /* space for numbers on the right */
+    padding-left: 0;
+}
+ 
 .custom-rtl-hebrew { direction: rtl !important; text-align: right !important; unicode-bidi: isolate !important; }
 .custom-rtl-hebrew * { unicode-bidi: isolate; }
 .custom-rtl-hebrew li { display: flex; flex-direction: row-reverse; align-items: flex-start; }
