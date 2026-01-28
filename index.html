@@ -259,7 +259,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 #preview .gpc-stamp { font-family: "Times New Roman", Times, serif !important; text-decoration: none !important; }
 #preview .gregorian-stamp { font-family: Helvetica, Arial, sans-serif !important; text-decoration: none !important; }
 
- /* Ordered lists: default LTR, RTL only when Hebrew is detected */
+/* Ordered lists: default LTR, RTL only when Hebrew is detected */
 #preview ol {
     direction: ltr;
     text-align: left;
@@ -284,7 +284,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
     padding-right: 2.5em;   /* space for numbers on the right */
     padding-left: 0;
 }
- 
+
 .custom-rtl-hebrew { direction: rtl !important; text-align: right !important; unicode-bidi: isolate !important; }
 .custom-rtl-hebrew * { unicode-bidi: isolate; }
 .custom-rtl-hebrew li { display: flex; flex-direction: row-reverse; align-items: flex-start; }
@@ -2135,27 +2135,7 @@ insertBullet() {
   this.updatePreviewAndSave();
 }
 
-insertNumberedList() {
-  const cursor = this.editor.selectionStart;
-  const lines = this.editor.value.split('\n');
-  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
-  const line = lines[lineIndex];
-  
-  // Check if line already has a number
-  if (/^\s*\d+\. /.test(line)) {
-    // Remove number and preserve indentation
-    const indent = (line.match(/^(\s*)/) || [''])[0];
-    lines[lineIndex] = indent + line.substring(indent.length + line.match(/^\s*(\d+)\. /)[0].length);
-  } else {
-    // Add number with proper indentation
-    const indent = (line.match(/^(\s*)/) || [''])[0];
-    const content = line.trim() === '' ? '' : ' ' + line.substring(indent.length).trim();
-    lines[lineIndex] = indent + '1.' + content;
-  }
-  
-  this.editor.value = lines.join('\n');
-  this.updatePreviewAndSave();
-}
+
 
 getSelectedText() {
   return this.editor.value.substring(this.editor.selectionStart, this.editor.selectionEnd);
@@ -2190,22 +2170,69 @@ handleDropdownClick(type, e) {
 toggleCheckbox() {
   const cursor = this.editor.selectionStart;
   const lines = this.editor.value.split('\n');
-  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
-  const line = lines[lineIndex];
+  const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+  let line = lines[lineIdx] || '';
   
-  // Check if line already has a checkbox
-  const checkboxMatch = line.match(/^(\s*)- \[[ xX]\] /);
+  const indent = line.match(/^(\s*)/)?.[1] || '';
   
-  if (checkboxMatch) {
-    // Remove the checkbox
-    lines[lineIndex] = line.replace(/^(\s*)- \[[ xX]\] /, '$1');
+  // Remove any existing number prefix (to avoid wrong order)
+  let content = line.replace(/\d+\.\s*/g, '');
+  
+  // Toggle checkbox part
+  if (/- \[[ xX]\] /.test(content)) {
+    // remove checkbox → keep the rest
+    content = content.replace(/^- \[[ xX]\] /, '');
   } else {
-    // Add a checkbox with proper indentation
-    const indent = (line.match(/^(\s*)/) || [''])[0];
-    lines[lineIndex] = indent + '- [ ] ' + line.substring(indent.length).trim();
+    // add checkbox in front
+    content = '- [ ] ' + content.trimStart();
+  }
+  
+  lines[lineIdx] = indent + content.trimStart();
+  this.editor.value = lines.join('\n');
+  
+  // Optional: if you want to force a number after adding checkbox
+  // this.insertNumberedList();   // ← uncomment if you want auto-number after checkbox
+  
+  this.updatePreviewAndSave();
+}
+
+
+insertNumberedList() {
+  const cursor = this.editor.selectionStart;
+  const lines = this.editor.value.split('\n');
+  const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+  let line = lines[lineIdx] || '';
+  
+  const indent = line.match(/^(\s*)/)?.[1] || '';
+  
+  // Always enforce checkbox first + number second
+  let checkboxPart = '';
+  let rest = line.replace(/^\s*- \[[ xX]\] /, m => {
+    checkboxPart = m;
+    return '';
+  });
+  
+  // Remove any existing number (we will re-add it correctly)
+  rest = rest.replace(/\d+\.\s*/g, '').trimStart();
+  
+  const hasCheckbox = !!checkboxPart;
+  
+  if (/\d+\./.test(line)) {
+    // was already numbered → toggle off number (keep checkbox if present)
+    if (hasCheckbox) {
+      lines[lineIdx] = indent + checkboxPart + rest;
+    } else {
+      lines[lineIdx] = indent + rest;
+    }
+  } else {
+    // add number — always AFTER checkbox if checkbox exists
+    const numberPrefix = hasCheckbox ? '1. ' : '1. ';
+    const beforeNumber = hasCheckbox ? checkboxPart : '';
+    lines[lineIdx] = indent + beforeNumber + numberPrefix + rest;
   }
   
   this.editor.value = lines.join('\n');
+  this.renumberListsAtCursor?.(); // call if you have renumber function
   this.updatePreviewAndSave();
 }
 
