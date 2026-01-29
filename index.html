@@ -1803,15 +1803,15 @@ syncTaskOrder() {
     tempDiv.querySelector('input')?.remove();
     const renderedContent = tempDiv.innerHTML.trim();
     
-    // Improved reverse conversion — especially for highlights
+    // Enhanced reverse conversion with CORRECT highlight handling
     let markdownLike = renderedContent
       // Wikilinks
       .replace(/<a[^>]*data-note="([^"]*)"[^>]*>(.*?)<\/a>/g, '[[$1|$2]]')
       .replace(/<a[^>]*>(.*?)<\/a>/g, '[[$1]]')
       
-      // Highlights — restore color prefix when possible
+      // Highlights - CRITICAL FIX: No color prefix for simple highlights
       .replace(/<span class="highlight\s+([a-z]+)">([^<]+)<\/span>/gi, '==$1:$2==')
-      .replace(/<span class="highlight">([^<]+)<\/span>/gi, '==highlight:$1==')
+      .replace(/<span class="highlight">([^<]+)<\/span>/gi, '==$1==')  // Simple highlight
       
       // Other formatting
       .replace(/<s>(.*?)<\/s>/gi, '~~$1~~')
@@ -1820,11 +1820,11 @@ syncTaskOrder() {
       .replace(/<u>(.*?)<\/u>/gi, '<u>$1</u>')
       .replace(/<sub>(.*?)<\/sub>/gi, '~$1~')
       .replace(/<sup>(.*?)<\/sup>/gi, '^$1^')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
       .trim();
     
-    // ─────────────────────────────────────────────────────────────
-    // Scoring to find the best original line
-    // ─────────────────────────────────────────────────────────────
+    // Find the best matching original line
     let bestMatchLine = null;
     let bestScore = -1;
     
@@ -1838,38 +1838,33 @@ syncTaskOrder() {
       
       let score = 0;
       
-      // 1. Core match: normalized text equality
-      if (this.taskTextsMatch(rawContent, markdownLike)) {
-        score += 100;
+      // 1. Check for highlight patterns
+      const hasHighlight = rawContent.includes('==');
+      const hasHighlightInPreview = markdownLike.includes('==');
+      
+      if (hasHighlight && hasHighlightInPreview) {
+        score += 80;
+        
+        // Check if it's the same type of highlight
+        const hasColorPrefix = /==\w+:/.test(rawContent);
+        const hasColorPrefixInPreview = /==\w+:/.test(markdownLike);
+        
+        if (hasColorPrefix === hasColorPrefixInPreview) score += 40;
       }
       
-      // 2. Wikilink presence + target match
-      const hasLinkInPreview = renderedContent.includes('class="wikilink"');
-      const hasLinkInSource = rawContent.includes('[[');
-      if (hasLinkInPreview && hasLinkInSource) score += 40;
+      // 2. Text content match (ignoring formatting)
+      const rawTextOnly = rawContent.replace(/==[^=]*?==/g, '').trim();
+      const previewTextOnly = markdownLike.replace(/==[^=]*?==/g, '').trim();
       
-      const linkTarget = renderedContent.match(/data-note="([^"]+)"/)?.[1];
-      if (linkTarget && rawContent.includes(linkTarget)) score += 60;
+      if (rawTextOnly && rawTextOnly === previewTextOnly) score += 100;
       
-      // 3. Highlight presence + color match
-      const hasHighlightInPreview = renderedContent.includes('class="highlight');
-      const hasHighlightInSource = rawContent.includes('==');
-      if (hasHighlightInPreview && hasHighlightInSource) score += 45;
-      
-      const colorMatch = renderedContent.match(/class="highlight\s+([a-z]+)/i);
-      if (colorMatch) {
-        const color = colorMatch[1].toLowerCase();
-        if (rawContent.toLowerCase().includes(color)) score += 35;
-      }
+      // 3. Checkbox state
+      const wasChecked = line.match(/\[([xX])\]/)?.[1]?.toLowerCase() === 'x';
+      if (wasChecked === isChecked) score += 30;
       
       // 4. Length similarity
       const lenDiff = Math.abs(rawContent.length - markdownLike.length);
-      if (lenDiff <= 3) score += 20;
-      else if (lenDiff <= 10) score += 10;
-      
-      // 5. Checkbox state bonus
-      const wasChecked = line.match(/\[([xX])\]/)?.[1]?.toLowerCase() === 'x';
-      if (wasChecked === isChecked) score += 8;
+      if (lenDiff <= 5) score += 20;
       
       if (score > bestScore) {
         bestScore = score;
@@ -1877,43 +1872,28 @@ syncTaskOrder() {
       }
     }
     
-    // ─────────────────────────────────────────────────────────────
-    // Choose best match or fallback
-    // ─────────────────────────────────────────────────────────────
+    // Use best match or create fallback
     let finalLine;
     
-    if (bestMatchLine && bestScore >= 65) { // lowered slightly — raise to 75+ later if stable
+    if (bestMatchLine && bestScore >= 100) {
+      // Update checkbox state while preserving formatting
       finalLine = bestMatchLine.replace(
         /^(- \[)([ xX])(\] )(.*)$/,
         `$1${isChecked ? 'x' : ' '}$3$4`
       );
     } else {
-      // Improved fallback with better indent detection
-      let indent = '';
-      const parentUl = taskItem.closest('ul.task-list');
-      if (parentUl) {
-        // Try to inherit indent from previous sibling or parent context
-        const prevSib = parentUl.previousElementSibling;
-        if (prevSib && prevSib.textContent) {
-          const m = prevSib.textContent.match(/^\s*/);
-          indent = m ? m[0] : '';
-        } else {
-          // Fallback to counting nesting level × 2 spaces
-          const nestingLevel = (taskItem.closest('ul')?.querySelectorAll('ul')?.length || 0) + 1;
-          indent = '  '.repeat(nestingLevel);
-        }
-      }
+      // Fallback with proper indentation
+      const indentLevel = (taskItem.closest('ul')?.querySelectorAll('ul')?.length || 0);
+      const indent = '  '.repeat(indentLevel);
       
-      finalLine = `\( {indent}- [ \){isChecked ? 'x' : ' '}] ${markdownLike}`;
-      console.warn("[syncTaskOrder fallback used]", markdownLike.substring(0, 80));
+      // Use the markdown we reconstructed
+      finalLine = `${indent}- [${isChecked ? 'x' : ' '}] ${markdownLike}`;
     }
     
     reorderedRawLines.push(finalLine);
   });
   
-  // ─────────────────────────────────────────────────────────────
-  // Rebuild editor content with new task order
-  // ─────────────────────────────────────────────────────────────
+  // Rebuild editor content
   let taskIdx = 0;
   for (let i = 0; i < newLines.length; i++) {
     if (/^(\s*)- \[[ xX]\] /.test(newLines[i])) {
@@ -1928,6 +1908,7 @@ syncTaskOrder() {
   this.pushHistory();
   this.updatePreviewAndSave();
 }
+
 
 makeTasksDraggable() {
   let draggedItem = null;
