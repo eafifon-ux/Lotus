@@ -2769,20 +2769,39 @@ class GPCCalendar {
     return { gpcYear, doyToday };
   }
   
-    // Section 3.3.4 - Display Updates
-  static updateGPC() {
+// ===== Section 3.3.4 - Display Updates =====
+static updateGPC() {
   const { doyToday } = this.calculateGPC();
   const emoji = this.weekEmojis[(doyToday - 1) % 7] || '';
   let displayHtml = emoji + ' ';
   
   if (this.baseMode === 'DOY') {
     const text = String(doyToday).padStart(3, '0');
-    displayHtml += text;
+    
+    // Find current month from DOY (same logic as DOM mode)
+    let remaining = doyToday;
+    let monthIndex = 0;
+    for (let i = 0; i < this.gpcMonths.length; i++) {
+      if (remaining <= this.gpcMonths[i].days) {
+        monthIndex = i;
+        break;
+      }
+      remaining -= this.gpcMonths[i].days;
+    }
+    
+    // Get month name and create link to month note
+    const monthName = this.gpcMonths[monthIndex].name;
+    const noteKey = '📁 Boomerang/' + monthName;
+    
+    // Make DOY number clickable to go to current month
+    displayHtml += '<a href="#" class="wikilink" data-note="' + noteKey + '">' + text + '</a>';
+    
   } else if (this.baseMode === 'DOS') {
     const quarter = Math.floor((doyToday - 1) / 91) + 1;
     const dayInSeason = ((doyToday - 1) % 91) + 1;
     const text = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
     displayHtml += text;
+    
   } else if (this.baseMode === 'DOM') {
     let remaining = doyToday;
     let monthIndex = 0;
@@ -2813,6 +2832,7 @@ class GPCCalendar {
   
   document.getElementById('gpc-display').innerHTML = displayHtml;
 }
+
   
   // Section 3.3.5 - Button event handling
   static initEvents() {
