@@ -301,17 +301,41 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   content: '☑';
 }
 
-/* Adjust collapse arrow position for checkbox headings */
+/* === Checkbox headings: hide collapse triangle / arrow completely === */
 #preview h1.checkbox-heading::after,
 #preview h2.checkbox-heading::after,
 #preview h3.checkbox-heading::after,
 #preview h4.checkbox-heading::after,
 #preview h5.checkbox-heading::after,
 #preview h6.checkbox-heading::after {
-  left: 1.2em;
+  display: none !important;
 }
 
+/* Optional but very recommended: strikethrough + visual feedback when checked */
+#preview h1.checkbox-heading.checked,
+#preview h2.checkbox-heading.checked,
+#preview h3.checkbox-heading.checked,
+#preview h4.checkbox-heading.checked,
+#preview h5.checkbox-heading.checked,
+#preview h6.checkbox-heading.checked {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.2px;
+  text-decoration-color: #888;
+  color: #555;
+  opacity: 0.85;
+  background: rgba(0,0,0,0.015);
+}
 
+/* Make checkbox symbol a bit more prominent when checked */
+#preview h1.checkbox-heading.checked::before,
+#preview h2.checkbox-heading.checked::before,
+#preview h3.checkbox-heading.checked::before,
+#preview h4.checkbox-heading.checked::before,
+#preview h5.checkbox-heading.checked::before,
+#preview h6.checkbox-heading.checked::before {
+  color: #2e7d32;           /* nice green for checked */
+  font-size: 1.1em;
+}
 
 #preview .backlinks { margin: 2em 0 1em 0; padding: 0.5em 0; border-top: 1px solid #e5e5e5; }
 #preview .backlinks h4 { margin: 0 0 0.8em 0; font-size: 1em; color: #666; font-weight: 400; }
