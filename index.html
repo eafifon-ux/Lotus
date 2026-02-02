@@ -239,6 +239,80 @@ h1:not(.collapsed)::before, h2:not(.collapsed)::before, h3:not(.collapsed)::befo
 h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::before { transform: rotate(90deg); }
 .collapsed + .collapsible-content { display: none; }
 
+/* ========== Section 1.7 - PREVIEW STYLES (Add this to your existing CSS) ========== */
+
+/* Heading collapse styles */
+#preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { 
+  cursor: pointer; 
+  user-select: none; 
+  position: relative; 
+  padding-left: 1.2em; 
+}
+#preview h2 { margin-left: 1.2em; } 
+#preview h3 { margin-left: 2.4em; } 
+#preview h4 { margin-left: 3.6em; } 
+#preview h5 { margin-left: 4.8em; } 
+#preview h6 { margin-left: 6em; }
+
+#preview h1::before, #preview h2::before, #preview h3::before, 
+#preview h4::before, #preview h5::before, #preview h6::before { 
+  content: '▶'; 
+  position: absolute; 
+  left: 0; 
+  transition: transform 0.2s ease; 
+  font-size: 0.9em; 
+  top: 0.05em; 
+}
+
+#preview h1.collapsed::before, #preview h2.collapsed::before, #preview h3.collapsed::before, 
+#preview h4.collapsed::before, #preview h5.collapsed::before, #preview h6.collapsed::before { 
+  transform: rotate(0deg); 
+}
+
+#preview h1:not(.collapsed)::before, #preview h2:not(.collapsed)::before, #preview h3:not(.collapsed)::before, 
+#preview h4:not(.collapsed)::before, #preview h5:not(.collapsed)::before, #preview h6:not(.collapsed)::before { 
+  transform: rotate(90deg); 
+}
+
+.collapsed + .collapsible-content { 
+  display: none; 
+}
+
+/* Checkbox heading styles */
+#preview h1.checkbox-heading::before,
+#preview h2.checkbox-heading::before,
+#preview h3.checkbox-heading::before,
+#preview h4.checkbox-heading::before,
+#preview h5.checkbox-heading::before,
+#preview h6.checkbox-heading::before {
+  content: '☐';
+  position: absolute;
+  left: 0;
+  font-size: 1em;
+  top: 0.05em;
+}
+
+#preview h1.checkbox-heading.checked::before,
+#preview h2.checkbox-heading.checked::before,
+#preview h3.checkbox-heading.checked::before,
+#preview h4.checkbox-heading.checked::before,
+#preview h5.checkbox-heading.checked::before,
+#preview h6.checkbox-heading.checked::before {
+  content: '☑';
+}
+
+/* Adjust collapse arrow position for checkbox headings */
+#preview h1.checkbox-heading::after,
+#preview h2.checkbox-heading::after,
+#preview h3.checkbox-heading::after,
+#preview h4.checkbox-heading::after,
+#preview h5.checkbox-heading::after,
+#preview h6.checkbox-heading::after {
+  left: 1.2em;
+}
+
+
+
 #preview .backlinks { margin: 2em 0 1em 0; padding: 0.5em 0; border-top: 1px solid #e5e5e5; }
 #preview .backlinks h4 { margin: 0 0 0.8em 0; font-size: 1em; color: #666; font-weight: 400; }
 #preview .backlinks ul { margin: 0; padding-left: 0; list-style: none; }
@@ -1971,58 +2045,124 @@ makeTasksDraggable() {
 
 
   
-  // ===== Section 3.2.8 - UI ENHANCEMENTS =====
-  addCopyButtons() {
-    this.preview.querySelectorAll('pre').forEach(block => {
-      if (block.querySelector('.copy-btn')) return;
-      
-      const btn = document.createElement('button');
-      btn.className = 'copy-btn';
-      btn.textContent = '📋'; // Keep the clipboard emoji
-btn.onclick = () => {
-  const blockText = block.cloneNode(true); // Clone the block
-  blockText.querySelector('.copy-btn')?.remove(); // Remove the button from the clone
-  const textToCopy = blockText.textContent.trim(); // Copy only the cleaned text
-  navigator.clipboard.writeText(textToCopy).then(() => {
-    btn.textContent = '✅';
-    setTimeout(() => btn.textContent = '📋', 1000);
+// ===== Section 3.2.8 - UI ENHANCEMENTS =====
+addCopyButtons() {
+  this.preview.querySelectorAll('pre').forEach(block => {
+    if (block.querySelector('.copy-btn')) return;
+    
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = '📋';
+    btn.onclick = () => {
+      const blockText = block.cloneNode(true);
+      blockText.querySelector('.copy-btn')?.remove();
+      const textToCopy = blockText.textContent.trim();
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        btn.textContent = '✅';
+        setTimeout(() => btn.textContent = '📋', 1000);
+      });
+    };
+    
+    block.appendChild(btn);
   });
-};
+}
 
+wrapHeadingsForCollapse() {
+  this.preview.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
+    if (h.dataset.processed) return;
+    
+    const headingText = h.textContent.trim();
+    
+    // Check for checkbox heading patterns: + [ ] or - [ ]
+    const checkboxMatch = headingText.match(/^([+-])\s*\[([ xX])\]\s*(.*)$/);
+    
+    if (checkboxMatch) {
+      const prefix = checkboxMatch[1]; // + or -
+      const checkboxState = checkboxMatch[2].toLowerCase(); // x or space
+      const actualText = checkboxMatch[3].trim();
       
-      block.appendChild(btn);
-    });
-  }
-  
-  wrapHeadingsForCollapse() {
-    this.preview.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
-      if (h.dataset.processed) return;
+      // Update the heading text to show only the actual content
+      h.textContent = actualText;
       
-      const wrapper = document.createElement('div');
-      wrapper.className = 'collapsible-content';
-      
-      let next = h.nextElementSibling;
-      while (next && (!next.tagName || !next.tagName.match(/^H[1-6]$/) || parseInt(next.tagName[1]) > parseInt(h.tagName[1]))) {
-        const temp = next.nextElementSibling;
-        wrapper.appendChild(next);
-        next = temp;
+      // Add checkbox heading classes
+      h.classList.add('checkbox-heading');
+      if (checkboxState === 'x') {
+        h.classList.add('checked');
       }
       
-      h.after(wrapper);
-      h.addEventListener('click', () => h.classList.toggle('collapsed'));
-      h.dataset.processed = true;
-    });
-  }
-  
-  applyRTL() {
-    this.preview.querySelectorAll('p, li, td, th').forEach(el => {
-      if (/[\u0590-\u05FF]/.test(el.textContent)) {
-        el.classList.add('custom-rtl-hebrew');
+      // Store original prefix for toggling
+      h.dataset.prefix = prefix;
+      h.dataset.originalText = actualText;
+      
+      // Set collapse state based on prefix
+      if (prefix === '-') {
+        h.classList.add('collapsed');
       } else {
-        el.classList.remove('custom-rtl-hebrew');
+        h.classList.remove('collapsed');
+      }
+    } else {
+      // Original logic for + or - collapse prefixes (non-checkbox)
+      const hasPlusPrefix = headingText.startsWith('+');
+      const hasMinusPrefix = headingText.startsWith('-');
+      
+      if (hasPlusPrefix || hasMinusPrefix) {
+        h.textContent = headingText.substring(1).trim();
+      }
+      
+      // Set collapse state based on prefix
+      if (hasMinusPrefix) {
+        h.classList.add('collapsed');
+      } else if (hasPlusPrefix) {
+        h.classList.remove('collapsed');
+      }
+    }
+    
+    // Create wrapper for collapsible content
+    const wrapper = document.createElement('div');
+    wrapper.className = 'collapsible-content';
+    
+    // Find all content until next same/higher level heading
+    let next = h.nextElementSibling;
+    while (next && (!next.tagName || !next.tagName.match(/^H[1-6]$/) || parseInt(next.tagName[1]) > parseInt(h.tagName[1]))) {
+      const temp = next.nextElementSibling;
+      wrapper.appendChild(next);
+      next = temp;
+    }
+    
+    h.after(wrapper);
+    
+    // Add click handler for toggling
+    h.addEventListener('click', (e) => {
+      // If clicking on the checkbox area (first 1.5em)
+      const rect = h.getBoundingClientRect();
+      const isCheckboxClick = e.clientX - rect.left < 24; // 24px click area
+      
+      if (h.classList.contains('checkbox-heading') && isCheckboxClick) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleCheckboxHeading(h);
+      } else {
+        // Otherwise toggle collapse
+        h.classList.toggle('collapsed');
+        this.updateCollapsePrefixInEditor(h);
       }
     });
-  }
+    
+    h.dataset.processed = true;
+  });
+}
+
+
+applyRTL() {
+  this.preview.querySelectorAll('p, li, td, th').forEach(el => {
+    if (/[\u0590-\u05FF]/.test(el.textContent)) {
+      el.classList.add('custom-rtl-hebrew');
+    } else {
+      el.classList.remove('custom-rtl-hebrew');
+    }
+  });
+}
+
   
 // ===== Section 3.2.9 - TOOLBAR HANDLERS =====
 handleToolbarClick(e) {
@@ -2691,6 +2831,91 @@ showWednesdayReminder() {
     }
   }
 }
+
+// ===== Section 3.2.14 - CHECKBOX HEADINGS =====
+toggleCheckboxHeading(headingElement) {
+  headingElement.classList.toggle('checked');
+  this.updateCheckboxHeadingInEditor(headingElement);
+}
+
+updateCheckboxHeadingInEditor(headingElement) {
+  const actualText = headingElement.dataset.originalText || headingElement.textContent.trim();
+  const isChecked = headingElement.classList.contains('checked');
+  const prefix = headingElement.dataset.prefix || '+';
+  const headingLevel = parseInt(headingElement.tagName[1]);
+  
+  // Find the original line in editor
+  const lines = this.editor.value.split('\n');
+  const headingPrefix = '#'.repeat(headingLevel) + ' ';
+  
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith(headingPrefix) && 
+        lines[i].includes(actualText)) {
+      
+      // Check if this line already has checkbox formatting
+      const checkboxMatch = lines[i].match(/^#{1,6}\s*([+-])\s*\[([ xX])\]\s*(.*)$/);
+      
+      if (checkboxMatch) {
+        // Update existing checkbox
+        lines[i] = `${headingPrefix}${prefix} [${isChecked ? 'x' : ' '}] ${actualText}`;
+      } else {
+        // Check if it's a regular heading with + or - prefix
+        const regularMatch = lines[i].match(/^#{1,6}\s*([+-]?)\s*(.*)$/);
+        if (regularMatch) {
+          const existingPrefix = regularMatch[1] || '+';
+          const existingText = regularMatch[2];
+          lines[i] = `${headingPrefix}${existingPrefix} [${isChecked ? 'x' : ' '}] ${existingText}`;
+        } else {
+          // Convert regular heading to checkbox heading
+          lines[i] = `${headingPrefix}+ [${isChecked ? 'x' : ' '}] ${actualText}`;
+        }
+      }
+      break;
+    }
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+
+updateCollapsePrefixInEditor(headingElement) {
+  const headingText = headingElement.textContent.trim();
+  const isCollapsed = headingElement.classList.contains('collapsed');
+  const headingLevel = parseInt(headingElement.tagName[1]);
+  const isCheckboxHeading = headingElement.classList.contains('checkbox-heading');
+  
+  // Don't update checkbox headings here - they're handled separately
+  if (isCheckboxHeading) return;
+  
+  // Find the original line in editor
+  const lines = this.editor.value.split('\n');
+  const headingPrefix = '#'.repeat(headingLevel) + ' ';
+  
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith(headingPrefix) && 
+        lines[i].includes(headingText)) {
+      
+      // Check if it already has + or - prefix
+      const prefixMatch = lines[i].match(/^#{1,6}\s*([+-]?)\s*(.*)$/);
+      
+      if (prefixMatch) {
+        const existingText = prefixMatch[2];
+        const newPrefix = isCollapsed ? '-' : '+';
+        lines[i] = `${headingPrefix}${newPrefix} ${existingText}`;
+      } else {
+        // Add prefix to heading
+        const newPrefix = isCollapsed ? '-' : '+';
+        lines[i] = `${headingPrefix}${newPrefix} ${headingText}`;
+      }
+      break;
+    }
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
 
 } // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
 
