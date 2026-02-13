@@ -1494,7 +1494,10 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
     html = html.replace(/([♣♠♦♥]️)\s*(\d+)/g, '<span class="gpc-stamp">$1</span> <strong>$2</strong>');
     html = html.replace(/(\d{4}\.\d{3})/g, '<span class="gpc-stamp">$&</span>');
     html = html.replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="gregorian-stamp">$&</span>');
-    html = html.replace(/(Q\d \d{2}|\b\d{3}\b)/g, '<span class="gpc-stamp">$&</span>');
+    html = html.replace(
+  /(Q\d \d{2}|(?<![\d,])\d{3}(?![\d,]))/g,
+  '<span class="gpc-stamp">$1</span>'
+);
     
     return html;
 }
