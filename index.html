@@ -212,35 +212,7 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 .copy-btn { position: absolute; top: 4px; right: 4px; padding: 4px 6px; font-size: 14px; cursor: pointer; border: none; background: #eee; border-radius: 4px; z-index: 10; }
 
 #preview table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-#preview th,
-#preview td {
-  border: 1px solid #999;
-  padding: 6px 10px;
-  text-align: left;
-  /* Default */
-}
-
-/* Force override for Markdown-generated inline styles */
-#preview th[style*="text-align"],
-#preview td[style*="text-align"] {
-  text-align: inherit !important;
-}
-
-/* Explicitly handle specific alignments */
-#preview table thead th:nth-child(1),
-#preview table tbody td:nth-child(1) {
-  text-align: left;
-}
-
-#preview table thead th:nth-child(2),
-#preview table tbody td:nth-child(2) {
-  text-align: center;
-}
-
-#preview table thead th:nth-child(3),
-#preview table tbody td:nth-child(3) {
-  text-align: right;
-}
+#preview th, #preview td { border: 1px solid #999; padding: 6px 10px; }
 #preview th { background-color: #f2f2f2; }
 
 #preview ul, #preview ol { padding-left: 1.6em; margin: 0.4em 0; }
