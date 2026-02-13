@@ -1736,16 +1736,26 @@ recalcTables() {
       return 'data'; // All other rows are treated as data
     };
 
-    const sumDataAbove = idx => {
-      let sum = 0;
-      for (let i = 1; i < idx; i++) { // Start from 1 to skip header
-        if (rowType(rows[i]) !== 'formula' && rowType(rows[i]) !== 'total') {
-          const v = parseFloat(rows[i].cells[col]?.textContent);
-          if (!isNaN(v)) sum += v;
-        }
+    const sumDataAbove = (idx) => {
+  let sum = 0;
+  for (let i = 1; i < idx; i++) { // skip header
+    if (rowType(rows[i]) !== 'formula' && rowType(rows[i]) !== 'total') {
+      let text = rows[i].cells[col]?.textContent?.trim() || "0";
+      
+      // ── Key fix ────────────────────────────────
+      text = text.replace(/,/g, ""); // remove thousand separators
+      text = text.replace(/\s+/g, ""); // optional: remove any spaces too
+      
+      const num = parseFloat(text);
+      // ───────────────────────────────────────────
+      
+      if (!isNaN(num)) {
+        sum += num;
       }
-      return sum;
-    };
+    }
+  }
+  return sum;
+};
 
     // formulas first - skip header row (index 0)
     rows.forEach((row, i) => {
@@ -1767,7 +1777,13 @@ recalcTables() {
         op === '*' ? base * sum :
         sum ? base / sum : 0;
 
-      cell.innerHTML = `<strong style="color:#0066cc">${result}</strong>`;
+      // Format with commas (US/English style)
+const formatted = Number(result).toLocaleString('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2 // or 0 if you want no decimals
+});
+
+cell.innerHTML = `<strong style="color:#0066cc">${formatted}</strong>`;
     });
 
     // totals last - skip header row (index 0)
@@ -1777,13 +1793,16 @@ recalcTables() {
 
       const total = sumDataAbove(i);
       row.cells[0].innerHTML = `<strong>Total</strong>`;
-      row.cells[col].innerHTML = `<strong style="color:green">${total}</strong>`;
+      // Format number with commas (US/English style)
+const formattedTotal = Number(total).toLocaleString('en-US', {
+  minimumFractionDigits: 0, // no decimals if whole number
+  maximumFractionDigits: 2 // show up to 2 decimals if needed
+});
+
+row.cells[col].innerHTML = `<strong style="color:green">${formattedTotal}</strong>`;
     });
   });
 }
-
-
-
   
 // ===== Section 3.2.7 - TASK MANAGEMENT (PRESERVE LINKS FIX) =====
 makeCheckboxesInteractive() {
