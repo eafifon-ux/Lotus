@@ -617,6 +617,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-action="del-row">- Row</button>
   <button data-action="add-col">+ Col</button>
   <button data-action="del-col">- Col</button>
+  <button data-action="add-remaining">🧾 Remaining</button>
   <button data-action="add-calc">🧮 Calculator</button>
   <button data-action="row-up">Row ↑</button>
   <button data-action="row-down">Row ↓</button>
@@ -1601,6 +1602,7 @@ handleTableAction(action) {
     'row-down':  () => this.moveRowDown(table),
     'col-left':  () => this.moveColumnLeft(table),
     'col-right': () => this.moveColumnRight(table),
+      'add-remaining':    () => this.addRemainingRow(table),
     'add-calc':  () => this.addCalculator(table)
   };
 
@@ -1718,6 +1720,28 @@ addCalculator(table) {
   const cols = this.splitRow(table.lines[table.start]).length;
   const row = this.joinRow(['Σ', ...Array(cols - 1).fill('+')]);
   table.lines.splice(table.end + 1, 0, row);
+}
+
+// NEW: Remaining row insert
+addRemainingRow(table) {
+  const cols = this.splitRow(table.lines[table.start]).length;
+  
+  const formulaCells = [
+    "Remaining",
+    "1000+@Σ",
+    ...Array(cols - 2).fill("   ")
+  ];
+  
+  const newRow = this.joinRow(formulaCells);
+  
+  let insertPos = table.end + 1;
+  
+  // If there's already a Σ/total row → insert just before it
+  if (table.lines[table.end]?.trim().startsWith('| Σ ')) {
+    insertPos = table.end;
+  }
+  
+  table.lines.splice(insertPos, 0, newRow);
 }
 
 // ---------- CALCULATOR ENGINE (CORRECT) ----------
@@ -2314,31 +2338,6 @@ insertFolderLink() {
   this.replaceSelection(wikilink);
 }
 
-
-insertBullet() {
-  const cursor = this.editor.selectionStart;
-  const lines = this.editor.value.split('\n');
-  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
-  const line = lines[lineIndex];
-  
-  // Check if line already has a bullet
-  if (/^\s*- /.test(line)) {
-    // Remove bullet and preserve indentation
-    const indent = (line.match(/^(\s*)/) || [''])[0];
-    lines[lineIndex] = indent + line.substring(indent.length + 2);
-  } else {
-    // Add bullet with proper indentation
-    const indent = (line.match(/^(\s*)/) || [''])[0];
-    const content = line.trim() === '' ? '' : ' ' + line.substring(indent.length).trim();
-    lines[lineIndex] = indent + '-' + content;
-  }
-  
-  this.editor.value = lines.join('\n');
-  this.updatePreviewAndSave();
-}
-
-
-
 getSelectedText() {
   return this.editor.value.substring(this.editor.selectionStart, this.editor.selectionEnd);
 }
@@ -2369,72 +2368,189 @@ handleDropdownClick(type, e) {
 
 
 
-toggleCheckbox() {
-  const cursor = this.editor.selectionStart;
-  const lines = this.editor.value.split('\n');
-  const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
-  let line = lines[lineIdx] || '';
+// Bullet list (• button) - toggle on/off for multi-line
+insertBullet() {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
   
-  const indent = line.match(/^(\s*)/)?.[1] || '';
-  
-  // Remove any existing number prefix (to avoid wrong order)
-  let content = line.replace(/\d+\.\s*/g, '');
-  
-  // Toggle checkbox part
-  if (/- \[[ xX]\] /.test(content)) {
-    // remove checkbox → keep the rest
-    content = content.replace(/^- \[[ xX]\] /, '');
-  } else {
-    // add checkbox in front
-    content = '- [ ] ' + content.trimStart();
+  if (start === end) {
+    // Single-line: your original logic (unchanged)
+    const cursor = this.editor.selectionStart;
+    const lines = this.editor.value.split('\n');
+    const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+    const line = lines[lineIdx] || '';
+    
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    if (/^\s*- /.test(line)) {
+      lines[lineIdx] = indent + line.substring(indent.length + 2);
+    } else {
+      const content = line.trim() === '' ? '' : ' ' + line.substring(indent.length).trim();
+      lines[lineIdx] = indent + '-' + content;
+    }
+    this.editor.value = lines.join('\n');
+    this.updatePreviewAndSave();
+    return;
   }
   
-  lines[lineIdx] = indent + content.trimStart();
-  this.editor.value = lines.join('\n');
+  // Multi-line: toggle bullets on/off
+  let selected = this.editor.value.substring(start, end);
+  let lines = selected.split('\n');
   
-  // Optional: if you want to force a number after adding checkbox
-  // this.insertNumberedList();   // ← uncomment if you want auto-number after checkbox
+  // Check if ALL non-empty lines already start with bullet
+  const allAreBullets = lines.every(line => {
+    const trimmed = line.trimStart();
+    return trimmed === '' || trimmed.startsWith('- ');
+  });
   
+  if (allAreBullets) {
+    // Remove bullets
+    lines = lines.map(line =>
+      line.replace(/^\s*- /, '').trimStart()
+    );
+  } else {
+    // Add bullets (clean first)
+    lines = lines.map(line => {
+      const cleaned = line.replace(/^\s*([-*+]|\d+\.|- \[[ xX]\]?\s*)/, '').trimStart();
+      return cleaned.trim() ? `- ${cleaned}` : line;
+    });
+  }
+  
+  const newText = lines.join('\n');
+  
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start;
+  this.editor.selectionEnd = start + newText.length;
   this.updatePreviewAndSave();
 }
 
-
+// Numbered list (1. button) - always 1. on every line + toggle off
 insertNumberedList() {
-  const cursor = this.editor.selectionStart;
-  const lines = this.editor.value.split('\n');
-  const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
-  let line = lines[lineIdx] || '';
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
   
-  const indent = line.match(/^(\s*)/)?.[1] || '';
-  
-  // Always enforce checkbox first + number second
-  let checkboxPart = '';
-  let rest = line.replace(/^\s*- \[[ xX]\] /, m => {
-    checkboxPart = m;
-    return '';
-  });
-  
-  // Remove any existing number (we will re-add it correctly)
-  rest = rest.replace(/\d+\.\s*/g, '').trimStart();
-  
-  const hasCheckbox = !!checkboxPart;
-  
-  if (/\d+\./.test(line)) {
-    // was already numbered → toggle off number (keep checkbox if present)
-    if (hasCheckbox) {
-      lines[lineIdx] = indent + checkboxPart + rest;
+  if (start === end) {
+    // Single-line: your original smart checkbox + number logic (unchanged)
+    const cursor = this.editor.selectionStart;
+    const lines = this.editor.value.split('\n');
+    const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+    let line = lines[lineIdx] || '';
+    
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    
+    let checkboxPart = '';
+    let rest = line.replace(/^\s*- \[[ xX]\] /, m => {
+      checkboxPart = m;
+      return '';
+    });
+    
+    rest = rest.replace(/\d+\.\s*/g, '').trimStart();
+    
+    const hasCheckbox = !!checkboxPart;
+    
+    if (/\d+\./.test(line)) {
+      if (hasCheckbox) {
+        lines[lineIdx] = indent + checkboxPart + rest;
+      } else {
+        lines[lineIdx] = indent + rest;
+      }
     } else {
-      lines[lineIdx] = indent + rest;
+      const numberPrefix = hasCheckbox ? '1. ' : '1. ';
+      const beforeNumber = hasCheckbox ? checkboxPart : '';
+      lines[lineIdx] = indent + beforeNumber + numberPrefix + rest;
     }
-  } else {
-    // add number — always AFTER checkbox if checkbox exists
-    const numberPrefix = hasCheckbox ? '1. ' : '1. ';
-    const beforeNumber = hasCheckbox ? checkboxPart : '';
-    lines[lineIdx] = indent + beforeNumber + numberPrefix + rest;
+    
+    this.editor.value = lines.join('\n');
+    this.updatePreviewAndSave();
+    return;
   }
   
-  this.editor.value = lines.join('\n');
-  this.renumberListsAtCursor?.(); // call if you have renumber function
+  // Multi-line: toggle numbered list (always 1. on every line)
+  let selected = this.editor.value.substring(start, end);
+  let lines = selected.split('\n');
+  
+  // Check if ALL non-empty lines already start with "1. "
+  const allAreNumbered = lines.every(line => {
+    const trimmed = line.trimStart();
+    return trimmed === '' || trimmed.startsWith('1. ');
+  });
+  
+  if (allAreNumbered) {
+    // Remove numbering
+    lines = lines.map(line =>
+      line.replace(/^\s*1\. /, '').trimStart()
+    );
+  } else {
+    // Add "1. " to non-empty lines (clean first)
+    lines = lines.map(line => {
+      const cleaned = line.replace(/^\s*(\d+\.|- \[[ xX]\]?|-|\*)\s*/, '').trimStart();
+      return cleaned.trim() ? `1. ${cleaned}` : line;
+    });
+  }
+  
+  const newText = lines.join('\n');
+  
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start;
+  this.editor.selectionEnd = start + newText.length;
+  this.updatePreviewAndSave();
+}
+
+// Checkbox list (☑ button) - toggle on/off for multi-line
+toggleCheckbox() {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  
+  if (start === end) {
+    // Single-line: your original logic (unchanged)
+    const cursor = this.editor.selectionStart;
+    const lines = this.editor.value.split('\n');
+    const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+    let line = lines[lineIdx] || '';
+    
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    
+    let content = line.replace(/\d+\.\s*/g, '');
+    
+    if (/- \[[ xX]\] /.test(content)) {
+      content = content.replace(/^- \[[ xX]\] /, '');
+    } else {
+      content = '- [ ] ' + content.trimStart();
+    }
+    
+    lines[lineIdx] = indent + content.trimStart();
+    this.editor.value = lines.join('\n');
+    this.updatePreviewAndSave();
+    return;
+  }
+  
+  // Multi-line: toggle checkboxes on/off
+  let selected = this.editor.value.substring(start, end);
+  let lines = selected.split('\n');
+  
+  // Check if ALL non-empty lines already have "- [ ] " or "- [x] "
+  const allAreCheckboxes = lines.every(line => {
+    const trimmed = line.trimStart();
+    return trimmed === '' || trimmed.match(/^- \[[ xX]\] /);
+  });
+  
+  if (allAreCheckboxes) {
+    // Remove checkboxes
+    lines = lines.map(line =>
+      line.replace(/^\s*- \[[ xX]\] /, '').trimStart()
+    );
+  } else {
+    // Add unchecked checkbox (clean first)
+    lines = lines.map(line => {
+      const cleaned = line.replace(/^\s*([-*+]|\d+\.|- \[[ xX]\]?\s*)/, '').trimStart();
+      return cleaned.trim() ? `- [ ] ${cleaned}` : line;
+    });
+  }
+  
+  const newText = lines.join('\n');
+  
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start;
+  this.editor.selectionEnd = start + newText.length;
   this.updatePreviewAndSave();
 }
 
