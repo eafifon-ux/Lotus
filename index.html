@@ -212,29 +212,21 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 .copy-btn { position: absolute; top: 4px; right: 4px; padding: 4px 6px; font-size: 14px; cursor: pointer; border: none; background: #eee; border-radius: 4px; z-index: 10; }
 
 #preview table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+
 #preview th, #preview td {
   border: 1px solid #999;
   padding: 6px 10px;
-  text-align: left; /* Default left alignment */
+  text-align: left; /* Default */
 }
 
-/* Markdown-generated alignment overrides */
-#preview table thead tr th[style*="text-align:center"],
-#preview table tbody tr td[style*="text-align:center"] {
-  text-align: center !important;
-}
+/* Column-based alignment using nth-child */
+#preview table tr > *:nth-child(1) { text-align: left; }    /* First column */
+#preview table tr > *:nth-child(2) { text-align: center; } /* Second column */  
+#preview table tr > *:nth-child(3) { text-align: right; }  /* Third column */
+ 
 
-#preview table thead tr th[style*="text-align:right"],
-#preview table tbody tr td[style*="text-align:right"] {
-  text-align: right !important;
-}
 
 #preview th { background-color: #f2f2f2; }
-
- #preview table thead tr th {
-  text-align: inherit; /* Inherits from the style attribute */
-}
-
 
 #preview ul, #preview ol { padding-left: 1.6em; margin: 0.4em 0; }
 #preview li { margin-bottom: 0.15em; line-height: 1.35; }
