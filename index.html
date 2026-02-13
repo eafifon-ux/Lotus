@@ -455,6 +455,8 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   border-color: #60a5fa;
   box-shadow: 0 0 0 3px rgba(96,165,250,0.12);
 }
+
+
 </style>
 </head>
 <body>
@@ -1433,7 +1435,40 @@ html = html.replace(
   }
 );
 
+
+
 html = marked.parse(html);
+
+// Renumber checkbox lists with repeated "1." to show 1, 2, 3... in preview
+const tempDiv = document.createElement('div');
+tempDiv.innerHTML = html;
+
+// Find all <li> that contain checkbox + "1."
+const items = tempDiv.querySelectorAll('li');
+let currentCounter = 1;
+let inList = false;
+
+items.forEach(li => {
+  const text = li.textContent.trim();
+  const hasCheckbox = li.querySelector('input[type="checkbox"]');
+  const hasNumber = text.match(/1\.\s/);
+  
+  if (hasCheckbox && hasNumber) {
+    if (!inList) {
+      currentCounter = 1;
+      inList = true;
+    }
+    
+    // Replace the "1." with current counter
+    li.innerHTML = li.innerHTML.replace(/1\.\s/, `${currentCounter}. `);
+    currentCounter++;
+  } else {
+    // End of list block
+    inList = false;
+  }
+});
+
+html = tempDiv.innerHTML;
 
 // Ensure task lists have the proper class
 html = html.replace(/<ul>/g, '<ul class="task-list">');
@@ -2369,54 +2404,58 @@ handleDropdownClick(type, e) {
 
 
 // Bullet list (• button) - toggle on/off for multi-line
+// Bullet list (• button) - single-line: keep bullet when removing checkbox
 insertBullet() {
   const start = this.editor.selectionStart;
   const end = this.editor.selectionEnd;
   
   if (start === end) {
-    // Single-line: your original logic (unchanged)
     const cursor = this.editor.selectionStart;
     const lines = this.editor.value.split('\n');
     const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
-    const line = lines[lineIdx] || '';
+    let line = lines[lineIdx] || '';
     
     const indent = line.match(/^(\s*)/)?.[1] || '';
-    if (/^\s*- /.test(line)) {
-      lines[lineIdx] = indent + line.substring(indent.length + 2);
+    let content = line.substring(indent.length).trimStart();
+    
+    if (content.match(/^- \[[ xX]\]/)) {
+      // Has checkbox → convert to plain bullet (remove checkbox only, keep -)
+      content = content.replace(/^- \[[ xX]\]\s*/, '- ');
+    } else if (content.startsWith('- ')) {
+      // Has plain bullet → remove it completely
+      content = content.replace(/^- /, '');
     } else {
-      const content = line.trim() === '' ? '' : ' ' + line.substring(indent.length).trim();
-      lines[lineIdx] = indent + '-' + content;
+      // No marker → add bullet
+      content = '- ' + content;
     }
+    
+    lines[lineIdx] = indent + content.trimStart();
     this.editor.value = lines.join('\n');
     this.updatePreviewAndSave();
     return;
   }
   
-  // Multi-line: toggle bullets on/off
+  // Multi-line part: unchanged (your current version)
   let selected = this.editor.value.substring(start, end);
   let lines = selected.split('\n');
   
-  // Check if ALL non-empty lines already start with bullet
-  const allAreBullets = lines.every(line => {
-    const trimmed = line.trimStart();
-    return trimmed === '' || trimmed.startsWith('- ');
-  });
+  const isCheckboxList = lines.every(l => !l.trim() || l.trimStart().match(/^- \[[ xX]\] /));
   
-  if (allAreBullets) {
-    // Remove bullets
-    lines = lines.map(line =>
-      line.replace(/^\s*- /, '').trimStart()
-    );
+  if (isCheckboxList) {
+    lines = lines.map(l => l.replace(/^- \[[ xX]\]\s*/, '- '));
   } else {
-    // Add bullets (clean first)
-    lines = lines.map(line => {
-      const cleaned = line.replace(/^\s*([-*+]|\d+\.|- \[[ xX]\]?\s*)/, '').trimStart();
-      return cleaned.trim() ? `- ${cleaned}` : line;
-    });
+    const allAreBullets = lines.every(l => !l.trim() || l.trimStart().startsWith('- '));
+    if (allAreBullets) {
+      lines = lines.map(l => l.replace(/^\s*- /, '').trimStart());
+    } else {
+      lines = lines.map(l => {
+        const cleaned = l.replace(/^\s*([-*+]|\d+\.|- \[[ xX]\]?\s*)/, '').trimStart();
+        return cleaned.trim() ? `- ${cleaned}` : l;
+      });
+    }
   }
   
   const newText = lines.join('\n');
-  
   this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
   this.editor.selectionStart = start;
   this.editor.selectionEnd = start + newText.length;
@@ -2428,8 +2467,8 @@ insertNumberedList() {
   const start = this.editor.selectionStart;
   const end = this.editor.selectionEnd;
   
+  // Single-line: keep your original smart checkbox + number logic (unchanged)
   if (start === end) {
-    // Single-line: your original smart checkbox + number logic (unchanged)
     const cursor = this.editor.selectionStart;
     const lines = this.editor.value.split('\n');
     const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
@@ -2464,26 +2503,43 @@ insertNumberedList() {
     return;
   }
   
-  // Multi-line: toggle numbered list (always 1. on every line)
+  // ── Multi-line: smart toggle numbering (especially after checkbox) ──
   let selected = this.editor.value.substring(start, end);
   let lines = selected.split('\n');
   
-  // Check if ALL non-empty lines already start with "1. "
+  // Check two cases for "already numbered":
+  // 1. Normal: starts with "1. "
+  // 2. After checkbox: starts with "- [ ] 1. " or "- [x] 1. "
   const allAreNumbered = lines.every(line => {
     const trimmed = line.trimStart();
-    return trimmed === '' || trimmed.startsWith('1. ');
+    if (!trimmed) return true;
+    // Normal numbered
+    if (trimmed.startsWith('1. ')) return true;
+    // Numbered after checkbox
+    return trimmed.match(/^- \[[ xX]\] 1\. /);
   });
   
   if (allAreNumbered) {
-    // Remove numbering
-    lines = lines.map(line =>
-      line.replace(/^\s*1\. /, '').trimStart()
-    );
-  } else {
-    // Add "1. " to non-empty lines (clean first)
+    // Toggle OFF: remove the "1. " part (wherever it is)
     lines = lines.map(line => {
+      if (!line.trim()) return line;
+      // Remove "1. " after checkbox
+      let updated = line.replace(/(\s*- \[[ xX]\] )\s*1\. /, '$1');
+      // Or remove standalone "1. "
+      updated = updated.replace(/^\s*1\. /, '');
+      return updated;
+    });
+  } else {
+    // Toggle ON: add "1. " after checkbox (or at start if no checkbox)
+    lines = lines.map(line => {
+      if (!line.trim()) return line;
+      // If has checkbox → insert 1. after it
+      if (line.match(/^- \[[ xX]\] /)) {
+        return line.replace(/^(\s*- \[[ xX]\] )(.*)$/, '$11. $2');
+      }
+      // No checkbox → normal add at start
       const cleaned = line.replace(/^\s*(\d+\.|- \[[ xX]\]?|-|\*)\s*/, '').trimStart();
-      return cleaned.trim() ? `1. ${cleaned}` : line;
+      return `1. ${cleaned}`;
     });
   }
   
@@ -2496,25 +2552,31 @@ insertNumberedList() {
 }
 
 // Checkbox list (☑ button) - toggle on/off for multi-line
+// Checkbox list (☑ button) - single-line: remove both checkbox and bullet when toggling off
 toggleCheckbox() {
   const start = this.editor.selectionStart;
   const end = this.editor.selectionEnd;
   
   if (start === end) {
-    // Single-line: your original logic (unchanged)
     const cursor = this.editor.selectionStart;
     const lines = this.editor.value.split('\n');
     const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
     let line = lines[lineIdx] || '';
     
     const indent = line.match(/^(\s*)/)?.[1] || '';
+    let content = line.substring(indent.length).trimStart();
     
-    let content = line.replace(/\d+\.\s*/g, '');
-    
-    if (/- \[[ xX]\] /.test(content)) {
-      content = content.replace(/^- \[[ xX]\] /, '');
-    } else {
-      content = '- [ ] ' + content.trimStart();
+    // Case 1: Already has checkbox → remove checkbox AND bullet (become plain text)
+    if (content.match(/^- \[[ xX]\]/)) {
+      content = content.replace(/^- \[[ xX]\]\s*/, '');
+    }
+    // Case 2: Has plain bullet → convert to checkbox
+    else if (content.startsWith('- ')) {
+      content = content.replace(/^- /, '- [ ] ');
+    }
+    // Case 3: No marker → add checkbox with bullet
+    else {
+      content = '- [ ] ' + content;
     }
     
     lines[lineIdx] = indent + content.trimStart();
@@ -2523,23 +2585,20 @@ toggleCheckbox() {
     return;
   }
   
-  // Multi-line: toggle checkboxes on/off
+  // Multi-line: unchanged
   let selected = this.editor.value.substring(start, end);
   let lines = selected.split('\n');
   
-  // Check if ALL non-empty lines already have "- [ ] " or "- [x] "
   const allAreCheckboxes = lines.every(line => {
     const trimmed = line.trimStart();
     return trimmed === '' || trimmed.match(/^- \[[ xX]\] /);
   });
   
   if (allAreCheckboxes) {
-    // Remove checkboxes
     lines = lines.map(line =>
       line.replace(/^\s*- \[[ xX]\] /, '').trimStart()
     );
   } else {
-    // Add unchecked checkbox (clean first)
     lines = lines.map(line => {
       const cleaned = line.replace(/^\s*([-*+]|\d+\.|- \[[ xX]\]?\s*)/, '').trimStart();
       return cleaned.trim() ? `- [ ] ${cleaned}` : line;
