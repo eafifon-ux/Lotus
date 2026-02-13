@@ -212,22 +212,16 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 .copy-btn { position: absolute; top: 4px; right: 4px; padding: 4px 6px; font-size: 14px; cursor: pointer; border: none; background: #eee; border-radius: 4px; z-index: 10; }
 
 #preview table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-
-/* Default: all columns left-aligned */
-#preview th, #preview td {
+#preview th,
+#preview td {
   border: 1px solid #999;
   padding: 6px 10px;
-  text-align: left; /* Default left alignment for ALL cells */
 }
 
-/* Only override when Markdown explicitly sets alignment */
-#preview table tr > *[style*="text-align:center"],
-#preview table tr > *[style*="text-align:right"] {
-  text-align: inherit !important;
+#preview th:not([align]):not([style*="text-align"]),
+#preview td:not([align]):not([style*="text-align"]) {
+  text-align: left;
 }
- 
-
-
 #preview th { background-color: #f2f2f2; }
 
 #preview ul, #preview ol { padding-left: 1.6em; margin: 0.4em 0; }
@@ -497,12 +491,12 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 <br><br>
 
 | [🗓️ Today](https://www.gpc364.com/p/today.html?m=1) | [☯️ Balance](https://www.gpc364.com/2025/12/calendar_95.html) | [📅 EZDates](https://www.gpc364.com/2026/01/ez-dates.html) | [🌙 Moon](https://www.gpc364.com/2026/01/my-moon.html) |
-| --- | --- | --- | --- |
+| :---: | :---: | :---: | :---: |
 
 <br><br>
 
-| <center>Q1</center> | <center>Q2</center> | <center>Q3</center> | <center>Q4</center> |
-| -- | -- | -- | -- |
+| Q1 | Q2 | Q3 | Q4 |
+| :--: | :--: | :--: | :--: |
 | [[📁 Boomerang/Unspring|🟠 Unspring]] <br><br> | [[📁 Boomerang/Quadsum|🟠 Quadsum]] <br><br> | [[📁 Boomerang/Sepafall|🟠 Sepafall]] <br><br> | [[📁 Boomerang/Dekawint|🟠 Dekawint]] <br><br> |
 | [[📁 Boomerang/Duspring|🌺 Duspring]] <br><br> | [[📁 Boomerang/Fivesum|🌺 Fivesum]] <br><br> | [[📁 Boomerang/Oktafall|🌺 Oktafall]] <br><br> | [[📁 Boomerang/Elvawint|🌺 Elvawint]] <br><br> |
 | [[📁 Boomerang/Trispring|🟢 Trispring]] <br><br> | [[📁 Boomerang/Sixsum|🟢 Sixsum]] <br><br> | [[📁 Boomerang/Novafall|🟢 Novafall]] <br><br> | [[📁 Boomerang/Dozawint|🟢 Dozawint]] <br><br> |
