@@ -456,7 +456,87 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   box-shadow: 0 0 0 3px rgba(96,165,250,0.12);
 }
 
+/* Search UI in sidebar */
+#search-container {
+  margin-bottom: 16px;
+  position: relative;
+}
 
+#search-input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1em;
+  box-sizing: border-box;
+  background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="gray" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat 12px center;
+  background-size: 16px;
+}
+
+#search-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+#search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.1em;
+  color: #999;
+  cursor: pointer;
+  display: none;
+}
+
+#search-clear:hover {
+  color: #333;
+}
+
+#search-results {
+  margin-top: 8px;
+}
+
+.search-result {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+
+.search-result:hover,
+.search-result.active {
+  background: #e0f2fe;
+}
+
+.search-result .title {
+  font-weight: 600;
+  color: #1e40af;
+  display: block;
+}
+
+.search-result .snippet {
+  font-size: 0.9em;
+  color: #555;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+.search-result mark {
+  background: #fef08a;
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.search-no-results {
+  padding: 12px;
+  color: #666;
+  font-style: italic;
+}
 </style>
 </head>
 <body>
@@ -550,15 +630,26 @@ Then read: [[📁 Boomerang/Manual|Manual]]
 </div>
 
 <!-- ========== Section 2.4 - SIDEBAR ========== -->
-<div id="sidebar">
+<<div id="sidebar">
   <div class="sidebar-section">
-   <div class="sidebar-item" id="back-btn">🔙 Back</div>
+    <!-- New search container at the top -->
+    <div id="search-container">
+      <input type="text" id="search-input" placeholder="Search notes..." autocomplete="off">
+      <button id="search-clear" title="Clear search">×</button>
+    </div>
+    
+    <div class="sidebar-item" id="back-btn">🔙 Back</div>
     <div class="sidebar-item" id="recent-btn">🗒️ Notes</div>
-    <div id="recent-list" style="margin-top:8px;"></div>
-    <div class="sidebar-item" id="create-folder-btn">📁 New Folder</div> <!-- Add this line -->
+    
+    <!-- This div will show either recent notes or search results -->
+    <div id="sidebar-content">
+      <div id="recent-list" style="margin-top:8px;"></div>
+    </div>
+    
+    <div class="sidebar-item" id="create-folder-btn">📁 New Folder</div>
     <div class="sidebar-item">⚙ System</div>
-       <div class="sidebar-item" data-action="export-all">📤 Export All</div>
-   <div class="sidebar-item" data-action="import-all">📥 Import All</div>
+    <div class="sidebar-item" data-action="export-all">📤 Export All</div>
+    <div class="sidebar-item" data-action="import-all">📥 Import All</div>
   </div>
 </div>
 
@@ -740,6 +831,14 @@ const VaultDB = (() => {
   };
 })();
 
+// ── Utility: debounce for delayed actions ────────────────────────────────
+function debounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
 
 
 // =============================================
@@ -751,7 +850,9 @@ class EditorCore {
     this.preview = document.getElementById('preview');
     this.currentNote = "Home";
     this.history = {}; // History per note
-this.currentHistoryIndex = {}; // Current position per note
+this.currentHistoryIndex = {};
+this.noteIndex = null; // will hold {name, title, snippet}
+this.debouncedReindex = null; // will be set in init
 
     this.noteCache = {};
     this.backlinksMap = {};
@@ -772,7 +873,9 @@ async init() {
   // Initialize reminders
 this.initReminders();
 
-  
+// Setup debounced re-indexing
+this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
+
   // Add offline support monitoring
   window.addEventListener('offline', () => {
     const alert = document.getElementById('offline-alert');
@@ -797,6 +900,7 @@ this.initReminders();
   this.noteCache[this.currentNote] = content;
   this.pushHistory(true);
   await this.updatePreviewAndSave();
+  await this.buildNoteIndex();
 }
 
 pushHistory(force = false) {
@@ -964,19 +1068,20 @@ async switchToNote(noteName) {
   
   // Add folder creation handler
   document.getElementById('create-folder-btn').addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const folderName = prompt('Enter folder name:');
-    if (folderName) {
-      try {
-        await VaultDB.createFolder(folderName);
-        await this.loadRecentNotes(); // Refresh the list
-        console.log("Folder created:", folderName);
-      } catch (err) {
-        console.error("Folder creation failed:", err);
-        alert("Couldn't create folder: " + err.message);
-      }
-    }
-  });
+  e.stopPropagation();
+  const folderName = prompt('Enter folder name:');
+  if (!folderName || !folderName.trim()) return;
+  
+  try {
+    await VaultDB.createFolder(folderName.trim());
+    await this.loadRecentNotes();
+    if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
+    console.log("Folder created:", folderName.trim());
+  } catch (err) {
+    console.error("Folder creation failed:", err);
+    alert("Couldn't create folder: " + err.message);
+  }
+});
   
  // Replace the current back button handler with this:
 document.getElementById('back-btn').addEventListener('click', async (e) => {
@@ -1114,6 +1219,7 @@ async deleteNote(noteName) {
         }
         
         await this.loadRecentNotes();
+if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
         console.error('Delete failed:', err);
         alert('Delete failed');
@@ -1171,6 +1277,7 @@ async renameNote(oldName) {
         }
         
         await this.loadRecentNotes();
+if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
         console.error('Rename failed:', err);
         alert('Rename failed: ' + err.message);
@@ -1244,6 +1351,7 @@ async moveNote(noteName) {
         }
         
         await this.loadRecentNotes();
+if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
         console.error('Move failed:', err);
         alert('Move failed: ' + err.message);
@@ -1394,6 +1502,8 @@ async loadRecentNotes() {
             });
         });
         
+        this.initSearch();
+        
     } catch (err) {
         console.error('Error loading notes:', err);
         recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
@@ -1407,6 +1517,145 @@ updateActiveNoteUI() {
     document.querySelectorAll(`.note-item[data-note="${this.currentNote}"]`).forEach(el => {
         el.classList.add('active');
     });
+}
+
+// ===== SEARCH FUNCTIONALITY =====
+
+initSearch() {
+  const searchInput = document.getElementById('search-input');
+  const searchClear = document.getElementById('search-clear');
+  const sidebarContent = document.getElementById('sidebar-content');
+  
+  if (!searchInput) return;
+  
+  // Live search on input
+  searchInput.addEventListener('input', debounce(() => {
+    const query = searchInput.value.trim().toLowerCase();
+    
+    if (query.length === 0) {
+      // Show normal recent list
+      searchClear.style.display = 'none';
+      this.showRecentNotes();
+    } else {
+      // Show search results
+      searchClear.style.display = 'block';
+      this.renderSearchResults(query);
+    }
+  }, 300));
+  
+  // Clear button
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    searchClear.style.display = 'none';
+    this.showRecentNotes();
+    searchInput.focus();
+  });
+  
+  // Optional: focus search when sidebar opens
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    if (document.getElementById('sidebar').classList.contains('open')) {
+      setTimeout(() => searchInput.focus(), 300);
+    }
+  });
+}
+
+showRecentNotes() {
+  // Re-show the original recent list
+  document.getElementById('recent-list').style.display = 'block';
+  this.loadRecentNotes(); // refresh just in case
+}
+
+async renderSearchResults(query) {
+  if (!this.noteIndex) {
+    await this.buildNoteIndex();
+  }
+  
+  const resultsContainer = document.getElementById('recent-list');
+  resultsContainer.innerHTML = ''; // clear previous content
+  
+  if (!query) {
+    this.showRecentNotes();
+    return;
+  }
+  
+  const terms = query.split(/\s+/).filter(t => t.length > 1);
+  if (terms.length === 0) {
+    resultsContainer.innerHTML = '<div class="search-no-results">Type to search...</div>';
+    return;
+  }
+  
+  const matching = this.noteIndex
+    .map(item => {
+      let score = 0;
+      const titleLower = item.title.toLowerCase();
+      const snippetLower = item.snippet;
+      
+      // Title matches are very important
+      terms.forEach(term => {
+        if (titleLower.includes(term)) score += 100;
+        if (snippetLower.includes(term)) score += 30;
+      });
+      
+      // Bonus for exact prefix match in title
+      if (titleLower.startsWith(query)) score += 150;
+      
+      return { ...item, score };
+    })
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 30); // limit to top 30 results
+  
+  if (matching.length === 0) {
+    resultsContainer.innerHTML = '<div class="search-no-results">No matching notes found.</div>';
+    return;
+  }
+  
+  let html = '';
+  for (const item of matching) {
+    // Highlight matching terms in title and snippet
+    let highlightedTitle = item.title;
+let highlightedSnippet = item.rawSnippet;
+
+terms.forEach(term => {
+  // Properly escape the term for regex
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp('(' + escaped + ')', 'gi');
+  
+  highlightedTitle = highlightedTitle.replace(regex, '<mark>$1</mark>');
+  highlightedSnippet = highlightedSnippet.replace(regex, '<mark>$1</mark>');
+});
+    
+    // Shorten snippet if too long
+    if (highlightedSnippet.length > 160) {
+      highlightedSnippet = highlightedSnippet.slice(0, 157) + '...';
+    }
+    
+    // Show folder prefix if present
+    let displayPath = '';
+    if (item.name.includes('/')) {
+      const folder = item.name.split('/')[0].replace('📁 ', '');
+      displayPath = `<small style="color:#666;">${folder} / </small>`;
+    }
+    
+    html += `
+      <div class="search-result note-item" data-note="${item.name}">
+        <div class="title">\( {displayPath} \){highlightedTitle}</div>
+        <div class="snippet">${highlightedSnippet}</div>
+      </div>
+    `;
+  }
+  
+  resultsContainer.innerHTML = html;
+  
+  // Add click handlers for results
+  resultsContainer.querySelectorAll('.search-result').forEach(el => {
+    el.addEventListener('click', async () => {
+      const noteName = el.dataset.note;
+      await this.switchToNote(noteName);
+      // Optional: close sidebar after selection
+      document.getElementById('sidebar').classList.remove('open');
+    });
+  });
 }
 
 
@@ -1491,8 +1740,9 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
     // Save after delay
     clearTimeout(this.saveTimeout);
     this.saveTimeout = setTimeout(async () => {
-      await VaultDB.set(this.currentNote, raw);
-    }, 500);
+  await VaultDB.set(this.currentNote, raw);
+  if (this.debouncedReindex) this.debouncedReindex(); // ← add this
+}, 500);
     
   } catch (error) {
     console.error('Preview error:', error);
@@ -3131,6 +3381,40 @@ updateCheckboxHeadingInEditor(headingElement) {
   this.updatePreviewAndSave();
 }
 
+// ── Search index building ────────────────────────────────────────────────
+async buildNoteIndex() {
+  const names = await VaultDB.list();
+  const index = [];
+  
+  for (const name of names) {
+    if (name === '__folders__' || name.startsWith('__')) continue;
+    
+    const fullContent = await VaultDB.get(name);
+    let snippet = (fullContent || '')
+      .replace(/^#+\s.*$/m, '') // remove first heading if present
+      .replace(/[\n\r]+/g, ' ') // collapse lines
+      .replace(/\s+/g, ' ') // normalize spaces
+      .trim()
+      .slice(0, 450); // \~3-8 lines usually enough
+    
+    // Optional: clean markdown noise a bit more
+    snippet = snippet.replace(/(\*\*|__|\[\[|\]\]|\*|_)/g, '');
+    
+    index.push({
+      name,
+      title: name
+        .replace(/^📁\s*/, '') // remove folder emoji
+        .replace(/\/.*/, '') // keep only top-level name
+        .trim(),
+      snippet: snippet.toLowerCase(),
+      rawSnippet: snippet
+    });
+  }
+  
+  this.noteIndex = index;
+  console.log(`Indexed ${index.length} notes`);
+}
+
 
 updateCollapsePrefixInEditor(headingElement) {
   const headingText = headingElement.textContent.trim();
@@ -3377,13 +3661,13 @@ document.getElementById('gpc-display').addEventListener('click', async (e) => {
     `;
     
     try {
-      const blob = new Blob([swScript], { type: 'application/javascript' });
-      const swUrl = URL.createObjectURL(blob);
-      await navigator.serviceWorker.register(swUrl);
-      console.log('✅ Offline support enabled');
-    } catch (err) {
-      console.log('❌ Offline support failed (private mode?)');
-    }
+  const blob = new Blob([swScript], { type: 'application/javascript' });
+  const swUrl = URL.createObjectURL(blob);
+  await navigator.serviceWorker.register(swUrl);
+  console.log('✅ Offline support enabled');
+} catch (err) {
+  // console.warn('Service Worker failed:', err.message);  // ← comment or remove
+}
   }
 });
 
