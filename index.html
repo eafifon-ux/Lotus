@@ -851,12 +851,11 @@ class EditorCore {
     this.currentNote = "Home";
     this.history = {}; // History per note
 this.currentHistoryIndex = {};
-this.noteIndex = null; // will hold {name, title, snippet}
 this.debouncedReindex = null; // will be set in init
 
     this.noteCache = {};
     this.backlinksMap = {};
-    
+    this.cachedIndex = null;   // ← ADD THIS LINE
     this.init();
   }
   
@@ -901,6 +900,7 @@ this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
   this.pushHistory(true);
   await this.updatePreviewAndSave();
   await this.buildNoteIndex();
+  console.log('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
 }
 
 pushHistory(force = false) {
@@ -1218,7 +1218,8 @@ async deleteNote(noteName) {
             await this.switchToNote('Home');
         }
         
-        await this.loadRecentNotes();
+       await this.loadRecentNotes();
+await this.updateCacheForSingleNote(noteName); // ← ADD THIS LINE
 if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
         console.error('Delete failed:', err);
@@ -1277,6 +1278,10 @@ async renameNote(oldName) {
         }
         
         await this.loadRecentNotes();
+await this.updateCacheForSingleNote(oldName); // ← ADD
+if (finalNewName !== oldName) {
+  await this.updateCacheForSingleNote(finalNewName); // ← ADD
+}
 if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
         console.error('Rename failed:', err);
@@ -1351,6 +1356,10 @@ async moveNote(noteName) {
         }
         
         await this.loadRecentNotes();
+await this.updateCacheForSingleNote(noteName); // old name ← ADD
+if (newName !== noteName) {
+  await this.updateCacheForSingleNote(newName); // new name ← ADD
+}
 if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
         console.error('Move failed:', err);
@@ -1566,7 +1575,7 @@ showRecentNotes() {
 }
 
 async renderSearchResults(query) {
-  if (!this.noteIndex) {
+  if (!this.cachedIndex) {
     await this.buildNoteIndex();
   }
   
@@ -1584,7 +1593,7 @@ async renderSearchResults(query) {
     return;
   }
   
-  const matching = this.noteIndex
+  const matching = this.cachedIndex
     .map(item => {
       let score = 0;
       const titleLower = item.title.toLowerCase();
@@ -1637,9 +1646,14 @@ terms.forEach(term => {
       displayPath = `<small style="color:#666;">${folder} / </small>`;
     }
     
-    html += `
+    let titleContent = highlightedTitle;
+if (displayPath) {
+  titleContent = `<small style="color:#666;">\( {displayPath} / </small> \){titleContent}`;
+}
+
+html += `
       <div class="search-result note-item" data-note="${item.name}">
-        <div class="title">\( {displayPath} \){highlightedTitle}</div>
+        <div class="title">${titleContent}</div>
         <div class="snippet">${highlightedSnippet}</div>
       </div>
     `;
@@ -1739,9 +1753,10 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
     
     // Save after delay
     clearTimeout(this.saveTimeout);
-    this.saveTimeout = setTimeout(async () => {
+this.saveTimeout = setTimeout(async () => {
   await VaultDB.set(this.currentNote, raw);
-  if (this.debouncedReindex) this.debouncedReindex(); // ← add this
+  await this.updateCacheForSingleNote(this.currentNote); // ← ADD THIS LINE
+  if (this.debouncedReindex) this.debouncedReindex();
 }, 500);
     
   } catch (error) {
@@ -3383,38 +3398,69 @@ updateCheckboxHeadingInEditor(headingElement) {
 
 // ── Search index building ────────────────────────────────────────────────
 async buildNoteIndex() {
+  if (this.cachedIndex) {
+    console.log('Using existing cache');
+    return;
+  }
+  console.log('Building cache (first time or forced)...');
+  
   const names = await VaultDB.list();
-  const index = [];
+  this.cachedIndex = [];
   
   for (const name of names) {
     if (name === '__folders__' || name.startsWith('__')) continue;
     
-    const fullContent = await VaultDB.get(name);
-    let snippet = (fullContent || '')
-      .replace(/^#+\s.*$/m, '') // remove first heading if present
-      .replace(/[\n\r]+/g, ' ') // collapse lines
-      .replace(/\s+/g, ' ') // normalize spaces
+    const full = await VaultDB.get(name) || '';
+    let snippet = full
+      .replace(/^#+\s.*$/m, '')
+      .replace(/[\n\r]+/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 450); // \~3-8 lines usually enough
+      .slice(0, 450);
     
-    // Optional: clean markdown noise a bit more
     snippet = snippet.replace(/(\*\*|__|\[\[|\]\]|\*|_)/g, '');
     
-    index.push({
+    this.cachedIndex.push({
       name,
-      title: name
-        .replace(/^📁\s*/, '') // remove folder emoji
-        .replace(/\/.*/, '') // keep only top-level name
-        .trim(),
+      title: name.replace(/^📁\s*/, '').replace(/\/.*/, '').trim(),
       snippet: snippet.toLowerCase(),
       rawSnippet: snippet
     });
   }
   
-  this.noteIndex = index;
-  console.log(`Indexed ${index.length} notes`);
+  console.log(`Search cache built: ${this.cachedIndex.length} notes indexed`);
 }
 
+async updateCacheForSingleNote(noteName) {
+  if (!this.cachedIndex) return; // cache not ready yet
+  
+  // Remove old version of this note from cache
+  this.cachedIndex = this.cachedIndex.filter(entry => entry.name !== noteName);
+  
+  // Read only this one note and rebuild its search snippet
+  const full = await VaultDB.get(noteName) || '';
+  let snippet = full
+    .replace(/^#+\s.*$/m, '') // remove heading
+    .replace(/[\n\r]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 450);
+  
+  snippet = snippet.replace(/(\*\*|__|\[\[|\]\]|\*|_)/g, '');
+  
+  // Add fresh entry back
+  this.cachedIndex.push({
+    name: noteName,
+    title: noteName
+      .replace(/^📁\s*/, '')
+      .replace(/\/.*/, '')
+      .trim(),
+    snippet: snippet.toLowerCase(),
+    rawSnippet: snippet
+  });
+  
+  console.log(`Cache updated for single note: ${noteName}`);
+}
 
 updateCollapsePrefixInEditor(headingElement) {
   const headingText = headingElement.textContent.trim();
