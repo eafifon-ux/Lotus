@@ -537,6 +537,32 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   color: #666;
   font-style: italic;
 }
+.note-item.folder-item .title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;          /* gentle spacing between name and count */
+}
+
+.note-item.folder-item .title .count {
+  font-size: 0.78em;   /* noticeably smaller than main text, but clear */
+  color: #000;         /* pure black — no gray, fully visible */
+  font-weight: 400;    /* normal weight, not bold */
+  line-height: 1;      /* tight vertical fit */
+}
+/* Add this to your existing CSS - Section 1.6 or Section 1.8 */
+#recent-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+}
+
+#recent-btn .count {
+  font-size: 0.78em;   /* Same as folder count */
+  color: #000;         /* Pure black */
+  font-weight: 400;    /* Normal weight */
+  line-height: 1;      /* Tight vertical fit */
+}
+
 </style>
 </head>
 <body>
@@ -901,6 +927,7 @@ this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
   await this.updatePreviewAndSave();
   await this.buildNoteIndex();
   console.log('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
+  await this.updateNoteCount();
 }
 
 pushHistory(force = false) {
@@ -988,7 +1015,36 @@ async switchToNote(noteName) {
   this.updatePreviewAndSave();
   this.updateActiveNoteUI();
 }
+// ── Lightweight note counter (only runs when sidebar is opened) ──
+async updateNoteCount() {
+  try {
+    const keys = await VaultDB.list();
+    
+    const count = keys.filter(k => {
+      if (!k || k.startsWith('__')) return false; // skip internal
+      if (k === 'Home') return false; // optional: skip Home
+      if (k.startsWith('📁 ') && !k.includes('/')) return false; // skip pure folder placeholders
+      
+      return true; // count everything else: root notes + notes in folders (e.g. 📁 Folder/Note)
+    }).length;
+    
+    const notesBtn = document.getElementById('recent-btn');
+    // In your updateNoteCount() method, change this part:
+if (notesBtn) {
+  notesBtn.innerHTML = count > 0 ?
+    `🗒️ Notes <span class="count">(${count})</span>` :
+    '🗒️ Notes';
+}
 
+    
+    // Debug helper — remove after testing
+    console.log(`Counted ${count} notes — full keys:`, keys);
+  } catch (err) {
+    console.warn('Note count failed:', err);
+    const notesBtn = document.getElementById('recent-btn');
+    if (notesBtn) notesBtn.textContent = '🗒️ Notes';
+  }
+}
 
 
 
@@ -1054,7 +1110,7 @@ async switchToNote(noteName) {
   const sidebarToggle = document.getElementById('sidebar-toggle');
   const sidebar = document.getElementById('sidebar');
   
-  sidebarToggle.addEventListener('click', () => {
+  sidebarToggle.addEventListener('click', async () => {
     sidebar.classList.toggle('open');
     if (sidebar.classList.contains('open')) {
       this.loadRecentNotes();
@@ -1064,6 +1120,8 @@ async switchToNote(noteName) {
   document.getElementById('recent-btn').addEventListener('click', async (e) => {
     e.stopPropagation();
     await this.loadRecentNotes();
+    await this.updateNoteCount();
+    await this.updateNoteCount();
   });
   
   // Add folder creation handler
@@ -1425,11 +1483,15 @@ async loadRecentNotes() {
         
         let html = '';
         
+        function getChildCount(folder, allNotes) {
+  return allNotes.filter(n => n.startsWith(`${folder}/`)).length;
+}
+        
         // Always show folders first
         folders.sort((a, b) => a.localeCompare(b));
         html += folders.map(folder => `
             <div class="note-item folder-item ${folder === this.currentNote ? 'active' : ''}" data-note="${folder}">
-                <span class="title">${folder}</span>
+                <span class="title">${folder}<span class="count">(${getChildCount(folder, validNotes)})</span></span>
                 <span class="icons">
                     <span class="action-btn rename-note" title="Rename">✏️</span>
                     <span class="action-btn move-note" title="Move">🚚</span>
