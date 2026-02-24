@@ -72,6 +72,8 @@
  * ====================================================================
  * 
  * // Section 4.1 - DOMContentLoaded event handler //
+ 
+  * // Section 4.2 - Offline Support Service Worker //
 
 
  * SECTION 1 - CSS STYLES
@@ -2452,14 +2454,23 @@ syncTaskOrder() {
 
 
 makeTasksDraggable() {
-  let draggedItem = null;
-
-  const handleDragStart = (e) => {
-    draggedItem = e.target.closest('li');
-    draggedItem.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', 'task');
-  };
+    const taskItems = this.preview.querySelectorAll('li.task-item');
+    
+    if (taskItems.length === 0) {
+      console.log('No tasks found to make draggable');
+      return;
+    }
+    
+    let draggedItem = null;
+    
+    const handleDragStart = (e) => {
+      draggedItem = e.target.closest('li');
+      if (!draggedItem) return;
+      
+      draggedItem.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'task');
+    };
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -3472,15 +3483,17 @@ async buildNoteIndex() {
   for (const name of names) {
     if (name === '__folders__' || name.startsWith('__')) continue;
     
-    const full = await VaultDB.get(name) || '';
-    let snippet = full
-      .replace(/^#+\s.*$/m, '')
-      .replace(/[\n\r]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 450);
+    const content = await VaultDB.get(name);
+    if (!content) continue; // Skip if no content
     
-    snippet = snippet.replace(/(\*\*|__|\[\[|\]\]|\*|_)/g, '');
+    let snippet = String(content) // Ensure content is a string
+      .replace(/^#+\s.*$/m, '') // Remove headings
+      .replace(/[\n\r]+/g, ' ') // Replace newlines with spaces
+      .replace(/\s+/g, ' ') // Collapse multiple spaces
+      .trim()
+      .slice(0, 450); // Limit length
+    
+    snippet = snippet.replace(/(\*\*|__|\[\[|\]\]|\*|_)/g, ''); // Remove formatting
     
     this.cachedIndex.push({
       name,
@@ -3492,6 +3505,7 @@ async buildNoteIndex() {
   
   console.log(`Search cache built: ${this.cachedIndex.length} notes indexed`);
 }
+
 
 async updateCacheForSingleNote(noteName) {
   if (!this.cachedIndex) return; // cache not ready yet
