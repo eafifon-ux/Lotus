@@ -565,6 +565,26 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   line-height: 1;      /* Tight vertical fit */
 }
 
+/* Add to your existing CSS - Section 1.6 or Section 1.8 */
+#recent-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#recent-btn .mode-indicator {
+  font-size: 0.75em;
+  color: #666;
+  font-weight: 400;
+}
+
+/* Recent notes mode indicator */
+#recent-btn .mode-indicator {
+  font-size: 0.75em;
+  color: #666;
+  font-weight: 400;
+}
+
 </style>
 </head>
 <body>
@@ -667,7 +687,12 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     </div>
     
     <div class="sidebar-item" id="back-btn">🔙 Back</div>
-    <div class="sidebar-item" id="recent-btn">🗒️ Notes</div>
+<!-- Replace this line in Section 2.4 -->
+<div class="sidebar-item" id="recent-btn">
+  <span>🗒️ Notes</span>
+  <span class="mode-indicator">(All)</span>
+</div>
+
     
     <!-- This div will show either recent notes or search results -->
     <div id="sidebar-content">
@@ -781,11 +806,23 @@ const VaultDB = (() => {
       const req = indexedDB.open(DB_NAME, VERSION);
       
       req.onupgradeneeded = e => {
-        const database = e.target.result;
-        if (!database.objectStoreNames.contains(STORE)) {
-          database.createObjectStore(STORE, { keyPath: "name" });
-        }
-      };
+  const database = e.target.result;
+  let store;
+  
+  if (!database.objectStoreNames.contains(STORE)) {
+    // Brand new database → create store + index for lastModified
+    store = database.createObjectStore(STORE, { keyPath: "name" });
+    store.createIndex("lastModified", "lastModified", { unique: false });
+  } else {
+    // Existing database (upgrade from version 1 → 2) → add index if missing
+    const tx = e.target.transaction;
+    store = tx.objectStore(STORE);
+    
+    if (!store.indexNames.contains("lastModified")) {
+      store.createIndex("lastModified", "lastModified", { unique: false });
+    }
+  }
+};
       
       req.onsuccess = () => {
         db = req.result;
@@ -813,19 +850,20 @@ const VaultDB = (() => {
   }
   
   async function set(name, content) {
-    try {
-      if (!db) await open();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, "readwrite");
-        tx.objectStore(STORE).put({ name, content });
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-    } catch (err) {
-      console.log('IndexedDB failed, falling back to localStorage:', err);
-      localStorage.setItem(`note-${name}`, content);
-    }
+  try {
+    if (!db) await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put({ name, content, lastModified: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.log('IndexedDB failed, falling back to localStorage:', err);
+    localStorage.setItem(`note-${name}`, content);
+    localStorage.setItem(`note-${name}-time`, Date.now()); // Add timestamp for fallback
   }
+}
   
   async function list() {
     if (!db) await open();
@@ -853,11 +891,39 @@ const VaultDB = (() => {
     return await set(`📁 ${name}`, `# ${name}\n\nFolder contents...`);
   }
   
-  return { 
-    open, get, set, list, remove,
-    createFolder
-  };
-})();
+   // ────────────────────────────────────────────────────────────────
+ // NEW: Get ALL notes with their full objects (name, content, lastModified)
+ async function getAll() {
+   if (!db) await open();
+   return new Promise((resolve, reject) => {
+     const tx = db.transaction(STORE, "readonly");
+     const req = tx.objectStore(STORE).getAll();
+     req.onsuccess = () => resolve(req.result);
+     req.onerror = () => reject(req.error);
+   });
+ }
+ 
+ // NEW: Get the 10 most recently modified note names
+ async function getRecent(limit = 10) {
+   const all = await getAll();
+   return all
+     .filter(note => note.name && note.lastModified && note.name !== 'Home' && !note.name.startsWith('__'))
+     .sort((a, b) => b.lastModified - a.lastModified)
+     .slice(0, limit)
+     .map(note => note.name);
+ }
+ 
+ return {
+   open,
+   get,
+   set,
+   list,
+   remove,
+   createFolder,
+   getAll, // ← expose them
+   getRecent
+ };
+ })(); // ← end of VaultDB
 
 // ── Utility: debounce for delayed actions ────────────────────────────────
 function debounce(fn, delay) {
@@ -884,6 +950,7 @@ this.debouncedReindex = null; // will be set in init
     this.noteCache = {};
     this.backlinksMap = {};
     this.cachedIndex = null;   // ← ADD THIS LINE
+    this.showRecentOnly = false; // Controls recent notes vs all notes view
     this.init();
   }
   
@@ -1120,11 +1187,10 @@ if (notesBtn) {
   });
   
   document.getElementById('recent-btn').addEventListener('click', async (e) => {
-    e.stopPropagation();
-    await this.loadRecentNotes();
-    await this.updateNoteCount();
-    await this.updateNoteCount();
-  });
+  e.stopPropagation();
+  await this.toggleRecentNotes();
+});
+
   
   // Add folder creation handler
   document.getElementById('create-folder-btn').addEventListener('click', async (e) => {
@@ -1427,6 +1493,52 @@ if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     }
 }
 
+// Add this method to the EditorCore class
+getRecentFromLocalStorage(limit = 10) {
+  const notes = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('note-') && !key.endsWith('-time')) {
+      const name = key.replace('note-', '');
+      const time = parseInt(localStorage.getItem(`note-${name}-time`) || '0');
+      notes.push({ name, lastModified: time });
+    }
+  }
+  
+  return notes
+    .sort((a, b) => b.lastModified - a.lastModified)
+    .slice(0, limit)
+    .map(n => n.name);
+}
+
+async getRecentNotes(limit = 10) {
+  try {
+    const recentNames = await VaultDB.getRecent(limit);
+    return recentNames.filter(name => name !== 'Home'); // Just in case
+  } catch (err) {
+    console.error('Error getting recent notes:', err);
+    // Fallback to localStorage version if DB fails
+    return this.getRecentFromLocalStorage(limit);
+  }
+}
+
+
+async toggleRecentNotes() {
+  this.showRecentOnly = !this.showRecentOnly;
+  await this.loadRecentNotes();
+  
+  // Update UI
+  const recentBtn = document.getElementById('recent-btn');
+  if (recentBtn) {
+    const indicator = recentBtn.querySelector('.mode-indicator');
+    if (indicator) {
+      indicator.textContent = this.showRecentOnly ? '(Recent)' : '(All)';
+    }
+  }
+}
+
+
+
 async updateBacklinksForRename(oldName, newName) {
     const allNotes = await VaultDB.list();
     const oldDisplayName = oldName.includes('/') ? oldName.split('/')[1] : oldName;
@@ -1473,8 +1585,16 @@ async updateBacklinksForRename(oldName, newName) {
 async loadRecentNotes() {
     const recentList = document.getElementById('recent-list');
     try {
-        const notes = await VaultDB.list();
-        const validNotes = notes.filter(n => n && n !== '__folders__');
+      // Get either recent notes or all notes based on mode
+      let noteNames;
+      if (this.showRecentOnly) {
+        noteNames = await this.getRecentNotes(10); // ← Changed this line
+      } else {
+        noteNames = await VaultDB.list();
+      }
+
+        // Filter out invalid notes and Home
+        const validNotes = noteNames.filter(n => n && n !== '__folders__' && n !== 'Home');
         
         // Separate folders and root-level notes
         const folders = validNotes.filter(n => n.startsWith('📁 ') && !n.includes('/'));
@@ -1486,8 +1606,8 @@ async loadRecentNotes() {
         let html = '';
         
         function getChildCount(folder, allNotes) {
-  return allNotes.filter(n => n.startsWith(`${folder}/`)).length;
-}
+            return allNotes.filter(n => n.startsWith(`${folder}/`)).length;
+        }
         
         // Always show folders first
         folders.sort((a, b) => a.localeCompare(b));
@@ -1582,6 +1702,7 @@ async loadRecentNotes() {
         recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
     }
 }
+
 
 updateActiveNoteUI() {
     document.querySelectorAll('.note-item.active').forEach(el => {
