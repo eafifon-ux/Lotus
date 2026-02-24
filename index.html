@@ -957,6 +957,13 @@ this.debouncedReindex = null; // will be set in init
   // ===== Section 3.2.1 - Initialize database and load first note =====
 async init() {
   await VaultDB.open();
+  // Clean broken note name (one-time)
+const junkName = '( {foundFolder}/ ){noteDisplayName}';
+const junkContent = await VaultDB.get(junkName);
+if (junkContent !== null) {
+  await VaultDB.remove(junkName);
+  console.log('Removed broken note:', junkName);
+}
   
   // Initialize UI events
   this.initEditorEvents();
@@ -1087,31 +1094,36 @@ async switchToNote(noteName) {
 // ── Lightweight note counter (only runs when sidebar is opened) ──
 async updateNoteCount() {
   try {
-    const keys = await VaultDB.list();
-    
-    const count = keys.filter(k => {
-      if (!k || k.startsWith('__')) return false; // skip internal
-      if (k === 'Home') return false; // optional: skip Home
-      if (k.startsWith('📁 ') && !k.includes('/')) return false; // skip pure folder placeholders
-      
-      return true; // count everything else: root notes + notes in folders (e.g. 📁 Folder/Note)
-    }).length;
+    let count = 0;
+    let modeText = 'Notes';
+    if (this.showRecentOnly) {
+      modeText = 'Recent';
+      const recentNames = await this.getRecentNotes(10);
+      count = recentNames.length;
+    } else {
+      const keys = await VaultDB.list();
+      count = keys.filter(function(k) {
+        if (!k || k.startsWith('__')) return false;
+        if (k === 'Home') return false;
+        if (k.startsWith('📁 ') && !k.includes('/')) return false;
+        return true;
+      }).length;
+    }
     
     const notesBtn = document.getElementById('recent-btn');
-    // In your updateNoteCount() method, change this part:
-if (notesBtn) {
-  notesBtn.innerHTML = count > 0 ?
-    `🗒️ Notes <span class="count">(${count})</span>` :
-    '🗒️ Notes';
-}
-
+    if (notesBtn) {
+      let html = '🗒️ ' + modeText;
+      if (count > 0) {
+        html += ' <span class="count">(' + count + ')</span>';
+      }
+      notesBtn.innerHTML = html;
+    }
     
-    // Debug helper — remove after testing
-    console.log(`Counted ${count} notes — full keys:`, keys);
+    console.log('Counted ' + count + ' notes (' + modeText + ' mode) — showRecentOnly: ' + this.showRecentOnly);
   } catch (err) {
     console.warn('Note count failed:', err);
     const notesBtn = document.getElementById('recent-btn');
-    if (notesBtn) notesBtn.textContent = '🗒️ Notes';
+    if (notesBtn) notesBtn.innerHTML = '🗒️ Notes';
   }
 }
 
@@ -1189,6 +1201,7 @@ if (notesBtn) {
   document.getElementById('recent-btn').addEventListener('click', async (e) => {
   e.stopPropagation();
   await this.toggleRecentNotes();
+  await this.updateNoteCount();
 });
 
   
@@ -1583,35 +1596,27 @@ async updateBacklinksForRename(oldName, newName) {
 
 
 async loadRecentNotes() {
-    const recentList = document.getElementById('recent-list');
-    try {
-      // Get either recent notes or all notes based on mode
-      let noteNames;
-      if (this.showRecentOnly) {
-        noteNames = await this.getRecentNotes(10); // ← Changed this line
-      } else {
-        noteNames = await VaultDB.list();
-      }
-
-        // Filter out invalid notes and Home
-        const validNotes = noteNames.filter(n => n && n !== '__folders__' && n !== 'Home');
-        
-        // Separate folders and root-level notes
-        const folders = validNotes.filter(n => n.startsWith('📁 ') && !n.includes('/'));
-        const rootNotes = validNotes.filter(n => !n.startsWith('📁 ') && !n.includes('/'));
-        
-        // Check if we're viewing a folder
-        const isViewingFolder = this.currentNote.startsWith('📁 ') && !this.currentNote.includes('/');
-        
-        let html = '';
-        
-        function getChildCount(folder, allNotes) {
-            return allNotes.filter(n => n.startsWith(`${folder}/`)).length;
-        }
-        
-        // Always show folders first
-        folders.sort((a, b) => a.localeCompare(b));
-        html += folders.map(folder => `
+  const recentList = document.getElementById('recent-list');
+  try {
+    const notes = await VaultDB.list();
+    const validNotes = notes.filter(n => n && n !== '__folders__');
+    
+    // Separate folders and root-level notes
+    const folders = validNotes.filter(n => n.startsWith('📁 ') && !n.includes('/'));
+    const rootNotes = validNotes.filter(n => !n.startsWith('📁 ') && !n.includes('/'));
+    
+    // Check if we're viewing a folder
+    const isViewingFolder = this.currentNote.startsWith('📁 ') && !this.currentNote.includes('/');
+    
+    let html = '';
+    
+    function getChildCount(folder, allNotes) {
+      return allNotes.filter(n => n.startsWith(`${folder}/`)).length;
+    }
+    
+    // Always show folders first
+    folders.sort((a, b) => a.localeCompare(b));
+    html += folders.map(folder => `
             <div class="note-item folder-item ${folder === this.currentNote ? 'active' : ''}" data-note="${folder}">
                 <span class="title">${folder}<span class="count">(${getChildCount(folder, validNotes)})</span></span>
                 <span class="icons">
@@ -1621,19 +1626,19 @@ async loadRecentNotes() {
                 </span>
             </div>
         `).join('');
-        
-        // Show notes based on current view
-        if (isViewingFolder) {
-            // Show notes in current folder
-            const folderNotes = validNotes
-                .filter(n => n.startsWith(`${this.currentNote}/`))
-                .map(n => ({
-                    fullName: n,
-                    displayName: n.split('/')[1]
-                }))
-                .sort((a, b) => a.displayName.localeCompare(b.displayName));
-            
-            html += folderNotes.map(note => `
+    
+    // Show notes based on current view
+    if (isViewingFolder) {
+      // Show notes in current folder
+      const folderNotes = validNotes
+        .filter(n => n.startsWith(`${this.currentNote}/`))
+        .map(n => ({
+          fullName: n,
+          displayName: n.split('/')[1]
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      
+      html += folderNotes.map(note => `
                 <div class="note-item ${note.fullName === this.currentNote ? 'active' : ''}" data-note="${note.fullName}">
                     <span class="title">${note.displayName}</span>
                     <span class="icons">
@@ -1643,13 +1648,13 @@ async loadRecentNotes() {
                     </span>
                 </div>
             `).join('');
-        } else {
-            // Show root-level notes (excluding Home's rename button)
-            rootNotes
-                .filter(n => n !== 'Home')
-                .sort((a, b) => a.localeCompare(b))
-                .forEach(note => {
-                    html += `
+    } else {
+      // Show root-level notes (excluding Home's rename button)
+      rootNotes
+        .filter(n => n !== 'Home')
+        .sort((a, b) => a.localeCompare(b))
+        .forEach(note => {
+          html += `
                         <div class="note-item ${note === this.currentNote ? 'active' : ''}" data-note="${note}">
                             <span class="title">${note}</span>
                             <span class="icons">
@@ -1659,10 +1664,10 @@ async loadRecentNotes() {
                             </span>
                         </div>
                     `;
-                });
-            
-            // Always show Home at the top without rename button
-            html = `
+        });
+      
+      // Always show Home at the top without rename button
+      html = `
                 <div class="note-item ${'Home' === this.currentNote ? 'active' : ''}" data-note="Home">
                     <span class="title">Home</span>
                     <span class="icons">
@@ -1670,37 +1675,37 @@ async loadRecentNotes() {
                     </span>
                 </div>
             ` + html;
-        }
-        
-        if (html === '') {
-            html = '<div class="note-item">No notes yet</div>';
-        }
-        
-        recentList.innerHTML = html;
-        
-        // Add click handler for folders
-        document.querySelectorAll('.note-item.folder-item').forEach(item => {
-            item.addEventListener('click', async (e) => {
-                if (e.target.closest('.action-btn, .delete-note')) return;
-                const folderName = item.dataset.note;
-                
-                // Toggle folder view: if already viewing this folder, go back to root
-                if (this.currentNote === folderName) {
-                    await this.switchToNote('Home');
-                } else {
-                    // Switch to folder view
-                    this.currentNote = folderName;
-                }
-                await this.loadRecentNotes();
-            });
-        });
-        
-        this.initSearch();
-        
-    } catch (err) {
-        console.error('Error loading notes:', err);
-        recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
     }
+    
+    if (html === '') {
+      html = '<div class="note-item">No notes yet</div>';
+    }
+    
+    recentList.innerHTML = html;
+    
+    // Add click handler for folders
+    document.querySelectorAll('.note-item.folder-item').forEach(item => {
+      item.addEventListener('click', async (e) => {
+        if (e.target.closest('.action-btn, .delete-note')) return;
+        const folderName = item.dataset.note;
+        
+        // Toggle folder view: if already viewing this folder, go back to root
+        if (this.currentNote === folderName) {
+          await this.switchToNote('Home');
+        } else {
+          // Switch to folder view
+          this.currentNote = folderName;
+        }
+        await this.loadRecentNotes();
+      });
+    });
+    
+    this.initSearch();
+    
+  } catch (err) {
+    console.error('Error loading notes:', err);
+    recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
+  }
 }
 
 
