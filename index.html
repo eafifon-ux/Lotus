@@ -1538,9 +1538,11 @@ async getRecentNotes(limit = 10) {
 
 async toggleRecentNotes() {
   this.showRecentOnly = !this.showRecentOnly;
+  
+  // Force reload + filter according to current mode
   await this.loadRecentNotes();
   
-  // Update UI
+  // Update mode label
   const recentBtn = document.getElementById('recent-btn');
   if (recentBtn) {
     const indicator = recentBtn.querySelector('.mode-indicator');
@@ -1548,6 +1550,9 @@ async toggleRecentNotes() {
       indicator.textContent = this.showRecentOnly ? '(Recent)' : '(All)';
     }
   }
+  
+  // Optional: also update the count display immediately
+  await this.updateNoteCount();
 }
 
 
