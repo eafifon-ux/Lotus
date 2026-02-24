@@ -565,26 +565,6 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   line-height: 1;      /* Tight vertical fit */
 }
 
-/* Add to your existing CSS - Section 1.6 or Section 1.8 */
-#recent-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#recent-btn .mode-indicator {
-  font-size: 0.75em;
-  color: #666;
-  font-weight: 400;
-}
-
-/* Recent notes mode indicator */
-#recent-btn .mode-indicator {
-  font-size: 0.75em;
-  color: #666;
-  font-weight: 400;
-}
-
 </style>
 </head>
 <body>
@@ -687,12 +667,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     </div>
     
     <div class="sidebar-item" id="back-btn">🔙 Back</div>
-<!-- Replace this line in Section 2.4 -->
-<div class="sidebar-item" id="recent-btn">
-  <span>🗒️ Notes</span>
-  <span class="mode-indicator">(All)</span>
-</div>
-
+    <div class="sidebar-item" id="recent-btn">🗒️ Notes</div>
     
     <!-- This div will show either recent notes or search results -->
     <div id="sidebar-content">
@@ -806,23 +781,11 @@ const VaultDB = (() => {
       const req = indexedDB.open(DB_NAME, VERSION);
       
       req.onupgradeneeded = e => {
-  const database = e.target.result;
-  let store;
-  
-  if (!database.objectStoreNames.contains(STORE)) {
-    // Brand new database → create store + index for lastModified
-    store = database.createObjectStore(STORE, { keyPath: "name" });
-    store.createIndex("lastModified", "lastModified", { unique: false });
-  } else {
-    // Existing database (upgrade from version 1 → 2) → add index if missing
-    const tx = e.target.transaction;
-    store = tx.objectStore(STORE);
-    
-    if (!store.indexNames.contains("lastModified")) {
-      store.createIndex("lastModified", "lastModified", { unique: false });
-    }
-  }
-};
+        const database = e.target.result;
+        if (!database.objectStoreNames.contains(STORE)) {
+          database.createObjectStore(STORE, { keyPath: "name" });
+        }
+      };
       
       req.onsuccess = () => {
         db = req.result;
@@ -850,20 +813,19 @@ const VaultDB = (() => {
   }
   
   async function set(name, content) {
-  try {
-    if (!db) await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put({ name, content, lastModified: Date.now() });
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.log('IndexedDB failed, falling back to localStorage:', err);
-    localStorage.setItem(`note-${name}`, content);
-    localStorage.setItem(`note-${name}-time`, Date.now()); // Add timestamp for fallback
+    try {
+      if (!db) await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put({ name, content });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (err) {
+      console.log('IndexedDB failed, falling back to localStorage:', err);
+      localStorage.setItem(`note-${name}`, content);
+    }
   }
-}
   
   async function list() {
     if (!db) await open();
@@ -891,39 +853,11 @@ const VaultDB = (() => {
     return await set(`📁 ${name}`, `# ${name}\n\nFolder contents...`);
   }
   
-   // ────────────────────────────────────────────────────────────────
- // NEW: Get ALL notes with their full objects (name, content, lastModified)
- async function getAll() {
-   if (!db) await open();
-   return new Promise((resolve, reject) => {
-     const tx = db.transaction(STORE, "readonly");
-     const req = tx.objectStore(STORE).getAll();
-     req.onsuccess = () => resolve(req.result);
-     req.onerror = () => reject(req.error);
-   });
- }
- 
- // NEW: Get the 10 most recently modified note names
- async function getRecent(limit = 10) {
-   const all = await getAll();
-   return all
-     .filter(note => note.name && note.lastModified && note.name !== 'Home' && !note.name.startsWith('__'))
-     .sort((a, b) => b.lastModified - a.lastModified)
-     .slice(0, limit)
-     .map(note => note.name);
- }
- 
- return {
-   open,
-   get,
-   set,
-   list,
-   remove,
-   createFolder,
-   getAll, // ← expose them
-   getRecent
- };
- })(); // ← end of VaultDB
+  return { 
+    open, get, set, list, remove,
+    createFolder
+  };
+})();
 
 // ── Utility: debounce for delayed actions ────────────────────────────────
 function debounce(fn, delay) {
@@ -950,20 +884,12 @@ this.debouncedReindex = null; // will be set in init
     this.noteCache = {};
     this.backlinksMap = {};
     this.cachedIndex = null;   // ← ADD THIS LINE
-    this.showRecentOnly = false; // Controls recent notes vs all notes view
     this.init();
   }
   
   // ===== Section 3.2.1 - Initialize database and load first note =====
 async init() {
   await VaultDB.open();
-  // Clean broken note name (one-time)
-const junkName = '( {foundFolder}/ ){noteDisplayName}';
-const junkContent = await VaultDB.get(junkName);
-if (junkContent !== null) {
-  await VaultDB.remove(junkName);
-  console.log('Removed broken note:', junkName);
-}
   
   // Initialize UI events
   this.initEditorEvents();
@@ -1094,36 +1020,31 @@ async switchToNote(noteName) {
 // ── Lightweight note counter (only runs when sidebar is opened) ──
 async updateNoteCount() {
   try {
-    let count = 0;
-    let modeText = 'Notes';
-    if (this.showRecentOnly) {
-      modeText = 'Recent';
-      const recentNames = await this.getRecentNotes(10);
-      count = recentNames.length;
-    } else {
-      const keys = await VaultDB.list();
-      count = keys.filter(function(k) {
-        if (!k || k.startsWith('__')) return false;
-        if (k === 'Home') return false;
-        if (k.startsWith('📁 ') && !k.includes('/')) return false;
-        return true;
-      }).length;
-    }
+    const keys = await VaultDB.list();
+    
+    const count = keys.filter(k => {
+      if (!k || k.startsWith('__')) return false; // skip internal
+      if (k === 'Home') return false; // optional: skip Home
+      if (k.startsWith('📁 ') && !k.includes('/')) return false; // skip pure folder placeholders
+      
+      return true; // count everything else: root notes + notes in folders (e.g. 📁 Folder/Note)
+    }).length;
     
     const notesBtn = document.getElementById('recent-btn');
-    if (notesBtn) {
-      let html = '🗒️ ' + modeText;
-      if (count > 0) {
-        html += ' <span class="count">(' + count + ')</span>';
-      }
-      notesBtn.innerHTML = html;
-    }
+    // In your updateNoteCount() method, change this part:
+if (notesBtn) {
+  notesBtn.innerHTML = count > 0 ?
+    `🗒️ Notes <span class="count">(${count})</span>` :
+    '🗒️ Notes';
+}
+
     
-    console.log('Counted ' + count + ' notes (' + modeText + ' mode) — showRecentOnly: ' + this.showRecentOnly);
+    // Debug helper — remove after testing
+    console.log(`Counted ${count} notes — full keys:`, keys);
   } catch (err) {
     console.warn('Note count failed:', err);
     const notesBtn = document.getElementById('recent-btn');
-    if (notesBtn) notesBtn.innerHTML = '🗒️ Notes';
+    if (notesBtn) notesBtn.textContent = '🗒️ Notes';
   }
 }
 
@@ -1199,11 +1120,11 @@ async updateNoteCount() {
   });
   
   document.getElementById('recent-btn').addEventListener('click', async (e) => {
-  e.stopPropagation();
-  await this.toggleRecentNotes();
-  await this.updateNoteCount();
-});
-
+    e.stopPropagation();
+    await this.loadRecentNotes();
+    await this.updateNoteCount();
+    await this.updateNoteCount();
+  });
   
   // Add folder creation handler
   document.getElementById('create-folder-btn').addEventListener('click', async (e) => {
@@ -1506,57 +1427,6 @@ if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     }
 }
 
-// Add this method to the EditorCore class
-getRecentFromLocalStorage(limit = 10) {
-  const notes = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key.startsWith('note-') && !key.endsWith('-time')) {
-      const name = key.replace('note-', '');
-      const time = parseInt(localStorage.getItem(`note-${name}-time`) || '0');
-      notes.push({ name, lastModified: time });
-    }
-  }
-  
-  return notes
-    .sort((a, b) => b.lastModified - a.lastModified)
-    .slice(0, limit)
-    .map(n => n.name);
-}
-
-async getRecentNotes(limit = 10) {
-  try {
-    const recentNames = await VaultDB.getRecent(limit);
-    return recentNames.filter(name => name !== 'Home'); // Just in case
-  } catch (err) {
-    console.error('Error getting recent notes:', err);
-    // Fallback to localStorage version if DB fails
-    return this.getRecentFromLocalStorage(limit);
-  }
-}
-
-
-async toggleRecentNotes() {
-  this.showRecentOnly = !this.showRecentOnly;
-  
-  // Force reload + filter according to current mode
-  await this.loadRecentNotes();
-  
-  // Update mode label
-  const recentBtn = document.getElementById('recent-btn');
-  if (recentBtn) {
-    const indicator = recentBtn.querySelector('.mode-indicator');
-    if (indicator) {
-      indicator.textContent = this.showRecentOnly ? '(Recent)' : '(All)';
-    }
-  }
-  
-  // Optional: also update the count display immediately
-  await this.updateNoteCount();
-}
-
-
-
 async updateBacklinksForRename(oldName, newName) {
     const allNotes = await VaultDB.list();
     const oldDisplayName = oldName.includes('/') ? oldName.split('/')[1] : oldName;
@@ -1600,134 +1470,118 @@ async updateBacklinksForRename(oldName, newName) {
 }
 
 
-
-    async loadRecentNotes() {
-  const recentList = document.getElementById('recent-list');
-  try {
-    const allNotes = await VaultDB.list();
-    const validNotes = allNotes.filter(n => n && n !== '__folders__');
-    
-    // Fetch timestamps for recency sorting (updated in switchToNote())
-    const notesWithTime = [];
-    for (const name of validNotes) {
-      try {
-        const data = await VaultDB.get(name);
-        notesWithTime.push({
-          name,
-          timestamp: data?.timestamp || 0
-        });
-      } catch {
-        notesWithTime.push({ name, timestamp: 0 });
-      }
-    }
-    
-    // Separate folders and root-level notes
-    const folders = notesWithTime.filter(n => n.name.startsWith('📁 ') && !n.name.includes('/'));
-    const rootNotes = notesWithTime.filter(n => !n.name.startsWith('📁 ') && !n.name.includes('/'));
-    
-    // Check if we're viewing a folder
-    const isViewingFolder = this.currentNote?.startsWith('📁 ') && !this.currentNote.includes('/');
-    
-    let html = '';
-    
-    function getChildCount(folderName, allNotes) {
-      return allNotes.filter(n => n.name.startsWith(`${folderName}/`)).length;
-    }
-    
-    if (isViewingFolder) {
-      // Show ALL notes in current folder (no limit here - folder-specific)
-      const folderNotes = validNotes
-        .filter(n => n.startsWith(`${this.currentNote}/`))
-        .map(n => ({ fullName: n, displayName: n.split('/')[1] }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
-      
-      html += folderNotes.map(note => `
-        <div class="note-item ${note.fullName === this.currentNote ? 'active' : ''}" data-note="${note.fullName}">
-          <span class="title">${note.displayName}</span>
-          <span class="icons">
-            <span class="action-btn rename-note" title="Rename">✏️</span>
-            <span class="action-btn move-note" title="Move">🚚</span>
-            <span class="delete-note" title="Delete">🗑</span>
-          </span>
-        </div>
-      `).join('');
-    } else {
-      // Root view: TOP 10 RECENT (sorted newest first, folders first then notes)
-      const recentFolders = folders
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 5); // Top 5 recent folders
-      
-      const recentRootNotes = rootNotes
-        .filter(n => n.name !== 'Home')
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 5); // Top 5 recent root notes
-      
-      // Folders first
-      html += recentFolders.map(folder => `
-        <div class="note-item folder-item ${folder.name === this.currentNote ? 'active' : ''}" data-note="${folder.name}">
-          <span class="title">${folder.name}<span class="count">(${getChildCount(folder.name, notesWithTime)})</span></span>
-          <span class="icons">
-            <span class="action-btn rename-note" title="Rename">✏️</span>
-            <span class="action-btn move-note" title="Move">🚚</span>
-            <span class="delete-note" title="Delete Folder">🗑</span>
-          </span>
-        </div>
-      `).join('');
-      
-      // Then recent root notes
-      html += recentRootNotes.map(note => `
-        <div class="note-item ${note.name === this.currentNote ? 'active' : ''}" data-note="${note.name}">
-          <span class="title">${note.name}</span>
-          <span class="icons">
-            <span class="action-btn rename-note" title="Rename">✏️</span>
-            <span class="action-btn move-note" title="Move">🚚</span>
-            <span class="delete-note" title="Delete">🗑</span>
-          </span>
-        </div>
-      `).join('');
-      
-      // Pin Home at top (no rename)
-      html = `
-        <div class="note-item ${'Home' === this.currentNote ? 'active' : ''}" data-note="Home">
-          <span class="title">Home</span>
-          <span class="icons">
-            <span class="action-btn move-note" title="Move">🚚</span>
-          </span>
-        </div>
-      ` + html;
-    }
-    
-    if (html === '') {
-      html = '<div class="note-item">No recent notes</div>';
-    }
-    
-    recentList.innerHTML = html;
-    
-    // Folder click handlers (fresh each load)
-    document.querySelectorAll('.note-item.folder-item').forEach(item => {
-      item.addEventListener('click', async (e) => {
-        if (e.target.closest('.action-btn, .delete-note')) return;
-        const folderName = item.dataset.note;
-        if (this.currentNote === folderName) {
-          await this.switchToNote('Home');
-        } else {
-          this.currentNote = folderName;
-        }
-        await this.loadRecentNotes();
-      });
-    });
-    
-    this.initSearch();
-    
-  } catch (err) {
-    console.error('Error loading recent notes:', err);
-    recentList.innerHTML = '<div class="note-item">Error loading recent notes</div>';
-  }
- }
- 
+async loadRecentNotes() {
+    const recentList = document.getElementById('recent-list');
+    try {
+        const notes = await VaultDB.list();
+        const validNotes = notes.filter(n => n && n !== '__folders__');
         
-          
-
+        // Separate folders and root-level notes
+        const folders = validNotes.filter(n => n.startsWith('📁 ') && !n.includes('/'));
+        const rootNotes = validNotes.filter(n => !n.startsWith('📁 ') && !n.includes('/'));
+        
+        // Check if we're viewing a folder
+        const isViewingFolder = this.currentNote.startsWith('📁 ') && !this.currentNote.includes('/');
+        
+        let html = '';
+        
+        function getChildCount(folder, allNotes) {
+  return allNotes.filter(n => n.startsWith(`${folder}/`)).length;
+}
+        
+        // Always show folders first
+        folders.sort((a, b) => a.localeCompare(b));
+        html += folders.map(folder => `
+            <div class="note-item folder-item ${folder === this.currentNote ? 'active' : ''}" data-note="${folder}">
+                <span class="title">${folder}<span class="count">(${getChildCount(folder, validNotes)})</span></span>
+                <span class="icons">
+                    <span class="action-btn rename-note" title="Rename">✏️</span>
+                    <span class="action-btn move-note" title="Move">🚚</span>
+                    <span class="delete-note" title="Delete Folder">🗑</span>
+                </span>
+            </div>
+        `).join('');
+        
+        // Show notes based on current view
+        if (isViewingFolder) {
+            // Show notes in current folder
+            const folderNotes = validNotes
+                .filter(n => n.startsWith(`${this.currentNote}/`))
+                .map(n => ({
+                    fullName: n,
+                    displayName: n.split('/')[1]
+                }))
+                .sort((a, b) => a.displayName.localeCompare(b.displayName));
+            
+            html += folderNotes.map(note => `
+                <div class="note-item ${note.fullName === this.currentNote ? 'active' : ''}" data-note="${note.fullName}">
+                    <span class="title">${note.displayName}</span>
+                    <span class="icons">
+                        <span class="action-btn rename-note" title="Rename">✏️</span>
+                        <span class="action-btn move-note" title="Move">🚚</span>
+                        <span class="delete-note" title="Delete">🗑</span>
+                    </span>
+                </div>
+            `).join('');
+        } else {
+            // Show root-level notes (excluding Home's rename button)
+            rootNotes
+                .filter(n => n !== 'Home')
+                .sort((a, b) => a.localeCompare(b))
+                .forEach(note => {
+                    html += `
+                        <div class="note-item ${note === this.currentNote ? 'active' : ''}" data-note="${note}">
+                            <span class="title">${note}</span>
+                            <span class="icons">
+                                <span class="action-btn rename-note" title="Rename">✏️</span>
+                                <span class="action-btn move-note" title="Move">🚚</span>
+                                <span class="delete-note" title="Delete">🗑</span>
+                            </span>
+                        </div>
+                    `;
+                });
+            
+            // Always show Home at the top without rename button
+            html = `
+                <div class="note-item ${'Home' === this.currentNote ? 'active' : ''}" data-note="Home">
+                    <span class="title">Home</span>
+                    <span class="icons">
+                        <span class="action-btn move-note" title="Move">🚚</span>
+                    </span>
+                </div>
+            ` + html;
+        }
+        
+        if (html === '') {
+            html = '<div class="note-item">No notes yet</div>';
+        }
+        
+        recentList.innerHTML = html;
+        
+        // Add click handler for folders
+        document.querySelectorAll('.note-item.folder-item').forEach(item => {
+            item.addEventListener('click', async (e) => {
+                if (e.target.closest('.action-btn, .delete-note')) return;
+                const folderName = item.dataset.note;
+                
+                // Toggle folder view: if already viewing this folder, go back to root
+                if (this.currentNote === folderName) {
+                    await this.switchToNote('Home');
+                } else {
+                    // Switch to folder view
+                    this.currentNote = folderName;
+                }
+                await this.loadRecentNotes();
+            });
+        });
+        
+        this.initSearch();
+        
+    } catch (err) {
+        console.error('Error loading notes:', err);
+        recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
+    }
+}
 
 updateActiveNoteUI() {
     document.querySelectorAll('.note-item.active').forEach(el => {
