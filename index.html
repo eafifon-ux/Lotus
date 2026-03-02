@@ -2624,34 +2624,6 @@ h.id = headingId;
 // Optional: helpful for debugging or future features
 h.dataset.anchorName = cleanForId.trim();
     
-       // ===== ADD THIS NEW CLICK HANDLER =====
-   h.addEventListener('click', (e) => {
-     // Only trigger if clicking the ::after pseudo-element (the 🔗 icon)
-     if (e.offsetX > h.offsetWidth - 20) { // Checks if click is near the end
-       e.preventDefault();
-       const anchorLink = `[[${this.currentNote}#${headingText}]]`;
-       navigator.clipboard.writeText(anchorLink);
-       
-       // Visual feedback (optional)
-       const icon = h.querySelector('.anchor-icon') ||
-         document.createElement('span');
-       icon.className = 'anchor-icon';
-       icon.textContent = '✓ Copied!';
-       icon.style.cssText = `
-          position: absolute;
-          background: #333;
-          color: white;
-          padding: 2px 5px;
-          border-radius: 3px;
-          font-size: 12px;
-          margin-left: 5px;
-        `;
-       h.appendChild(icon);
-       setTimeout(() => icon.remove(), 1000);
-     }
-   });
-   // ===== END OF NEW CODE =====
-    
     // Check for checkbox heading patterns: + [ ] or - [ ]
     const checkboxMatch = headingText.match(/^([+-])\s*\[([ xX])\]\s*(.*)$/);
     
