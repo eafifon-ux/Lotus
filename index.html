@@ -252,6 +252,26 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 
 /* ========== Section 1.7 - PREVIEW STYLES (Add this to your existing CSS) ========== */
 
+#preview h1:hover::after,
+#preview h2:hover::after,
+#preview h3:hover::after,
+#preview h4:hover::after,
+#preview h5:hover::after,
+#preview h6:hover::after {
+  content: '🔗';
+  margin-left: 10px;
+  font-size: 0.8em;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+#preview h1, #preview h2, #preview h3, 
+#preview h4, #preview h5, #preview h6 {
+  position: relative; /* Allows absolute positioning of tooltip */
+  padding-right: 20px; /* Prevents text from overlapping icon */
+}
+
+
 /* Heading collapse styles */
 #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { 
   cursor: pointer; 
@@ -859,6 +879,18 @@ const VaultDB = (() => {
   };
 })();
 
+// =============================================
+// Helper: Slugify function for heading IDs
+// =============================================
+function slugify(text) {
+  return text.toLowerCase()
+    .replace(/[^\w\s-]/g, '')     // Remove special chars
+    .replace(/\s+/g, '-')         // Replace spaces with hyphens
+    .replace(/-+/g, '-')          // Collapse multiple hyphens
+    .trim();
+}
+
+
 // ── Utility: debounce for delayed actions ────────────────────────────────
 function debounce(fn, delay) {
   let timer;
@@ -1062,15 +1094,37 @@ if (notesBtn) {
       this.handleAutoContinue(e);
     });
     
-    // Wikilink clicks in preview
-    this.preview.addEventListener('click', async (e) => {
-      const wikiLink = e.target.closest('.wikilink, .backlink');
-      if (!wikiLink) return;
-      
-      e.preventDefault();
-      const noteName = wikiLink.dataset.note?.trim();
-      if (noteName) await this.switchToNote(noteName);
-    });
+// Wikilink clicks in preview
+this.preview.addEventListener('click', async (e) => {
+  const wikiLink = e.target.closest('.wikilink, .backlink');
+  if (!wikiLink) return;
+  
+  e.preventDefault();
+  const noteName = wikiLink.dataset.note?.trim();
+  const anchorId = wikiLink.dataset.anchor;
+  
+  if (noteName) {
+    // Switch to the note
+    await this.switchToNote(noteName);
+    
+    // If there's an anchor, scroll to it after a short delay
+    if (anchorId) {
+      setTimeout(() => {
+        const targetElement = this.preview.querySelector(`#${anchorId}`);
+        if (targetElement) {
+          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          
+          // Optional: Add visual highlight
+          targetElement.style.backgroundColor = '#fffacd';
+          setTimeout(() => {
+            targetElement.style.backgroundColor = '';
+          }, 1500);
+        }
+      }, 100); // Small delay for preview to render
+    }
+  }
+});
+
   }
   
   initToolbarEvents() {
@@ -1830,14 +1884,23 @@ this.saveTimeout = setTimeout(async () => {
 
   
   renderWikilinks(text) {
-    return text.replace(/\[\[([^\|\]]+)(?:\|([^\]]+))?\]\]/g, 
-      (m, page, alias) => {
-        const note = page.trim();
-        const label = alias ? alias.trim() : note;
-        return `<a href="#" class="wikilink" data-note="${note}">${label}</a>`;
+  return text.replace(/\[\[([^#\|\]]+)(?:#([^\|\]]+))?(?:\|([^\]]+))?\]\]/g, 
+    (m, page, anchor, alias) => {
+      const note = (page || '').trim();
+      const headingAnchor = (anchor || '').trim();
+      const label = alias ? alias.trim() : (headingAnchor ? `${note}#${headingAnchor}` : note);
+      
+      // Build data attributes
+      let dataAttrs = `data-note="${note}"`;
+      if (headingAnchor) {
+        dataAttrs += ` data-anchor="${slugify(headingAnchor)}"`;
       }
-    );
-  }
+      
+      return `<a href="#" class="wikilink" ${dataAttrs}>${label}</a>`;
+    }
+  );
+}
+
   
   processHighlights(html) {
     return html.replace(/==(\w+):([\s\S]+?)==/g, '<span class="highlight $1">$2</span>')
@@ -2547,6 +2610,47 @@ wrapHeadingsForCollapse() {
     if (h.dataset.processed) return;
     
     const headingText = h.textContent.trim();
+    // Generate stable heading ID — ignore collapse/checkbox prefixes
+let cleanForId = h.textContent.trim(); // use current (already cleaned) text
+
+// Extra safety: also strip any leftover prefix patterns just in case
+cleanForId = cleanForId.replace(/^[+-]\s*/, '');
+cleanForId = cleanForId.replace(/^[+-]\s*\[[\sXx]?\]\s*/, '');
+
+// Now slugify the cleaned version
+const headingId = slugify(cleanForId.trim());
+h.id = headingId;
+
+// Optional: helpful for debugging or future features
+h.dataset.anchorName = cleanForId.trim();
+    
+       // ===== ADD THIS NEW CLICK HANDLER =====
+   h.addEventListener('click', (e) => {
+     // Only trigger if clicking the ::after pseudo-element (the 🔗 icon)
+     if (e.offsetX > h.offsetWidth - 20) { // Checks if click is near the end
+       e.preventDefault();
+       const anchorLink = `[[${this.currentNote}#${headingText}]]`;
+       navigator.clipboard.writeText(anchorLink);
+       
+       // Visual feedback (optional)
+       const icon = h.querySelector('.anchor-icon') ||
+         document.createElement('span');
+       icon.className = 'anchor-icon';
+       icon.textContent = '✓ Copied!';
+       icon.style.cssText = `
+          position: absolute;
+          background: #333;
+          color: white;
+          padding: 2px 5px;
+          border-radius: 3px;
+          font-size: 12px;
+          margin-left: 5px;
+        `;
+       h.appendChild(icon);
+       setTimeout(() => icon.remove(), 1000);
+     }
+   });
+   // ===== END OF NEW CODE =====
     
     // Check for checkbox heading patterns: + [ ] or - [ ]
     const checkboxMatch = headingText.match(/^([+-])\s*\[([ xX])\]\s*(.*)$/);
@@ -2693,12 +2797,25 @@ insertLink() {
 }
 
 insertWikilink() {
-  const noteName = prompt('Note name:', this.getSelectedText() || '');
+  const selectedText = this.getSelectedText() || '';
+  const noteName = prompt('Note name (optional #Heading):', selectedText);
   if (noteName) {
-    const wikilink = `[[${noteName}]]`;
+    let wikilink;
+    
+    // Check if user included a #heading
+    if (noteName.includes('#')) {
+      const [page, heading] = noteName.split('#');
+      const displayText = prompt('Display text (optional):', heading || page);
+      wikilink = displayText ? `[[${page}#${heading}|${displayText}]]` : `[[${page}#${heading}]]`;
+    } else {
+      const displayText = prompt('Display text (optional):', noteName);
+      wikilink = displayText ? `[[${noteName}|${displayText}]]` : `[[${noteName}]]`;
+    }
+    
     this.replaceSelection(wikilink);
   }
 }
+
 
 insertFolderLink() {
   const selectedText = this.getSelectedText();
@@ -3750,17 +3867,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.editorCore = new EditorCore();
   window.editorCore.toggleEditMode();   // flips from edit → view on load
   
-  // Make GPC display wikilinks clickable (same behavior as in preview)
+  // Make GPC display wikilinks clickable
 document.getElementById('gpc-display').addEventListener('click', async (e) => {
   const wikiLink = e.target.closest('.wikilink');
   if (!wikiLink) return;
   
   e.preventDefault();
   const noteName = wikiLink.dataset.note?.trim();
+  const anchorId = wikiLink.dataset.anchor;
+  
   if (noteName) {
     await window.editorCore.switchToNote(noteName);
+    
+    // Handle anchor if present
+    if (anchorId) {
+      setTimeout(() => {
+        const targetElement = window.editorCore.preview.querySelector(`#${anchorId}`);
+        if (targetElement) {
+          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          targetElement.style.backgroundColor = '#fffacd';
+          setTimeout(() => {
+            targetElement.style.backgroundColor = '';
+          }, 1500);
+        }
+      }, 100);
+    }
   }
 });
+
   
   // Section 4.2 - Offline Support Service Worker
   if ('serviceWorker' in navigator) {
