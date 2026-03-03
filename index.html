@@ -3818,7 +3818,7 @@ static updateGPC() {
     
     // DOS now correctly links to DOY note + anchors to today's day number
     const targetNote = "📁 Boomerang/DOY";
-    const targetAnchor = String(doyToday); // e.g. "350" → matches id="350"
+    const targetAnchor = "D" + String(doyToday).padStart(3, '0');   // ← changed line
     
     displayHtml +=
       '<a href="#" class="wikilink" ' +
