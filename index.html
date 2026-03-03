@@ -3760,7 +3760,8 @@ static updateGPC() {
     const quarter = Math.floor((doyToday - 1) / 91) + 1;
     const dayInSeason = ((doyToday - 1) % 91) + 1;
     const text = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
-    displayHtml += text;
+    // Link to DOY note with anchor to the specific day
+    displayHtml += '<a href="#" class="wikilink" data-note="📁 Boomerang/DOY" data-anchor="' + doyToday + '">' + text + '</a>';
     
   } else if (this.baseMode === 'DOM') {
     let remaining = doyToday;
@@ -3792,6 +3793,7 @@ static updateGPC() {
   
   document.getElementById('gpc-display').innerHTML = displayHtml;
 }
+
 
   
   // Section 3.3.5 - Button event handling
