@@ -252,6 +252,29 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 
 /* ========== Section 1.7 - PREVIEW STYLES (Add this to your existing CSS) ========== */
 
+/* Add to your CSS styles */
+#preview {
+  scroll-behavior: smooth;
+}
+
+#preview h1[id],
+#preview h2[id],
+#preview h3[id],
+#preview h4[id],
+#preview h5[id],
+#preview h6[id] {
+  scroll-margin-top: 50px;
+  /* Adjust based on your header height */
+  position: relative;
+}
+
+/* Add to your CSS */
+#preview {
+  content-visibility: auto;
+  contain-intrinsic-size: 1000px;
+}
+
+
 #preview h1, #preview h2, #preview h3, 
 #preview h4, #preview h5, #preview h6 {
   position: relative; /* Allows absolute positioning of tooltip */
@@ -572,6 +595,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   line-height: 1;      /* Tight vertical fit */
 }
 
+
 </style>
 </head>
 <body>
@@ -869,13 +893,31 @@ const VaultDB = (() => {
 // =============================================
 // Helper: Slugify function for heading IDs
 // =============================================
+// =============================================
+// Helper: Robust Slugify function for heading IDs
+// =============================================
 function slugify(text) {
-  return text.toLowerCase()
-    .replace(/[^\w\s-]/g, '')     // Remove special chars
-    .replace(/\s+/g, '-')         // Replace spaces with hyphens
-    .replace(/-+/g, '-')          // Collapse multiple hyphens
-    .trim();
+  if (!text) return ''; // Handle null/undefined
+  
+  try {
+    // Convert numbers to strings and pad DOY numbers
+    let str = String(text).trim();
+    if (/^\d+$/.test(str)) {
+      str = str.padStart(3, '0'); // Format numbers as 001, 012, 350
+    }
+
+    return str
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')     // Remove special chars
+      .replace(/\s+/g, '-')         // Replace spaces with hyphens
+      .replace(/-+/g, '-')          // Collapse multiple hyphens
+      .replace(/^-+|-+$/g, '');     // Trim leading/trailing hyphens
+  } catch (err) {
+    console.error('Slugify error:', err);
+    return 'note'; // Fallback for unexpected errors
+  }
 }
+
 
 
 // ── Utility: debounce for delayed actions ────────────────────────────────
@@ -1006,35 +1048,34 @@ redo() {
 }
 
 async switchToNote(noteName) {
-  if (!noteName || noteName === this.currentNote) return;
-
-  // Save current note content
-  if (this.currentNote) {
-    await VaultDB.set(this.currentNote, this.editor.value);
-    this.noteCache[this.currentNote] = this.editor.value;
-  }
-
-  // Load new note content
-  let content = this.noteCache[noteName];
-  if (!content) {
-    content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
-    this.noteCache[noteName] = content;
-  }
-
-  // Update state
-  this.currentNote = noteName;
-  this.editor.value = content;
-
-  // Initialize history for new note if needed
-  if (!this.history[noteName]) {
-    this.history[noteName] = [];
-    this.currentHistoryIndex[noteName] = -1;
-  }
-
-  // Push initial state
-  this.pushHistory();
-  this.updatePreviewAndSave();
-  this.updateActiveNoteUI();
+    if (!noteName || noteName === this.currentNote) return;
+    
+    // FAST PATH: Check cache first
+    let content = this.noteCache[noteName];
+    
+    if (!content) {
+      // Cache miss - load from storage
+      content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+      this.noteCache[noteName] = content;
+    }
+    
+    // Save current note (deferred for performance)
+    setTimeout(async () => {
+      if (this.currentNote) {
+        const currentContent = this.editor.value;
+        await VaultDB.set(this.currentNote, currentContent);
+        this.noteCache[this.currentNote] = currentContent;
+      }
+    }, 0);
+    
+    // INSTANT UI update
+    this.currentNote = noteName;
+    this.editor.value = content;
+    
+    // Push history and update preview
+    this.pushHistory();
+    this.updatePreviewAndSave();
+    this.updateActiveNoteUI();
 }
 // ── Lightweight note counter (only runs when sidebar is opened) ──
 async updateNoteCount() {
@@ -1091,23 +1132,29 @@ this.preview.addEventListener('click', async (e) => {
   const anchorId = wikiLink.dataset.anchor;
   
   if (noteName) {
-    // Switch to the note
     await this.switchToNote(noteName);
     
-    // If there's an anchor, scroll to it after a short delay
+    // Updated anchor scroll with polling
     if (anchorId) {
-      setTimeout(() => {
+      const tryScroll = (attempt = 0) => {
         const targetElement = this.preview.querySelector(`#${anchorId}`);
+        
         if (targetElement) {
-          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          
-          // Optional: Add visual highlight
+          console.log(`Anchor #${anchorId} FOUND after ${attempt} attempts`);
+          targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
           targetElement.style.backgroundColor = '#fffacd';
           setTimeout(() => {
             targetElement.style.backgroundColor = '';
           }, 1500);
+        } else if (attempt < 25) {
+          console.log(`Attempt \( {attempt + 1}: # \){anchorId} not found yet — retrying...`);
+          setTimeout(() => tryScroll(attempt + 1), 100);
+        } else {
+          console.log(`Gave up after \( {attempt} attempts — # \){anchorId} never appeared`);
         }
-      }, 100); // Small delay for preview to render
+      };
+      
+      setTimeout(tryScroll, 300);
     }
   }
 });
@@ -2597,16 +2644,27 @@ wrapHeadingsForCollapse() {
     if (h.dataset.processed) return;
     
     const headingText = h.textContent.trim();
-    // Generate stable heading ID — ignore collapse/checkbox prefixes
-let cleanForId = h.textContent.trim(); // use current (already cleaned) text
+    
+    // NEW IMPROVED ID GENERATION
+    let cleanForId = headingText
+      .replace(/^[\s+-]+/, '')       // Remove leading +/-
+      .replace(/^\[[\sxX]?\]\s*/, '') // Remove [ ] or [x] checkboxes
+      .replace(/\s+/g, ' ')          // Collapse multiple spaces
+      .trim();
 
-// Extra safety: also strip any leftover prefix patterns just in case
-cleanForId = cleanForId.replace(/^[+-]\s*/, '');
-cleanForId = cleanForId.replace(/^[+-]\s*\[[\sXx]?\]\s*/, '');
+    // Special handling for numbered headings (like DOY dates)
+    if (/^\d{1,3}$/.test(cleanForId)) {
+      cleanForId = cleanForId.padStart(3, '0'); // Format as 001, 350, etc.
+    }
+    
+    // Generate the final ID
+    const headingId = slugify(cleanForId);
+    h.id = headingId;
+    console.log("Heading ID generated:", headingId, "from original text:", headingText);
 
-// Now slugify the cleaned version
-const headingId = slugify(cleanForId.trim());
-h.id = headingId;
+    // ... rest of existing method ...
+
+
 
 // Optional: helpful for debugging or future features
 h.dataset.anchorName = cleanForId.trim();
@@ -3738,7 +3796,7 @@ static updateGPC() {
   if (this.baseMode === 'DOY') {
     const text = String(doyToday).padStart(3, '0');
     
-    // Find current month from DOY (same logic as DOM mode)
+    // Find current month from DOY
     let remaining = doyToday;
     let monthIndex = 0;
     for (let i = 0; i < this.gpcMonths.length; i++) {
@@ -3749,19 +3807,25 @@ static updateGPC() {
       remaining -= this.gpcMonths[i].days;
     }
     
-    // Get month name and create link to month note
     const monthName = this.gpcMonths[monthIndex].name;
     const noteKey = '📁 Boomerang/' + monthName;
-    
-    // Make DOY number clickable to go to current month
     displayHtml += '<a href="#" class="wikilink" data-note="' + noteKey + '">' + text + '</a>';
     
   } else if (this.baseMode === 'DOS') {
     const quarter = Math.floor((doyToday - 1) / 91) + 1;
     const dayInSeason = ((doyToday - 1) % 91) + 1;
     const text = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
-    // Link to DOY note with anchor to the specific day
-    displayHtml += '<a href="#" class="wikilink" data-note="📁 Boomerang/DOY" data-anchor="' + doyToday + '">' + text + '</a>';
+    
+    // DOS now correctly links to DOY note + anchors to today's day number
+    const targetNote = "📁 Boomerang/DOY";
+    const targetAnchor = String(doyToday); // e.g. "350" → matches id="350"
+    
+    displayHtml +=
+      '<a href="#" class="wikilink" ' +
+      'data-note="' + targetNote + '" ' +
+      'data-anchor="' + targetAnchor + '">' +
+      text +
+      '</a>';
     
   } else if (this.baseMode === 'DOM') {
     let remaining = doyToday;
@@ -3779,11 +3843,10 @@ static updateGPC() {
     
     const noteKey = '📁 Boomerang/' + dayNumber;
     const text = monthNum + '.' + dayNum;
-    
     displayHtml += '<a href="#" class="wikilink dom-day" data-note="' + noteKey + '">' + text + '</a>';
   }
   
-  // Heptad only shown when the Heptad button is active
+  // Heptad
   if (this.heptadEnabled) {
     const heptad = this.heptadMap[doyToday];
     if (heptad) {
@@ -3793,7 +3856,6 @@ static updateGPC() {
   
   document.getElementById('gpc-display').innerHTML = displayHtml;
 }
-
 
   
   // Section 3.3.5 - Button event handling
@@ -3824,69 +3886,155 @@ static updateGPC() {
 
 // Section 4.1 - DOMContentLoaded event handler
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize calendar system
   GPCCalendar.init();
+  
+  // Create and initialize editor core
   window.editorCore = new EditorCore();
-  window.editorCore.toggleEditMode();   // flips from edit → view on load
-  
-  // Make GPC display wikilinks clickable
-document.getElementById('gpc-display').addEventListener('click', async (e) => {
-  const wikiLink = e.target.closest('.wikilink');
-  if (!wikiLink) return;
-  
-  e.preventDefault();
-  const noteName = wikiLink.dataset.note?.trim();
-  const anchorId = wikiLink.dataset.anchor;
-  
-  if (noteName) {
-    await window.editorCore.switchToNote(noteName);
-    
-    // Handle anchor if present
-    if (anchorId) {
-      setTimeout(() => {
-        const targetElement = window.editorCore.preview.querySelector(`#${anchorId}`);
-        if (targetElement) {
-          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          targetElement.style.backgroundColor = '#fffacd';
-          setTimeout(() => {
-            targetElement.style.backgroundColor = '';
-          }, 1500);
-        }
-      }, 100);
-    }
-  }
-});
+  window.editorCore.toggleEditMode(); // Start in view mode
 
-  
+  // Optimized GPC display click handler
+  document.getElementById('gpc-display').addEventListener('click', async (e) => {
+    const wikiLink = e.target.closest('a.wikilink');
+    if (!wikiLink) return;
+    
+    e.preventDefault();
+    
+    const noteName = wikiLink.dataset.note?.trim();
+    const anchorId = wikiLink.dataset.anchor;
+    const { doyToday } = GPCCalendar.calculateGPC();
+    
+    console.log("GPC navigation initiated:", { 
+      targetNote: noteName, 
+      anchor: anchorId, 
+      currentDOY: doyToday 
+    });
+
+    if (!noteName) return;
+
+    // 1. FAST PATH: Already on target note with anchor
+    if (window.editorCore.currentNote === noteName && anchorId) {
+      const target = document.getElementById(anchorId) || 
+                    document.getElementById(anchorId.padStart(3, '0'));
+      
+      if (target) {
+        console.log("Fast scroll to existing anchor");
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const highlight = target.style.backgroundColor;
+        target.style.backgroundColor = '#fffacd';
+        setTimeout(() => target.style.backgroundColor = highlight, 1500);
+        return;
+      }
+    }
+
+    try {
+      // 2. Switch notes if needed
+      if (window.editorCore.currentNote !== noteName) {
+        console.time('NoteSwitch');
+        await window.editorCore.switchToNote(noteName);
+        console.timeEnd('NoteSwitch');
+      }
+
+      // 3. Handle anchor after note loads
+      if (anchorId) {
+        // Adaptive timing based on device
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        const initialDelay = isMobile ? 400 : 150;
+        
+        setTimeout(() => {
+          // First try exact ID match
+          let target = document.getElementById(anchorId);
+          
+          // Fallback 1: Try padded number (for DOY)
+          if (!target && /^\d+$/.test(anchorId)) {
+            target = document.getElementById(anchorId.padStart(3, '0'));
+          }
+          
+          // Fallback 2: Try contains match
+          if (!target) {
+            target = document.querySelector(`[id*="${anchorId}"]`);
+          }
+          
+          // Fallback 3: Search headings by content
+          if (!target) {
+            const headings = window.editorCore.preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
+            for (const h of headings) {
+              if (h.textContent.includes(anchorId) || 
+                  h.id.includes(anchorId)) {
+                target = h;
+                break;
+              }
+            }
+          }
+
+          if (target) {
+            console.log("Scrolling to anchor:", target);
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const highlight = target.style.backgroundColor;
+            target.style.backgroundColor = '#fffacd';
+            setTimeout(() => target.style.backgroundColor = highlight, 1500);
+          } else {
+            console.warn("Anchor not found after all attempts:", anchorId);
+          }
+        }, initialDelay);
+      }
+    } catch (err) {
+      console.error("Navigation error:", err);
+    }
+  });
+
   // Section 4.2 - Offline Support Service Worker
   if ('serviceWorker' in navigator) {
-    // Create inline service worker
     const swScript = `
-      const CACHE_NAME = 'lotus-v1.1';
+      const CACHE_NAME = 'lotus-v1.2';
+      const OFFLINE_URL = './';
       
       self.addEventListener('install', (e) => {
-        console.log('📦 Installing Lotus Service Worker');
         e.waitUntil(
-          caches.open(CACHE_NAME).then(cache => cache.addAll(['./']))
+          caches.open(CACHE_NAME)
+            .then(cache => cache.addAll([OFFLINE_URL]))
+            .then(() => self.skipWaiting())
         );
       });
       
       self.addEventListener('fetch', (e) => {
-        e.respondWith(
-          caches.match(e.request).then(cached => cached || fetch(e.request))
+        if (e.request.mode === 'navigate') {
+          e.respondWith(
+            fetch(e.request).catch(() => caches.match(OFFLINE_URL))
+          );
+        } else {
+          e.respondWith(
+            caches.match(e.request).then(res => res || fetch(e.request))
+          );
+        }
+      });
+      
+      self.addEventListener('activate', (e) => {
+        e.waitUntil(
+          caches.keys().then(cacheNames => {
+            return Promise.all(
+              cacheNames.map(cache => {
+                if (cache !== CACHE_NAME) {
+                  return caches.delete(cache);
+                }
+              })
+            );
+          })
         );
       });
     `;
     
     try {
-  const blob = new Blob([swScript], { type: 'application/javascript' });
-  const swUrl = URL.createObjectURL(blob);
-  await navigator.serviceWorker.register(swUrl);
-  console.log('✅ Offline support enabled');
-} catch (err) {
-  // console.warn('Service Worker failed:', err.message);  // ← comment or remove
-}
+      const blob = new Blob([swScript], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      await navigator.serviceWorker.register(swUrl);
+      console.log('✅ Offline support enabled');
+    } catch (err) {
+      console.log('Service Worker registration skipped (expected in some environments)');
+    }
   }
 });
+
 
 </script>
 </body>
