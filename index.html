@@ -787,7 +787,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="ul">•</button>
     <button data-action="ol">1.</button>
     <button data-action="checkbox">☑</button>
-<button id="deeplink-button">🔗 ▼</button>
+<button id="deeplink-button">🚀 ▼</button>
     <button data-action="link">🔗</button>
     <button data-action="wikilink">📄</button>
     <!-- Add to Toolbar -->
@@ -2992,7 +2992,7 @@ handleDropdownClick(type, e) {
     if (link) {
       e.preventDefault(); // Stop normal link behavior
       const url = link.href;
-      const text = link.textContent.trim().replace(/\s*(\S+)\s*$/, '$1'); // Clean text (e.g., "WhatsApp")
+      const text = link.textContent.trim(); // FIXED: Just trim—preserves internal spaces (e.g., "🍏 WhatsApp")
       
       // JUST PASTE THE MARKDOWN LINK AT CURSOR
       const markdown = `[${text}](${url})`;
@@ -3005,9 +3005,6 @@ handleDropdownClick(type, e) {
   // Close dropdown after any action
   e.currentTarget.classList.remove('open');
 }
-
-
-
 
 // Bullet list (• button) - toggle on/off for multi-line
 // Bullet list (• button) - single-line: keep bullet when removing checkbox
@@ -3945,23 +3942,22 @@ static updateGPC() {
     const noteKey = '📁 Boomerang/' + monthName;
     displayHtml += '<a href="#" class="wikilink" data-note="' + noteKey + '">' + text + '</a>';
     
-  } else if (this.baseMode === 'DOS') {
-    const quarter = Math.floor((doyToday - 1) / 91) + 1;
-    const dayInSeason = ((doyToday - 1) % 91) + 1;
-    const text = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
-    
-    // DOS now correctly links to DOY note + anchors to today's day number
-    const targetNote = "📁 Boomerang/DOY";
-    const targetAnchor = "D" + String(doyToday).padStart(3, '0');   // ← changed line
-    
-    displayHtml +=
-      '<a href="#" class="wikilink" ' +
-      'data-note="' + targetNote + '" ' +
-      'data-anchor="' + targetAnchor + '">' +
-      text +
-      '</a>';
-    
-  } else if (this.baseMode === 'DOM') {
+ } else if (this.baseMode === 'DOS') {
+  const quarter = Math.floor((doyToday - 1) / 91) + 1;
+  const dayInSeason = ((doyToday - 1) % 91) + 1;
+  const text = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
+  
+  // ← CHANGED: point to the rich quarter page instead of giant DOY
+  const targetNote = `📁 Boomerang/Q${quarter}`;
+  const targetAnchor = "D" + String(doyToday).padStart(3, '0');
+  
+  displayHtml +=
+    '<a href="#" class="wikilink" ' +
+    'data-note="' + targetNote + '" ' +
+    'data-anchor="' + targetAnchor + '">' +
+    text +
+    '</a>';
+} else if (this.baseMode === 'DOM') {
     let remaining = doyToday;
     let monthIndex = 0;
     for (let i = 0; i < this.gpcMonths.length; i++) {
