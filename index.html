@@ -122,13 +122,71 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 #toolbar-inner { display: inline-flex; gap: 8px; padding: 0 10px; padding-right: 140px; }
 #toolbar button { flex-shrink: 0; padding: 8px 12px; border-radius: 6px; border: 1px solid #aaa; cursor: pointer; background: #fff; font-size: 16px; }
 
-/* ========== Section 1.5 - DROPDOWNS ========== */
-.floating-dropdown { display: none; position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 -8px 20px rgba(0,0,0,0.2); z-index: 999999999; min-width: 120px; }
-.floating-dropdown button { display: block; width: 100%; text-align: center; padding: 12px; border: none; background: none; cursor: pointer; font-size: 15px; border-bottom: 1px solid #eee; }
+/* ========== Section 1.5 - DROPDOWNS (Existing + Deeplink Matching Colors) ========== */
+.floating-dropdown { 
+  display: none; position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); 
+  background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 -8px 20px rgba(0,0,0,0.2); 
+  z-index: 999999999; min-width: 120px; 
+  /* For 19 items: Slightly taller but no forced scroll - let it grow naturally */
+  max-height: 320px; overflow-y: auto; /* Only scrolls if screen tiny */
+}
+
+.floating-dropdown button { 
+  display: block; width: 100%; text-align: center; padding: 12px; border: none; background: none; 
+  cursor: pointer; font-size: 15px; border-bottom: 1px solid #eee; 
+}
 .floating-dropdown button:last-child { border-bottom: none; }
 .floating-dropdown button:hover { background: #f0f0f0; }
+
 .floating-dropdown.open { display: block; }
 #floating-table-dropdown { min-width: 160px; }
+
+/* DEEPLINK: Exact match to button style - Sexy like Colors (centered, clean stack) */
+.floating-dropdown a.deeplink-btn {
+  display: block; width: 100%; text-align: left; padding: 10px 12px; /* Slightly less padding for compactness */
+  border: none; background: none; cursor: pointer; font-size: 15px; 
+  border-bottom: 1px solid #eee; text-decoration: none; color: #333; /* No underline, dark text like buttons */
+  transition: background 0.2s; /* Same subtle hover as buttons */
+  line-height: 1.3; /* Tighter lines for stack */
+  /* Emoji + text: Simple left-align with small gap - no jumble */
+  display: flex; align-items: center; gap: 8px; /* Emoji left, text follows */
+  white-space: nowrap; /* No wrap - keeps "Text Homie" on one line */
+}
+
+.floating-dropdown a.deeplink-btn:hover { 
+  background: #f0f0f0; /* Exact same hover as colors buttons */
+}
+
+.floating-dropdown a.deeplink-btn:last-child { 
+  border-bottom: none; 
+  border-radius: 0 0 8px 8px; /* Rounded bottom like dropdown */
+}
+
+.floating-dropdown a.deeplink-btn:first-child { 
+  border-radius: 8px 8px 0 0; /* Rounded top */
+}
+
+/* Emoji polish: Consistent size, no extra spacing */
+.floating-dropdown a.deeplink-btn > svg, /* If emoji as SVG */
+.floating-dropdown a.deeplink-btn::before { /* Fallback for emoji */
+  font-size: 16px; flex-shrink: 0; margin-right: 0; /* Tight emoji */
+  line-height: 1;
+}
+
+/* If too many items, subtle scrollbar (matches app feel) */
+.floating-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+.floating-dropdown::-webkit-scrollbar-track { background: #f5f5f5; }
+.floating-dropdown::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+.floating-dropdown::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* Mobile: Slightly wider for thumbs, no jumble */
+@media (max-width: 768px) {
+  .floating-dropdown { min-width: 140px; }
+  .floating-dropdown a.deeplink-btn { padding: 12px 14px; gap: 10px; font-size: 16px; }
+}
+
 
 /* ========== Section 1.6 - SIDEBAR ========== */
 #sidebar { width: 250px; background: #f0f0f0; position: fixed; top: 0; bottom: 0; left: -250px; padding: 1em; overflow-y: auto; z-index: 100; box-shadow: 2px 0 6px rgba(0,0,0,0.2); transition: left 0.25s ease, opacity 0.25s ease; pointer-events: none; opacity: 0; }
@@ -729,6 +787,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="ul">•</button>
     <button data-action="ol">1.</button>
     <button data-action="checkbox">☑</button>
+<button id="deeplink-button">🔗 ▼</button>
     <button data-action="link">🔗</button>
     <button data-action="wikilink">📄</button>
     <!-- Add to Toolbar -->
@@ -787,9 +846,34 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-color="gray">gray</button>
   <button data-color="brown">brown</button>
 </div>
+  
+  <!-- Add this complete dropdown -->
+<div id="floating-deeplink-dropdown" class="floating-dropdown">
+  <a href="mailto:user@gmail.com" target="_blank" class="deeplink-btn">📨 Email</a>
+  <a href="sms:+10001234567?body=" class="deeplink-btn">📞 Text Homie</a>
+  <a href="https://wa.me/10001234567?text=" class="deeplink-btn">🍏 WhatsApp</a>
+  <a href="http://m.me/facebook?ref=yourpage" class="deeplink-btn">💬 Messenger</a>
+  <a href="zoomus://join?action=join&confno=yourmeetingid" class="deeplink-btn">🎥 Zoom</a>
+  <a href="snapchat://add/yourusername" class="deeplink-btn">👻 Snapchat</a>
+  <a href="https://maps.app.goo.gl/XKqHcBTfN2xYz9jg7" target="_blank" class="deeplink-btn">🗺️ Maps</a>
+  <a href="uber://?action=setPickup" class="deeplink-btn">🚕 Uber</a>
+  <a href="ubereats://home" class="deeplink-btn">🍔 Uber Eats</a>
+  <a href="amazon://cart" class="deeplink-btn">🛍️ Amazon</a>
+  <a href="walmart://home" class="deeplink-btn">🛒 Walmart</a>
+  <a href="upi://pay?pa=rahul@upi&pn=Rahul&cu=INR" class="deeplink-btn">💸 Pay</a>
+  <a href="cashapp://scan" class="deeplink-btn">💵 Cash App</a>
+  <a href="venmo://pay" class="deeplink-btn">💳 Venmo</a>
+  <a href="audible://home" class="deeplink-btn">🎧 Audible</a>
+  <a href="spotify://home" class="deeplink-btn">📻 Spotify</a>
+  <a href="https://facebook.com/zuck" target="_blank" class="deeplink-btn">👍 Facebook</a>
+  <a href="tiktok://home" class="deeplink-btn">🎵 TikTok</a>
+  <a href="vnd.youtube://watch" class="deeplink-btn">▶️ YouTube</a>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js">
+
+</script>
 
 <script>
 
@@ -1173,28 +1257,56 @@ this.preview.addEventListener('click', async (e) => {
   }
   
   initDropdownEvents() {
-    const dropdowns = ['h', 't', 'date', 'highlight', 'table'];
+  const dropdowns = ['h', 't', 'date', 'highlight', 'table', 'deeplink'];
+  
+  console.log('🔧 initDropdownEvents() starting...'); // Keep for now
+  
+  dropdowns.forEach(type => {
+    const button = document.getElementById(`${type}-button`);
+    const dropdown = document.getElementById(`floating-${type}-dropdown`);
     
-    dropdowns.forEach(type => {
-      const button = document.getElementById(`${type}-button`);
-      const dropdown = document.getElementById(`floating-${type}-dropdown`);
+    console.log(`🔧 Processing ${type}:`, { button: button ? 'FOUND' : 'MISSING', dropdown: dropdown ? 'FOUND' : 'MISSING' });
+    
+    if (button && dropdown) {
+      console.log(`🔧 Attaching listeners to ${type}...`);
       
-      if (button && dropdown) {
-        button.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.closeAllDropdowns();
-          dropdown.classList.toggle('open');
-        });
-        
-        dropdown.addEventListener('click', (e) => {
-          this.handleDropdownClick(type, e);
-          dropdown.classList.remove('open');
-        });
-      }
-    });
+      button.addEventListener('click', (e) => {
+        console.log(`🔧 ${type} BUTTON CLICKED!`);
+        e.stopPropagation();
+        this.closeAllDropdowns();
+        dropdown.classList.toggle('open');
+        console.log(`🔧 ${type} dropdown toggled: open=${dropdown.classList.contains('open')}`);
+      });
+      
+      // CRITICAL: Stop propagation on ALL clicks inside dropdown (prevents bubbling to document)
+      dropdown.addEventListener('click', (e) => {
+        e.stopPropagation(); // ← This stops bubble to document
+        console.log(`🔧 ${type} INNER CLICK (target: ${e.target.nodeName})`);
+        this.handleDropdownClick(type, e);
+        // Don't auto-close here—let handleDropdownClick decide
+      });
+      console.log(`✅ Listeners attached for ${type}`);
+    } else {
+      console.error(`❌ FAILED to attach ${type}`);
+    }
+  });
+  
+  // FIXED: Document click only closes if NOT clicking inside a dropdown
+  document.addEventListener('click', (e) => {
+    const isClickInsideDropdown = e.target.closest('.floating-dropdown');
+    const isClickOnToolbar = e.target.closest('#toolbar');
     
-    document.addEventListener('click', () => this.closeAllDropdowns());
-  }
+    if (!isClickInsideDropdown && !isClickOnToolbar) {
+      console.log('🔧 Document clicked OUTSIDE - closing all dropdowns');
+      this.closeAllDropdowns();
+    } else {
+      console.log('🔧 Click inside dropdown/toolbar - ignoring close');
+    }
+  });
+  
+  console.log('🔧 initDropdownEvents() complete!');
+}
+
   
   initSidebarEvents() {
   const sidebarToggle = document.getElementById('sidebar-toggle');
@@ -2858,20 +2970,42 @@ replaceSelection(text) {
 }
 
 handleDropdownClick(type, e) {
+  // Handle button-based dropdowns (unchanged - headings, text, date, colors, table)
   const btn = e.target.closest('button');
-  if (!btn) return;
-  
-  const action = btn.dataset.action || btn.dataset.stamp || btn.dataset.color;
-  if (!action) return;
-  
-  switch(type) {
-    case 'h': this.applyHeading(action); break;
-    case 't': this.applyTextFormat(action); break;
-    case 'date': this.insertDateStamp(action); break;
-    case 'highlight': this.applyHighlight(action); break;
-    case 'table': this.handleTableAction(action); break;
+  if (btn) {
+    const action = btn.dataset.action || btn.dataset.stamp || btn.dataset.color;
+    if (!action) return;
+    
+    switch(type) {
+      case 'h': this.applyHeading(action); break;
+      case 't': this.applyTextFormat(action); break;
+      case 'date': this.insertDateStamp(action); break;
+      case 'highlight': this.applyHighlight(action); break;
+      case 'table': this.handleTableAction(action); break;
+    }
+    return; // Exit after button action
   }
+  
+  // DEEPLINK SPECIAL: Only insert markdown (paste [Text](url) at cursor)
+  if (type === 'deeplink') {
+    const link = e.target.closest('a.deeplink-btn');
+    if (link) {
+      e.preventDefault(); // Stop normal link behavior
+      const url = link.href;
+      const text = link.textContent.trim().replace(/\s*(\S+)\s*$/, '$1'); // Clean text (e.g., "WhatsApp")
+      
+      // JUST PASTE THE MARKDOWN LINK AT CURSOR
+      const markdown = `[${text}](${url})`;
+      this.insertAtCursor(markdown);
+      
+      console.log(`✅ Inserted: [${text}](${url})`); // Optional log
+    }
+  }
+  
+  // Close dropdown after any action
+  e.currentTarget.classList.remove('open');
 }
+
 
 
 
