@@ -877,6 +877,33 @@ Then read: [[📁 Boomerang/Manual|Manual]]
 
 <script>
 
+function devWarn(...args) {
+  if (window.location.hostname === 'localhost' ||
+    window.location.hostname.includes('192.168') ||
+    window.location.hostname.includes('127.0.0.1')) {
+    console.warn(...args);
+  }
+}
+
+function devError(...args) {
+  if (window.location.hostname === 'localhost' ||
+    window.location.hostname.includes('192.168') ||
+    window.location.hostname.includes('127.0.0.1')) {
+    console.error(...args);
+  }
+}
+
+// ── Dev-only console logging ─────────────────────────────────────────────
+// Only shows messages when running locally (SPCK preview, localhost, home Wi-Fi)
+// Disappears automatically on GitHub Pages, Vercel, etc.
+function devLog(...args) {
+  if (window.location.hostname === 'localhost' ||
+      window.location.hostname.includes('192.168') ||
+      window.location.hostname.includes('127.0.0.1')) {
+    console.log(...args);
+  }
+}
+
  // ====================================================================
  // SECTION 3 - JAVASCRIPT
  // ====================================================================
@@ -922,7 +949,7 @@ const VaultDB = (() => {
         req.onerror = () => reject(req.error);
       });
     } catch (err) {
-      console.log('IndexedDB failed, falling back to localStorage:', err);
+      devLog('IndexedDB failed, falling back to localStorage:', err);
       return localStorage.getItem(`note-${name}`);
     }
   }
@@ -937,7 +964,7 @@ const VaultDB = (() => {
         tx.onerror = () => reject(tx.error);
       });
     } catch (err) {
-      console.log('IndexedDB failed, falling back to localStorage:', err);
+      devLog('IndexedDB failed, falling back to localStorage:', err);
       localStorage.setItem(`note-${name}`, content);
     }
   }
@@ -997,7 +1024,7 @@ function slugify(text) {
       .replace(/-+/g, '-')          // Collapse multiple hyphens
       .replace(/^-+|-+$/g, '');     // Trim leading/trailing hyphens
   } catch (err) {
-    console.error('Slugify error:', err);
+    devError('Slugify error:', err);
     return 'note'; // Fallback for unexpected errors
   }
 }
@@ -1052,13 +1079,13 @@ this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
   window.addEventListener('offline', () => {
     const alert = document.getElementById('offline-alert');
     if (alert) alert.style.display = 'block';
-    console.log('📴 Offline mode activated');
+    devLog('📴 Offline mode activated');
   });
   
   window.addEventListener('online', () => {
     const alert = document.getElementById('offline-alert');
     if (alert) alert.style.display = 'none';
-    console.log('📶 Online mode restored');
+    devLog('📶 Online mode restored');
   });
   
   // Load initial note
@@ -1073,7 +1100,7 @@ this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
   this.pushHistory(true);
   await this.updatePreviewAndSave();
   await this.buildNoteIndex();
-  console.log('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
+  devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
   await this.updateNoteCount();
 }
 
@@ -1184,9 +1211,9 @@ if (notesBtn) {
 
     
     // Debug helper — remove after testing
-    console.log(`Counted ${count} notes — full keys:`, keys);
+    devLog(`Counted ${count} notes — full keys:`, keys);
   } catch (err) {
-    console.warn('Note count failed:', err);
+    devWarn('Note count failed:', err);
     const notesBtn = document.getElementById('recent-btn');
     if (notesBtn) notesBtn.textContent = '🗒️ Notes';
   }
@@ -1224,17 +1251,17 @@ this.preview.addEventListener('click', async (e) => {
         const targetElement = this.preview.querySelector(`#${anchorId}`);
         
         if (targetElement) {
-          console.log(`Anchor #${anchorId} FOUND after ${attempt} attempts`);
+          devLog(`Anchor #${anchorId} FOUND after ${attempt} attempts`);
           targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
           targetElement.style.backgroundColor = '#fffacd';
           setTimeout(() => {
             targetElement.style.backgroundColor = '';
           }, 1500);
         } else if (attempt < 25) {
-          console.log(`Attempt \( {attempt + 1}: # \){anchorId} not found yet — retrying...`);
+          devLog(`Attempt \( {attempt + 1}: # \){anchorId} not found yet — retrying...`);
           setTimeout(() => tryScroll(attempt + 1), 100);
         } else {
-          console.log(`Gave up after \( {attempt} attempts — # \){anchorId} never appeared`);
+          devLog(`Gave up after \( {attempt} attempts — # \){anchorId} never appeared`);
         }
       };
       
@@ -1259,35 +1286,35 @@ this.preview.addEventListener('click', async (e) => {
   initDropdownEvents() {
   const dropdowns = ['h', 't', 'date', 'highlight', 'table', 'deeplink'];
   
-  console.log('🔧 initDropdownEvents() starting...'); // Keep for now
+  devLog('🔧 initDropdownEvents() starting...'); // Keep for now
   
   dropdowns.forEach(type => {
     const button = document.getElementById(`${type}-button`);
     const dropdown = document.getElementById(`floating-${type}-dropdown`);
     
-    console.log(`🔧 Processing ${type}:`, { button: button ? 'FOUND' : 'MISSING', dropdown: dropdown ? 'FOUND' : 'MISSING' });
+    devLog(`🔧 Processing ${type}:`, { button: button ? 'FOUND' : 'MISSING', dropdown: dropdown ? 'FOUND' : 'MISSING' });
     
     if (button && dropdown) {
-      console.log(`🔧 Attaching listeners to ${type}...`);
+      devLog(`🔧 Attaching listeners to ${type}...`);
       
       button.addEventListener('click', (e) => {
-        console.log(`🔧 ${type} BUTTON CLICKED!`);
+        devLog(`🔧 ${type} BUTTON CLICKED!`);
         e.stopPropagation();
         this.closeAllDropdowns();
         dropdown.classList.toggle('open');
-        console.log(`🔧 ${type} dropdown toggled: open=${dropdown.classList.contains('open')}`);
+        devLog(`🔧 ${type} dropdown toggled: open=${dropdown.classList.contains('open')}`);
       });
       
       // CRITICAL: Stop propagation on ALL clicks inside dropdown (prevents bubbling to document)
       dropdown.addEventListener('click', (e) => {
         e.stopPropagation(); // ← This stops bubble to document
-        console.log(`🔧 ${type} INNER CLICK (target: ${e.target.nodeName})`);
+        devLog(`🔧 ${type} INNER CLICK (target: ${e.target.nodeName})`);
         this.handleDropdownClick(type, e);
         // Don't auto-close here—let handleDropdownClick decide
       });
-      console.log(`✅ Listeners attached for ${type}`);
+      devLog(`✅ Listeners attached for ${type}`);
     } else {
-      console.error(`❌ FAILED to attach ${type}`);
+      devError(`❌ FAILED to attach ${type}`);
     }
   });
   
@@ -1297,14 +1324,14 @@ this.preview.addEventListener('click', async (e) => {
     const isClickOnToolbar = e.target.closest('#toolbar');
     
     if (!isClickInsideDropdown && !isClickOnToolbar) {
-      console.log('🔧 Document clicked OUTSIDE - closing all dropdowns');
+      devLog('🔧 Document clicked OUTSIDE - closing all dropdowns');
       this.closeAllDropdowns();
     } else {
-      console.log('🔧 Click inside dropdown/toolbar - ignoring close');
+      devLog('🔧 Click inside dropdown/toolbar - ignoring close');
     }
   });
   
-  console.log('🔧 initDropdownEvents() complete!');
+  devLog('🔧 initDropdownEvents() complete!');
 }
 
   
@@ -1336,9 +1363,9 @@ this.preview.addEventListener('click', async (e) => {
     await VaultDB.createFolder(folderName.trim());
     await this.loadRecentNotes();
     if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
-    console.log("Folder created:", folderName.trim());
+    devLog("Folder created:", folderName.trim());
   } catch (err) {
-    console.error("Folder creation failed:", err);
+    devError("Folder creation failed:", err);
     alert("Couldn't create folder: " + err.message);
   }
 });
@@ -1351,7 +1378,7 @@ document.getElementById('back-btn').addEventListener('click', async (e) => {
   if (this.currentNote !== 'Home') {
     await this.switchToNote('Home');
   } else {
-    console.log('Already at Home');
+    devLog('Already at Home');
   }
   
   // Close sidebar after navigation
@@ -1482,7 +1509,7 @@ async deleteNote(noteName) {
 await this.updateCacheForSingleNote(noteName); // ← ADD THIS LINE
 if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
-        console.error('Delete failed:', err);
+        devError('Delete failed:', err);
         alert('Delete failed');
     }
 }
@@ -1544,7 +1571,7 @@ if (finalNewName !== oldName) {
 }
 if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
-        console.error('Rename failed:', err);
+        devError('Rename failed:', err);
         alert('Rename failed: ' + err.message);
     }
 }
@@ -1622,7 +1649,7 @@ if (newName !== noteName) {
 }
 if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
     } catch (err) {
-        console.error('Move failed:', err);
+        devError('Move failed:', err);
         alert('Move failed: ' + err.message);
     }
 }
@@ -1778,7 +1805,7 @@ async loadRecentNotes() {
         this.initSearch();
         
     } catch (err) {
-        console.error('Error loading notes:', err);
+        devError('Error loading notes:', err);
         recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
     }
 }
@@ -2024,7 +2051,7 @@ this.saveTimeout = setTimeout(async () => {
 }, 500);
     
   } catch (error) {
-    console.error('Preview error:', error);
+    devError('Preview error:', error);
   }
 }
 
@@ -2666,7 +2693,7 @@ makeTasksDraggable() {
     const taskItems = this.preview.querySelectorAll('li.task-item');
     
     if (taskItems.length === 0) {
-      console.log('No tasks found to make draggable');
+      devLog('No tasks found to make draggable');
       return;
     }
     
@@ -2721,7 +2748,7 @@ makeTasksDraggable() {
     item.ondragend = handleDragEnd;
   });
   
-  console.log('Made', this.preview.querySelectorAll('li.task-item').length, 'tasks draggable with links support');
+  devLog('Made', this.preview.querySelectorAll('li.task-item').length, 'tasks draggable with links support');
 }
 
 
@@ -2772,7 +2799,7 @@ wrapHeadingsForCollapse() {
     // Generate the final ID
     const headingId = slugify(cleanForId);
     h.id = headingId;
-    console.log("Heading ID generated:", headingId, "from original text:", headingText);
+    devLog("Heading ID generated:", headingId, "from original text:", headingText);
 
     // ... rest of existing method ...
 
@@ -2998,7 +3025,7 @@ handleDropdownClick(type, e) {
       const markdown = `[${text}](${url})`;
       this.insertAtCursor(markdown);
       
-      console.log(`✅ Inserted: [${text}](${url})`); // Optional log
+      devLog(`✅ Inserted: [${text}](${url})`); // Optional log
     }
   }
   
@@ -3483,7 +3510,7 @@ initExportImport() {
 
 // Fixed export method - properly handles folder structure
 async exportAllNotes() {
-  console.log('Export function called');
+  devLog('Export function called');
   
   try {
     // Show loading indicator
@@ -3494,12 +3521,12 @@ async exportAllNotes() {
     
     // Ensure JSZip is loaded
     if (typeof JSZip === 'undefined') {
-      console.error('JSZip is undefined!');
+      devError('JSZip is undefined!');
       throw new Error('JSZip library not loaded. Check if the script tag is loading.');
     }
     
     const notes = await VaultDB.list();
-    console.log('Notes found:', notes.length, notes);
+    devLog('Notes found:', notes.length, notes);
     
     if (notes.length === 0) {
       alert('No notes to export!');
@@ -3509,14 +3536,14 @@ async exportAllNotes() {
     }
     
     const zip = new JSZip();
-    console.log('Zip instance created');
+    devLog('Zip instance created');
 
     // Add each note to the zip file with proper folder structure
     for (const note of notes) {
       try {
         const content = await VaultDB.get(note);
         if (!content) {
-          console.warn('Note ' + note + ' has no content, skipping');
+          devWarn('Note ' + note + ' has no content, skipping');
           continue;
         }
         
@@ -3538,17 +3565,17 @@ async exportAllNotes() {
           filePath = note + '.md';
         }
         
-        console.log('Adding note to zip: ' + filePath);
+        devLog('Adding note to zip: ' + filePath);
         zip.file(filePath, content);
       } catch (err) {
-        console.error('Error exporting note ' + note + ':', err);
+        devError('Error exporting note ' + note + ':', err);
       }
     }
 
     // Generate the zip file
-    console.log('Generating zip file...');
+    devLog('Generating zip file...');
     const content = await zip.generateAsync({ type: "blob" });
-    console.log('Zip generated, size:', content.size, 'bytes');
+    devLog('Zip generated, size:', content.size, 'bytes');
     
     if (content.size === 0) {
       alert('Export failed: Generated zip file is empty!');
@@ -3569,7 +3596,7 @@ async exportAllNotes() {
     a.download = filename;
     
     document.body.appendChild(a);
-    console.log('Triggering download...');
+    devLog('Triggering download...');
     a.click();
     
     // Clean up
@@ -3578,11 +3605,11 @@ async exportAllNotes() {
       URL.revokeObjectURL(url);
       exportBtn.textContent = originalText;
       exportBtn.disabled = false;
-      console.log('Export complete! File should download as:', filename);
+      devLog('Export complete! File should download as:', filename);
     }, 100);
       
   } catch (err) {
-    console.error('Export failed:', err);
+    devError('Export failed:', err);
     alert('Export failed: ' + (err.message || 'Unknown error'));
     
     // Reset button text
@@ -3651,7 +3678,7 @@ async importAllNotes() {
       await this.loadRecentNotes();
 
     } catch (err) {
-      console.error('Import failed:', err);
+      devError('Import failed:', err);
       alert('❌ Import failed: ' + err.message);
     } finally {
       // Reset button text
@@ -3737,10 +3764,10 @@ updateCheckboxHeadingInEditor(headingElement) {
 // ── Search index building ────────────────────────────────────────────────
 async buildNoteIndex() {
   if (this.cachedIndex) {
-    console.log('Using existing cache');
+    devLog('Using existing cache');
     return;
   }
-  console.log('Building cache (first time or forced)...');
+  devLog('Building cache (first time or forced)...');
   
   const names = await VaultDB.list();
   this.cachedIndex = [];
@@ -3768,7 +3795,7 @@ async buildNoteIndex() {
     });
   }
   
-  console.log(`Search cache built: ${this.cachedIndex.length} notes indexed`);
+  devLog(`Search cache built: ${this.cachedIndex.length} notes indexed`);
 }
 
 
@@ -3800,7 +3827,7 @@ async updateCacheForSingleNote(noteName) {
     rawSnippet: snippet
   });
   
-  console.log(`Cache updated for single note: ${noteName}`);
+  devLog(`Cache updated for single note: ${noteName}`);
 }
 
 updateCollapsePrefixInEditor(headingElement) {
@@ -4034,7 +4061,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const anchorId = wikiLink.dataset.anchor;
     const { doyToday } = GPCCalendar.calculateGPC();
     
-    console.log("GPC navigation initiated:", { 
+    devLog("GPC navigation initiated:", { 
       targetNote: noteName, 
       anchor: anchorId, 
       currentDOY: doyToday 
@@ -4048,7 +4075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.getElementById(anchorId.padStart(3, '0'));
       
       if (target) {
-        console.log("Fast scroll to existing anchor");
+        devLog("Fast scroll to existing anchor");
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         const highlight = target.style.backgroundColor;
         target.style.backgroundColor = '#fffacd';
@@ -4098,18 +4125,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
 
           if (target) {
-            console.log("Scrolling to anchor:", target);
+            devLog("Scrolling to anchor:", target);
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             const highlight = target.style.backgroundColor;
             target.style.backgroundColor = '#fffacd';
             setTimeout(() => target.style.backgroundColor = highlight, 1500);
           } else {
-            console.warn("Anchor not found after all attempts:", anchorId);
+            devWarn("Anchor not found after all attempts:", anchorId);
           }
         }, initialDelay);
       }
     } catch (err) {
-      console.error("Navigation error:", err);
+      devError("Navigation error:", err);
     }
   });
 
@@ -4158,9 +4185,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       const blob = new Blob([swScript], { type: 'application/javascript' });
       const swUrl = URL.createObjectURL(blob);
       await navigator.serviceWorker.register(swUrl);
-      console.log('✅ Offline support enabled');
+      devLog('✅ Offline support enabled');
     } catch (err) {
-      console.log('Service Worker registration skipped (expected in some environments)');
+      devLog('Service Worker registration skipped (expected in some environments)');
     }
   }
 });
