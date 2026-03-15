@@ -114,6 +114,9 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 /* ========== Section 1.3 - EDITOR/PREVIEW ========== */
 #editor-container { flex: 1; display: flex; flex-direction: column; margin-bottom: 60px; }
 #editor, #preview { flex: 1; width: 100%; box-sizing: border-box; border: 1px solid #ddd; font-family: "Courier New", monospace; font-size: 16px; line-height: 1.4; background: #fff; overflow: auto; white-space: pre-wrap; }
+#preview {
+  white-space: normal;
+}
 #editor { display: block; padding: 20px; border-radius: 8px; }
 #preview { display: none; padding: 20px; border-radius: 8px; }
 
@@ -321,7 +324,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 #preview h4[id],
 #preview h5[id],
 #preview h6[id] {
-  scroll-margin-top: 50px;
+  scroll-margin-top: 5px;
   /* Adjust based on your header height */
   position: relative;
 }
@@ -329,7 +332,6 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 /* Add to your CSS */
 #preview {
   content-visibility: auto;
-  contain-intrinsic-size: 1000px;
 }
 
 
@@ -2781,9 +2783,9 @@ addCopyButtons() {
 wrapHeadingsForCollapse() {
   this.preview.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
     if (h.dataset.processed) return;
-    
+
     const headingText = h.textContent.trim();
-    
+
     // NEW IMPROVED ID GENERATION
     let cleanForId = headingText
       .replace(/^[\s+-]+/, '')       // Remove leading +/-
@@ -2801,12 +2803,8 @@ wrapHeadingsForCollapse() {
     h.id = headingId;
     devLog("Heading ID generated:", headingId, "from original text:", headingText);
 
-    // ... rest of existing method ...
-
-
-
-// Optional: helpful for debugging or future features
-h.dataset.anchorName = cleanForId.trim();
+    // Optional: helpful for debugging or future features
+    h.dataset.anchorName = cleanForId.trim();
     
     // Check for checkbox heading patterns: + [ ] or - [ ]
     const checkboxMatch = headingText.match(/^([+-])\s*\[([ xX])\]\s*(.*)$/);
@@ -2852,23 +2850,61 @@ h.dataset.anchorName = cleanForId.trim();
       }
     }
     
-    // Create wrapper for collapsible content
-    const wrapper = document.createElement('div');
-    wrapper.className = 'collapsible-content';
+    // ── CREATE WRAPPER FOR H2+ ONLY (first H1 has no wrapper) ──
+    const isFirstH1 = h.tagName === 'H1' && h.parentNode === this.preview && !h.previousElementSibling;
     
-    // Find all content until next same/higher level heading
-    let next = h.nextElementSibling;
-    while (next && (!next.tagName || !next.tagName.match(/^H[1-6]$/) || parseInt(next.tagName[1]) > parseInt(h.tagName[1]))) {
-      const temp = next.nextElementSibling;
-      wrapper.appendChild(next);
-      next = temp;
+    let wrapper;
+    if (!isFirstH1) {
+      // Create wrapper for H2+ or subsequent H1s
+      wrapper = document.createElement('div');
+      wrapper.className = 'collapsible-content';
+      
+      // CONDENSED MODE - tight spacing
+      wrapper.style.cssText = `
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        line-height: 1.2 !important; /* Tight line height */
+        min-height: 0 !important;
+        height: auto !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+        display: block !important;
+      `;
+      
+      // Set initial display based on collapse state
+      wrapper.style.display = h.classList.contains('collapsed') ? 'none' : 'block';
+      
+      // Find all content until next same/higher level heading
+      let next = h.nextElementSibling;
+      while (next && (!next.tagName || !next.tagName.match(/^H[1-6]$/) || parseInt(next.tagName[1]) > parseInt(h.tagName[1]))) {
+        const temp = next.nextElementSibling;
+        wrapper.appendChild(next);
+        next = temp;
+      }
+      
+      h.after(wrapper);
+      
+      // FORCE zero spacing on ALL content inside wrapper
+      const contentElements = wrapper.querySelectorAll('*');
+      contentElements.forEach(el => {
+        el.style.margin = '0 0 2px 0 !important'; // TINY bottom margin only
+        el.style.padding = '0 !important';
+        el.style.lineHeight = '1.2 !important'; // Tight lines
+      });
     }
-    
-    h.after(wrapper);
-    
+
+    // ── HEADING MARGINS - zero bottom for all ──
+    if (h.tagName === 'H1') {
+      h.style.margin = '12px 0 0 0 !important'; // H1: top only
+    } else {
+      // H2+: Small top + indent, ZERO bottom
+      h.style.margin = '6px 0 0 1em !important'; // Smaller top margin for tighter H2
+    }
+
     // Add click handler for toggling
     h.addEventListener('click', (e) => {
-      // If clicking on the checkbox area (first 1.5em)
+      // If clicking on the checkbox area (first 24px)
       const rect = h.getBoundingClientRect();
       const isCheckboxClick = e.clientX - rect.left < 24; // 24px click area
       
@@ -2879,6 +2915,12 @@ h.dataset.anchorName = cleanForId.trim();
       } else {
         // Otherwise toggle collapse
         h.classList.toggle('collapsed');
+        
+        // Toggle wrapper if it exists
+        if (!isFirstH1 && wrapper) {
+          wrapper.style.display = h.classList.contains('collapsed') ? 'none' : 'block';
+        }
+        
         this.updateCollapsePrefixInEditor(h);
       }
     });
