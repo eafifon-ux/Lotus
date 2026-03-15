@@ -329,6 +329,7 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 /* Add to your CSS */
 #preview {
   content-visibility: auto;
+  contain-intrinsic-size: 1000px;
 }
 
 
@@ -652,74 +653,6 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   line-height: 1;      /* Tight vertical fit */
 }
 
-/* ========== MOBILE FIX - Add this at the END of your CSS ========== */
-/* Targets mobile screens specifically */
-@media (max-width: 768px) {
-  body {
-    padding: 5px !important; /* Reduce body padding on mobile */
-    margin: 0 !important;
-  }
-  
-  #top-bar {
-    top: 5px !important; /* Closer to edge */
-    right: 5px !important;
-    left: auto !important; /* Don't stretch full width */
-  }
-  
-  #editor-container {
-    margin-bottom: 0 !important; /* Remove bottom margin - toolbar is fixed */
-    padding-top: 50px !important; /* Just enough for top bar */
-    min-height: calc(100vh - 60px) !important; /* Account for toolbar + top bar */
-  }
-  
-  #preview {
-    padding: 12px !important; /* Less padding on small screens */
-    flex: 0 1 auto !important; /* Don't expand beyond content */
-    min-height: auto !important; /* No forced height */
-    max-height: calc(100vh - 120px) !important; /* Prevent overflow */
-  }
-  
-  #toolbar {
-    padding: 2px 0 !important; /* Tighter toolbar */
-    bottom: 0 !important;
-  }
-  
-  #toolbar-inner {
-    padding: 0 5px !important;
-    gap: 4px !important; /* Tighter buttons on mobile */
-  }
-  
-  #toolbar button {
-    padding: 6px 8px !important; /* Smaller buttons for mobile thumbs */
-    font-size: 14px !important;
-  }
-  
-  .floating-dropdown {
-    min-width: 160px !important; /* Wider for touch */
-    bottom: 55px !important; /* Closer to toolbar */
-    max-height: 50vh !important; /* Half viewport max */
-  }
-  
-  #sidebar {
-    width: 280px !important; /* Wider for mobile */
-    padding: 0.5em !important;
-  }
-  
-  /* Reduce table padding on mobile */
-  #preview table th,
-  #preview table td {
-    padding: 4px 6px !important; /* Tighter cells */
-    font-size: 13px !important;
-  }
-  
-  /* Prevent horizontal scroll on mobile tables */
-  #preview table {
-    font-size: 12px !important;
-    overflow-x: auto !important;
-    display: block !important;
-    white-space: nowrap !important;
-  }
-}
 
 </style>
 </head>
