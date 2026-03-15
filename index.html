@@ -117,6 +117,9 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 #preview {
   white-space: normal;
 }
+ #preview *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+  white-space: pre-wrap;
+ }
 #editor { display: block; padding: 20px; border-radius: 8px; }
 #preview { display: none; padding: 20px; border-radius: 8px; }
 
