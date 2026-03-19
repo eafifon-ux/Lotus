@@ -85,6 +85,7 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: Inter, Roboto, Ar
 body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px; box-sizing: border-box; }
 
 /* ========== Section 1.2 - Top bar & GPC display styling ========== */
+
 #top-bar { position: fixed; top: 10px; right: 10px; z-index: 1000; }
 #mode-toggle { font-size: 22px; background: none; border: none; cursor: pointer; }
 #gpc-display { font-weight: bold; margin-bottom: 12px; font-size: 18px; }
@@ -117,9 +118,13 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 #preview {
   white-space: normal;
 }
- #preview *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+#preview *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
   white-space: pre-wrap;
- }
+}
+/* Prevent empty collapsible blocks from creating space */
+.collapsible-content:empty {
+  display: none;
+}
 #editor { display: block; padding: 20px; border-radius: 8px; }
 #preview { display: none; padding: 20px; border-radius: 8px; }
 
@@ -3990,6 +3995,14 @@ class GPCCalendar {
     return { gpcYear, doyToday };
   }
   
+  // Section 3.3.3 - Core calculations (add this method)
+static getSeason(doy) {
+  if (doy >= 1 && doy <= 91) return 'Spring';
+  if (doy >= 92 && doy <= 182) return 'Summer';
+  if (doy >= 183 && doy <= 273) return 'Fall';
+  return 'Winter'; // DOY 274-364 or invalid
+}
+
 // ===== Section 3.3.4 - Display Updates =====
 static updateGPC() {
   const { doyToday } = this.calculateGPC();
@@ -4048,16 +4061,21 @@ static updateGPC() {
     displayHtml += '<a href="#" class="wikilink dom-day" data-note="' + noteKey + '">' + text + '</a>';
   }
   
-  // Heptad
+  // Heptad (UPDATED: Add data-anchor based on season when enabled)
   if (this.heptadEnabled) {
     const heptad = this.heptadMap[doyToday];
     if (heptad) {
-      displayHtml += ' <a href="#" class="wikilink heptad-link" data-note="📁 Boomerang/🎴Weeks - Heptad">' + heptad + '</a>';
+      const season = this.getSeason(doyToday); // NEW: Get current season
+      const anchorAttr = ` data-anchor="${season}"`; // NEW: Add anchor for season (e.g., "Summer")
+      
+      displayHtml += ' <a href="#" class="wikilink heptad-link" data-note="📁 Boomerang/🎴Weeks - Heptad"' + anchorAttr + '>' + heptad + '</a>';
     }
   }
   
   document.getElementById('gpc-display').innerHTML = displayHtml;
 }
+
+
 
   
   // Section 3.3.5 - Button event handling
