@@ -216,74 +216,6 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 
 /* ========== Section 1.7 - PREVIEW STYLES ========== */
 
-/* ========== COMMENTS - FIXED ========== */
-
-/* EDITOR: Standalone comments %%text%% - green background */
-#editor {
-  /* Base styling */
-  font-family: "Courier New", monospace !important;
-  line-height: 1.4 !important;
-  background: #fff;
-}
-
-/* PREVIEW: Hide standalone comments %%text%% completely */
-#preview .comment-text {
-  display: none !important; /* Invisible in preview */
-  visibility: hidden;
-}
-
-/* PREVIEW: Highlights with comments - dotted underline */
-.highlight[data-comment] {
-  position: relative;
-  cursor: help;
-  border-bottom: 1px dotted #666 !important;
-  background-color: yellow !important; /* Yellow highlight */
-  padding: 0 1px; /* Tiny padding */
-}
-
-/* PREVIEW: Comment bubbles - HIDDEN until clicked */
-.comment-bubble {
-  display: none !important;
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 8px 12px;
-  max-width: 280px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 1000;
-  font-size: 14px;
-  line-height: 1.4;
-  white-space: normal;
-  margin-bottom: 4px;
-}
-
-.comment-bubble::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 12px;
-  border: 6px solid transparent;
-  border-top-color: #fff;
-}
-
-/* EDITOR: When in edit mode, comments get subtle green tint (visual trick) */
-#editor:focus-within {
-  /* Can't directly style text in textarea, but we can add cursor styling */
-  caret-color: #28a745; /* Green cursor when comments are present */
-}
-
-/* PREVIEW: Regular highlights (no comment) */
-#preview .highlight {
-  background-color: yellow !important;
-  padding: 0 1px;
-}
-
-
-
-
 /* Add to your CSS section */
 .folder-item {
   background-color: #f0f0f0;
@@ -855,7 +787,6 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="undo">↶</button>
     <button data-action="redo">↷</button>
     <button id="t-button">T ▼</button>
-    <button id="comment-button" title="Add Comment to Highlight">💬</button>
     <button data-action="highlight">🖍</button>
     <button id="highlight-button">🎨 ▼</button>
     <button data-action="quote">❝</button>
@@ -1309,14 +1240,8 @@ if (notesBtn) {
     });
     
     this.editor.addEventListener('keydown', (e) => {
-  this.handleAutoContinue(e);
-  
-  // Quick comment insertion: Ctrl+Shift+C
-  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-    e.preventDefault();
-    this.addCommentToHighlight();
-  }
-});
+      this.handleAutoContinue(e);
+    });
     
 // Wikilink clicks in preview
 this.preview.addEventListener('click', async (e) => {
@@ -1366,9 +1291,6 @@ this.preview.addEventListener('click', async (e) => {
     document.getElementById('mode-toggle').addEventListener('click', () => {
       this.toggleEditMode();
     });
-    document.getElementById('comment-button')?.addEventListener('click', () => {
-  this.addCommentToHighlight();
-});
   }
   
   initDropdownEvents() {
@@ -2061,31 +1983,62 @@ html += `
     // Update backlinks
     this.updateBacklinks(this.currentNote, raw);
     
-    // Process markdown - SIMPLIFIED ORDER
-    let html = raw;
+    // Process markdown
+    // In updatePreviewAndSave(), modify this part:
+let html = this.renderWikilinks(raw);
+html = this.processHighlights(html);
+html = this.processSubSuperScript(html);
+
+// Convert markdown tasks to HTML before parsing with proper markdown support
+html = html.replace(
+  /^- \[([ xX])\] (.*)$/gm,
+  (match, checkbox, content) => {
+    // Process the content with inline markdown first
+    const processedContent = marked.parseInline(content.trim());
+    return `<li class="task-item"><input type="checkbox" ${checkbox === 'x' ? 'checked' : ''}/>${processedContent}</li>`;
+  }
+);
+
+
+
+html = marked.parse(html);
+
+// Renumber checkbox lists with repeated "1." to show 1, 2, 3... in preview
+const tempDiv = document.createElement('div');
+tempDiv.innerHTML = html;
+
+// Find all <li> that contain checkbox + "1."
+const items = tempDiv.querySelectorAll('li');
+let currentCounter = 1;
+let inList = false;
+
+items.forEach(li => {
+  const text = li.textContent.trim();
+  const hasCheckbox = li.querySelector('input[type="checkbox"]');
+  const hasNumber = text.match(/1\.\s/);
+  
+  if (hasCheckbox && hasNumber) {
+    if (!inList) {
+      currentCounter = 1;
+      inList = true;
+    }
     
-    // 1. Wikilinks
-    html = this.renderWikilinks(html);
-    
-    // 2. Sub/super script
-    html = this.processSubSuperScript(html);
-    
-    // 3. Highlights and comments
-    html = this.processHighlights(html);
-    
-    // 4. Convert markdown tasks BEFORE marked
-    html = html.replace(
-      /^- \[([ xX])\] (.*)$/gm,
-      (match, checkbox, content) => {
-        const processedContent = marked.parseInline(content.trim());
-        return `<li class="task-item"><input type="checkbox" ${checkbox === 'x' ? 'checked' : ''}/>${processedContent}</li>`;
-      }
-    );
-    
-    // 5. Now parse with marked
-    html = marked.parse(html);
-    
-    // 6. Post-process
+    // Replace the "1." with current counter
+    li.innerHTML = li.innerHTML.replace(/1\.\s/, `${currentCounter}. `);
+    currentCounter++;
+  } else {
+    // End of list block
+    inList = false;
+  }
+});
+
+html = tempDiv.innerHTML;
+
+// Ensure task lists have the proper class
+html = html.replace(/<ul>/g, '<ul class="task-list">');
+
+
+
     html = this.processGPCStamps(html);
     
     // Update preview
@@ -2099,33 +2052,18 @@ html += `
     this.applyRTL();
     this.recalcTables();
     
-    // FIXED: Style standalone comments in EDITOR with JavaScript
-    this.styleEditorComments();
-    
     // Save after delay
     clearTimeout(this.saveTimeout);
-    this.saveTimeout = setTimeout(async () => {
-      await VaultDB.set(this.currentNote, raw);
-      await this.updateCacheForSingleNote(this.currentNote);
-      if (this.debouncedReindex) this.debouncedReindex();
-    }, 500);
+this.saveTimeout = setTimeout(async () => {
+  await VaultDB.set(this.currentNote, raw);
+  await this.updateCacheForSingleNote(this.currentNote); // ← ADD THIS LINE
+  if (this.debouncedReindex) this.debouncedReindex();
+}, 500);
     
   } catch (error) {
     devError('Preview error:', error);
   }
 }
-
-// NEW METHOD: Style comments in editor textarea
-styleEditorComments() {
-  // Since textarea doesn't support spans, we'll use a visual trick
-  // This adds a subtle background to comment sections
-  const text = this.editor.value;
-  const cursor = this.editor.selectionStart;
-  
-  // For now, just log - we can add better styling later
-  // The CSS will handle preview hiding
-}
-
 
   
   renderWikilinks(text) {
@@ -2145,46 +2083,13 @@ styleEditorComments() {
     }
   );
 }
-processSubSuperScript(html) {
-  return html.replace(/~([\s\S]+?)~/g, '<sub>$1</sub>')
-            .replace(/\^([\s\S]+?)\^/g, '<sup>$1</sup>');
-}
-
 
   
-  // In EditorCore class, replace processHighlights method:
-processHighlights(html) {
-  // 1. FIRST: Standalone comments %%text%% (green in editor, HIDDEN in preview)
-  html = html.replace(/%%([^%]+)%%/g, 
-    '<span class="comment-text" style="color:#28a745;font-style:italic;background:rgba(40,167,74,0.15);">$1</span>'
-  );
-  
-  // 2. NEXT: Regular highlights ==text== (yellow background)
-  html = html.replace(/==([^=]+)==/g, (match, text) => {
-    return `<span class="highlight">${this.escapeHtml(text.trim())}</span>`;
-  });
-  
-  // 3. LAST: Highlights WITH comments ==text%%comment== (highlight + hidden bubble)
-  html = html.replace(/==([^%]+)%%([^%]+)==/g, (match, text, comment) => {
-    const escapedText = this.escapeHtml(text.trim());
-    const escapedComment = this.escapeHtml(comment.trim());
-    return `<span class="highlight" data-comment="${escapedComment}">${escapedText}</span>`;
-  });
-  
-  // 4. Finally: Strikethrough
-  html = html.replace(/~~([^~]+)~~/g, '<s>$1</s>');
-  
-  return html;
-}
-
-
-// Add escapeHtml helper
-escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
+  processHighlights(html) {
+    return html.replace(/==(\w+):([\s\S]+?)==/g, '<span class="highlight $1">$2</span>')
+              .replace(/==([\s\S]+?)==/g, '<span class="highlight">$1</span>')
+              .replace(/~~([^~]+)~~/g, '<s>$1</s>'); // Add this line for strike-through
+  }
   
   processSubSuperScript(html) {
     return html.replace(/~([\s\S]+?)~/g, '<sub>$1</sub>')
@@ -2576,39 +2481,7 @@ makeCheckboxesInteractive() {
       this.reorderTask(taskItem, isChecked);
     });
   });
-
-  // ADD THIS - Comment bubble handlers
-  this.preview.addEventListener('click', (e) => {
-    const commentBubble = e.target.closest('.comment-bubble');
-    if (commentBubble) {
-      return;
-    }
-    
-    const highlight = e.target.closest('.highlight[data-comment]');
-    if (highlight) {
-      e.preventDefault();
-      const bubble = highlight.querySelector('.comment-bubble');
-      const isVisible = bubble.style.display !== 'none';
-      
-      this.preview.querySelectorAll('.comment-bubble').forEach(b => {
-        b.style.display = 'none';
-      });
-      
-      bubble.style.display = isVisible ? 'none' : 'block';
-      
-      setTimeout(() => {
-        const hideComments = (outsideClick) => {
-          if (outsideClick || !highlight.contains(e.target)) {
-            bubble.style.display = 'none';
-            document.removeEventListener('click', hideComments);
-          }
-        };
-        document.addEventListener('click', hideComments);
-      }, 0);
-    }
-  });
 }
-
 
 getTaskTextContent(taskItem) {
   // Get normalized text content from preview
@@ -3209,33 +3082,6 @@ handleDropdownClick(type, e) {
   // Close dropdown after any action
   e.currentTarget.classList.remove('open');
 }
-
-addCommentToHighlight() {
-  const start = this.editor.selectionStart;
-  const end = this.editor.selectionEnd;
-  const selected = this.editor.value.substring(start, end);
-  
-  if (!selected.trim()) {
-    alert('Select text to add comment');
-    return;
-  }
-  
-  // SIMPLE: Just wrap selection in %% %% (like == == for highlight)
-  const wrapped = `%%${selected}%%`;
-  
-  this.editor.value = 
-    this.editor.value.substring(0, start) + 
-    wrapped + 
-    this.editor.value.substring(end);
-  
-  this.editor.selectionStart = this.editor.selectionEnd = 
-    start + wrapped.length;
-  
-  this.updatePreviewAndSave();
-}
-
-
-
 
 // Bullet list (• button) - toggle on/off for multi-line
 // Bullet list (• button) - single-line: keep bullet when removing checkbox
