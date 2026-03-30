@@ -4256,7 +4256,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/Lotus/service-worker.js')
+    .then(() => console.log('SW registered'))
+    .catch(err => console.log('SW failed:', err));
+}
 </script>
 </body>
 </html>
