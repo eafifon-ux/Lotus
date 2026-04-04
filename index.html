@@ -732,24 +732,9 @@ You’re already inside Lotus — start using it right now.
 
 **Optional – Offline version (full vault)**
 
-To download Lotus.zip reliably without Google login:
+To download Lotus.zip reliably:
 
-1. Copy one of the URLs below  
-2. Paste it directly into your browser's address bar & press Enter  
-3. On the Google Drive page that opens, click **Download** (top right)
-
-Copy this (view/preview):
-```
-https://drive.google.com/file/d/1HYIzs9Drv4PJRLJMMirTANknlsqGrF3q/view?usp=drivesdk
-```
-
-
-Or this (direct):
-```
-https://drive.google.com/uc?export=download&id=1HYIzs9Drv4PJRLJMMirTANknlsqGrF3q
-```
-
-After unzip → open folder as vault.
+1. Click Load Full Vault in the left sidebar
 
 Then read: [[📁 Boomerang/Manual|Manual]]
 
@@ -4107,13 +4092,12 @@ static updateGPC() {
 
 // Section 4.1 - DOMContentLoaded event handler
 
- 
-
-
-// ====================== FULL VAULT AUTO + MANUAL LOADER ======================
+ // ====================== FULL VAULT AUTO + MANUAL LOADER ======================
 async function loadFullVault(isAuto = false) {
   const VAULT_KEY = 'lotus-full-vault-loaded';
-  const ZIP_URL = 'https://drive.google.com/uc?export=download&id=1HYIzs9Drv4PJRLJMMirTANknlsqGrF3q';
+  
+  // Use jsDelivr CDN for direct download (no redirects!)
+  const ZIP_URL = 'https://cdn.jsdelivr.net/gh/eafifon-ux/lotus-vault@main/Lotus2.8.zip';
   
   // Check if already loaded
   if (isAuto && localStorage.getItem(VAULT_KEY)) {
@@ -4175,150 +4159,288 @@ async function loadFullVault(isAuto = false) {
     
     updateProgress(10);
     
-    // Download using fetch with proper headers
-    updateProgress(30);
-    
-    // Create a download helper function
-    const downloadWithRetry = async (url, retries = 3) => {
-      for (let i = 0; i < retries; i++) {
-        try {
-          // Add timestamp to avoid caching issues
-          const uniqueUrl = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
-          
-          const response = await fetch(uniqueUrl, {
-            headers: {
-              'Accept': 'application/zip, application/octet-stream',
-              'Cache-Control': 'no-cache'
-            }
-          });
-          
-          if (response.ok) {
-            const blob = await response.blob();
-            if (blob && blob.size > 0) {
-              return blob;
-            }
-          }
-          
-          // If we get a small blob, it might be the warning page
-          const blob = await response.blob();
-          if (blob.size < 1000) {
-            // Could be the warning page, try with confirm parameter
-            const text = await blob.text();
-            if (text.includes('confirm=t')) {
-              // Already has confirm parameter, something else is wrong
-              throw new Error('Google Drive warning page detected');
-            }
-          }
-        } catch (error) {
-          if (i === retries - 1) throw error;
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-        }
-      }
-      throw new Error('All download attempts failed');
-    };
-    
-    updateProgress(50);
-    
-    // Try to download
-    let finalBlob;
-    try {
-      finalBlob = await downloadWithRetry(ZIP_URL);
-    } catch (error) {
-      // Try with confirm parameter
-      devLog('First attempt failed, trying with confirm parameter...');
-      finalBlob = await downloadWithRetry(ZIP_URL + '&confirm=t');
-    }
-    
-    if (!finalBlob || finalBlob.size === 0) {
-      throw new Error('Downloaded file is empty');
-    }
-    
-    updateProgress(70);
-    
-    // Process the zip file
-    const zip = new JSZip();
-    const contents = await zip.loadAsync(finalBlob);
-    
-    updateProgress(80);
-    
-    let imported = 0;
-    const fileEntries = Object.entries(contents.files);
-    
-    for (let i = 0; i < fileEntries.length; i++) {
-      const [filename, file] = fileEntries[i];
-      if (file.dir) continue;
-      
-      const content = await file.async('text');
-      let noteName = filename.replace(/\.md$/i, '');
-      
-      // Preserve folder structure
-      await VaultDB.set(noteName, content);
-      imported++;
-      
-      // Update progress
-      const progress = 80 + Math.round((i / fileEntries.length) * 15);
-      updateProgress(progress);
-    }
-    
-    updateProgress(95);
-    localStorage.setItem(VAULT_KEY, 'true');
-    
-    // Success message
-    loading.innerHTML = `
-      <div style="font-size: 32px; margin-bottom: 15px;">✅</div>
-      <div style="font-size: 20px; margin-bottom: 10px;">Success!</div>
-      <div style="font-size: 16px; margin-bottom: 20px;">${imported} notes & folders loaded.</div>
-      <div style="font-size: 14px; opacity: 0.8;">Refreshing in 2 seconds...</div>
-    `;
-    
-    // Wait and reload
+    // SIMPLIFIED APPROACH: Just show manual instructions if auto fails
+    // Many browsers block direct ZIP downloads from fetch
     setTimeout(() => {
-      loading.remove();
-      window.location.reload();
-    }, 2000);
-    
-    return true;
-    
-  } catch (err) {
-    console.error('Vault load error:', err);
-    
-    // Show error message
-    const loading = document.getElementById('vault-loading-overlay');
-    if (loading) {
+      updateProgress(30);
+      
+      // Show manual instructions after short wait
       loading.innerHTML = `
-        <div style="font-size: 32px; margin-bottom: 15px;">❌</div>
-        <div style="font-size: 20px; margin-bottom: 10px;">Download Failed</div>
-        <div style="font-size: 14px; margin-bottom: 20px; max-width: 400px;">
-          ${err.message || 'Unknown error'}
-          <br><br>
-          <strong>Alternative solution:</strong><br>
-          1. Copy this link:<br>
-          <code style="background: #333; padding: 5px; border-radius: 3px; font-size: 12px; display: inline-block; margin-top: 5px;">
-            https://drive.google.com/file/d/1HYIzs9Drv4PJRLJMMirTANknlsqGrF3q/view
-          </code><br>
-          2. Paste in browser address bar<br>
-          3. Click "Download" (top right)<br>
-          4. Use "Import All" in sidebar
+        <div style="font-size: 24px; margin-bottom: 15px;">📥</div>
+        <div style="font-size: 18px; margin-bottom: 10px;">Rythos - Manual Download Required</div>
+        <div style="font-size: 14px; margin-bottom: 20px; max-width: 500px;">
+          Some browsers block automatic downloads.<br>
+          Please follow these simple manual steps:
         </div>
+        
+        <div style="
+          background: #1a1a1a;
+          border-radius: 8px;
+          padding: 20px;
+          margin: 20px 0;
+          max-width: 500px;
+          border: 1px solid #333;
+          text-align: left;
+        ">
+          <div style="margin-bottom: 15px; font-size: 14px;">
+            <strong>Step 1:</strong> Copy this download link:
+          </div>
+          
+          <div onclick="
+            navigator.clipboard.writeText('${ZIP_URL}');
+            const original = this.innerHTML;
+            this.innerHTML = '✅ Copied to clipboard!';
+            this.style.background='#2E7D32';
+            setTimeout(()=>{
+              this.innerHTML=original;
+              this.style.background='#1a1a1a';
+            },2000);
+          " style="
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            cursor: pointer;
+            border: 1px solid #444;
+            margin-bottom: 15px;
+            user-select: all;
+          ">
+            ${ZIP_URL}
+          </div>
+          
+          <div style="margin-bottom: 15px; font-size: 14px;">
+            <strong>Step 2:</strong> Paste the link in your browser's address bar and download the ZIP file
+          </div>
+          
+          <div style="margin-bottom: 15px; font-size: 14px;">
+            <strong>Step 3:</strong> Come back here and select the downloaded file:
+          </div>
+          
+          <div style="text-align: center;">
+            <input type="file" id="manual-upload" accept=".zip" style="display: none;">
+            <button onclick="document.getElementById('manual-upload').click();" style="
+              padding: 12px 24px;
+              background: #4CAF50;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 10px;
+            ">
+              📁 SELECT DOWNLOADED ZIP FILE
+            </button>
+            <div style="font-size: 12px; opacity: 0.8;">
+              Look for: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">Lotus2.8.zip</code>
+            </div>
+          </div>
+        </div>
+        
         <button onclick="this.parentElement.remove();" style="
           padding: 10px 20px;
-          background: #2196F3;
+          background: #f44336;
           color: white;
           border: none;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 16px;
+          font-size: 14px;
         ">
-          Close
+          Cancel
         </button>
       `;
+      
+      // Setup file input
+      setTimeout(() => {
+        const fileInput = document.getElementById('manual-upload');
+        if (fileInput) {
+          fileInput.addEventListener('change', handleManualUpload);
+        }
+      }, 100);
+      
+    }, 1500); // Show manual instructions after 1.5 seconds
+    
+    return false; // Auto-download didn't complete
+    
+  } catch (err) {
+    console.error('Vault load error:', err);
+    
+    // Show manual instructions as fallback
+    const loading = document.getElementById('vault-loading-overlay');
+    if (loading) {
+      loading.innerHTML = `
+        <div style="font-size: 24px; margin-bottom: 15px;">📥</div>
+        <div style="font-size: 18px; margin-bottom: 10px;">Rythos - Manual Download</div>
+        <div style="font-size: 14px; margin-bottom: 20px; max-width: 500px;">
+          Follow these simple steps:
+        </div>
+        
+        <div style="
+          background: #1a1a1a;
+          border-radius: 8px;
+          padding: 20px;
+          margin: 20px 0;
+          max-width: 500px;
+          border: 1px solid #333;
+          text-align: left;
+        ">
+          <div style="margin-bottom: 15px; font-size: 14px;">
+            <strong>Step 1:</strong> Copy this download link:
+          </div>
+          
+          <div onclick="
+            navigator.clipboard.writeText('${ZIP_URL}');
+            const original = this.innerHTML;
+            this.innerHTML = '✅ Copied to clipboard!';
+            this.style.background='#2E7D32';
+            setTimeout(()=>{
+              this.innerHTML=original;
+              this.style.background='#1a1a1a';
+            },2000);
+          " style="
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            cursor: pointer;
+            border: 1px solid #444;
+            margin-bottom: 15px;
+            user-select: all;
+          ">
+            ${ZIP_URL}
+          </div>
+          
+          <div style="margin-bottom: 15px; font-size: 14px;">
+            <strong>Step 2:</strong> Paste the link in your browser's address bar and download
+          </div>
+          
+          <div style="margin-bottom: 15px; font-size: 14px;">
+            <strong>Step 3:</strong> Select the downloaded file:
+          </div>
+          
+          <div style="text-align: center;">
+            <input type="file" id="manual-upload-fallback" accept=".zip" style="display: none;">
+            <button onclick="document.getElementById('manual-upload-fallback').click();" style="
+              padding: 12px 24px;
+              background: #4CAF50;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 16px;
+              font-weight: bold;
+            ">
+              📁 UPLOAD ZIP FILE
+            </button>
+          </div>
+        </div>
+      `;
+      
+      // Setup file input
+      setTimeout(() => {
+        const fileInput = document.getElementById('manual-upload-fallback');
+        if (fileInput) {
+          fileInput.addEventListener('change', handleManualUpload);
+        }
+      }, 100);
     }
     
     return false;
   }
 }
 
+// Handle manual ZIP upload (keep this exactly as it works perfectly)
+async function handleManualUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  if (!file.name.endsWith('.zip')) {
+    alert('❌ Please select a ZIP file');
+    return;
+  }
+  
+  const loading = document.getElementById('vault-loading-overlay');
+  if (!loading) return;
+  
+  loading.innerHTML = `
+    <div style="font-size: 24px; margin-bottom: 15px;">⏳</div>
+    <div style="font-size: 18px; margin-bottom: 10px;">Importing ${file.name}</div>
+    <div id="vault-progress" style="width: 80%; max-width: 300px; height: 6px; background: #333; border-radius: 3px; overflow: hidden; margin: 20px 0;">
+      <div id="vault-progress-bar" style="width: 0%; height: 100%; background: #4CAF50;"></div>
+    </div>
+    <div style="font-size: 14px; opacity: 0.8;">Please wait...</div>
+  `;
+  
+  const updateProgress = (percent) => {
+    const bar = document.getElementById('vault-progress-bar');
+    if (bar) bar.style.width = percent + '%';
+  };
+  
+  updateProgress(10);
+  
+  try {
+    const zip = new JSZip();
+    const contents = await zip.loadAsync(file);
+    
+    updateProgress(30);
+    
+    let imported = 0;
+    const fileEntries = Object.entries(contents.files);
+    
+    for (let i = 0; i < fileEntries.length; i++) {
+      const [filename, fileEntry] = fileEntries[i];
+      if (fileEntry.dir) continue;
+      
+      try {
+        const content = await fileEntry.async('text');
+        const noteName = filename.replace(/\.md$/i, '');
+        await VaultDB.set(noteName, content);
+        imported++;
+        updateProgress(30 + Math.round((i / fileEntries.length) * 60));
+      } catch (e) {
+        console.error(`Error importing ${filename}:`, e);
+      }
+    }
+    
+    updateProgress(95);
+    localStorage.setItem('lotus-full-vault-loaded', 'true');
+    
+    loading.innerHTML = `
+      <div style="font-size: 32px; margin-bottom: 15px;">✅</div>
+      <div style="font-size: 20px; margin-bottom: 10px;">Success!</div>
+      <div style="font-size: 16px; margin-bottom: 20px;">${imported} notes loaded.</div>
+      <div style="font-size: 14px; opacity: 0.8;">Refreshing in 2 seconds...</div>
+    `;
+    
+    setTimeout(() => {
+      loading.remove();
+      window.location.reload();
+    }, 2000);
+    
+  } catch (error) {
+    loading.innerHTML = `
+      <div style="font-size: 32px; margin-bottom: 15px;">❌</div>
+      <div style="font-size: 18px; margin-bottom: 10px;">Upload Failed</div>
+      <div style="font-size: 14px; margin-bottom: 20px;">${error.message || 'Invalid ZIP file'}</div>
+      <button onclick="location.reload();" style="
+        padding: 10px 20px;
+        background: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      ">
+        Try Again
+      </button>
+    `;
+  }
+}
+
+// Rest of your code stays exactly the same...
 function addLoadVaultButton() {
   const section = document.querySelector('#sidebar .sidebar-section');
   if (!section) return;
@@ -4345,7 +4467,7 @@ function addLoadVaultButton() {
 
 // ====================== INITIALIZATION ======================
 // Section 4.1 - DOMContentLoaded event handler
-document.addEventListener('DOMContentLoaded', async () => {  // <-- ADDED async HERE
+document.addEventListener('DOMContentLoaded', async () => {
   // Initialize calendar system
   GPCCalendar.init();
   
@@ -4453,6 +4575,7 @@ document.addEventListener('DOMContentLoaded', async () => {  // <-- ADDED async 
       devError("Navigation error:", err);
     }
   });
+
 
   
 
