@@ -4106,14 +4106,118 @@ static updateGPC() {
 // =============================================
 
 // Section 4.1 - DOMContentLoaded event handler
+
+      // ====================== FULL VAULT AUTO + MANUAL LOADER ======================
+async function loadFullVault(isAuto = false) {
+  const VAULT_KEY = 'lotus-full-vault-loaded';
+  const ZIP_URL = 'https://drive.google.com/uc?export=download&id=1HYIzs9Drv4PJRLJMMirTANknlsqGrF3q';
+  
+  if (isAuto && localStorage.getItem(VAULT_KEY)) {
+    return false;
+  }
+  
+  const msg = isAuto ?
+    "📥 First time here?\n\nWould you like to automatically download and load the complete Lotus vault?\n(This gives you all notes & folders for the best offline experience)" :
+    "📥 Load the full Lotus vault now?\nThis will import all notes and folders from the official zip.";
+  
+  if (!confirm(msg)) {
+    if (isAuto) localStorage.setItem(VAULT_KEY, 'skipped');
+    return false;
+  }
+  
+  try {
+    const loading = document.createElement('div');
+    loading.style.cssText = `
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:#1a1a1a; color:white; padding:25px 40px; border-radius:12px;
+      z-index:999999; text-align:center; font-family:sans-serif; box-shadow:0 10px 40px rgba(0,0,0,0.6);
+      min-width:280px;
+    `;
+    loading.innerHTML = `⏳ Downloading full Lotus vault...<br><small>Please wait 5–20 seconds</small>`;
+    document.body.appendChild(loading);
+    
+    const response = await fetch(ZIP_URL);
+    if (!response.ok) throw new Error('Download failed');
+    
+    const zipBlob = await response.blob();
+    const zip = new JSZip();
+    const contents = await zip.loadAsync(zipBlob);
+    
+    let imported = 0;
+    
+    for (const [filename, file] of Object.entries(contents.files)) {
+      if (file.dir) continue;
+      
+      const content = await file.async('text');
+      let noteName = filename.replace(/\.md$/i, '');
+      
+      if (filename.includes('/')) {
+        noteName = filename.replace(/\.md$/i, '');
+      }
+      
+      await VaultDB.set(noteName, content);
+      imported++;
+    }
+    
+    localStorage.setItem(VAULT_KEY, 'true');
+    
+    loading.innerHTML = `✅ Success!<br>${imported} notes & folders loaded.<br><br>Refreshing the app...`;
+    
+    setTimeout(() => window.location.reload(), 1400);
+    return true;
+    
+  } catch (err) {
+    console.error('Vault load error:', err);
+    alert('❌ Failed to download the vault.\n\nYou can still use the manual "Import All" button in the sidebar.');
+    const loading = document.querySelector('div[style*="position:fixed"]');
+    if (loading) loading.remove();
+    return false;
+  }
+}
+
+function addLoadVaultButton() {
+  const section = document.querySelector('#sidebar .sidebar-section');
+  if (!section) return;
+  
+  const btn = document.createElement('div');
+  btn.className = 'sidebar-item';
+  btn.innerHTML = '📦 Load Full Vault';
+  btn.style.backgroundColor = '#e3f2fd';
+  btn.style.fontWeight = '600';
+  btn.title = 'Import the complete official Lotus vault';
+  
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    loadFullVault(false);
+  });
+  
+  const exportBtn = section.querySelector('[data-action="export-all"]');
+  if (exportBtn) {
+    exportBtn.before(btn);
+  } else {
+    section.appendChild(btn);
+  }
+}
+
+// ====================== INITIALIZATION ======================
+// Section 4.1 - DOMContentLoaded event handler
 document.addEventListener('DOMContentLoaded', async () => {
   // Initialize calendar system
   GPCCalendar.init();
   
+  // Auto-load full vault on first visit
+  const vaultStatus = localStorage.getItem('lotus-full-vault-loaded');
+  if (!vaultStatus) {
+    setTimeout(() => loadFullVault(true), 1200);
+  }
+  
   // Create and initialize editor core
   window.editorCore = new EditorCore();
   window.editorCore.toggleEditMode(); // Start in view mode
-
+  
+  // Add manual "Load Full Vault" button to sidebar
+  setTimeout(addLoadVaultButton, 800);
+  
   // Optimized GPC display click handler
   document.getElementById('gpc-display').addEventListener('click', async (e) => {
     const wikiLink = e.target.closest('a.wikilink');
@@ -4125,18 +4229,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const anchorId = wikiLink.dataset.anchor;
     const { doyToday } = GPCCalendar.calculateGPC();
     
-    devLog("GPC navigation initiated:", { 
-      targetNote: noteName, 
-      anchor: anchorId, 
-      currentDOY: doyToday 
+    devLog("GPC navigation initiated:", {
+      targetNote: noteName,
+      anchor: anchorId,
+      currentDOY: doyToday
     });
-
+    
     if (!noteName) return;
-
+    
     // 1. FAST PATH: Already on target note with anchor
     if (window.editorCore.currentNote === noteName && anchorId) {
-      const target = document.getElementById(anchorId) || 
-                    document.getElementById(anchorId.padStart(3, '0'));
+      const target = document.getElementById(anchorId) ||
+        document.getElementById(anchorId.padStart(3, '0'));
       
       if (target) {
         devLog("Fast scroll to existing anchor");
@@ -4147,7 +4251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
     }
-
+    
     try {
       // 2. Switch notes if needed
       if (window.editorCore.currentNote !== noteName) {
@@ -4155,39 +4259,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         await window.editorCore.switchToNote(noteName);
         console.timeEnd('NoteSwitch');
       }
-
+      
       // 3. Handle anchor after note loads
       if (anchorId) {
-        // Adaptive timing based on device
         const isMobile = /Mobi|Android/i.test(navigator.userAgent);
         const initialDelay = isMobile ? 400 : 150;
         
         setTimeout(() => {
-          // First try exact ID match
           let target = document.getElementById(anchorId);
           
-          // Fallback 1: Try padded number (for DOY)
           if (!target && /^\d+$/.test(anchorId)) {
             target = document.getElementById(anchorId.padStart(3, '0'));
           }
           
-          // Fallback 2: Try contains match
           if (!target) {
             target = document.querySelector(`[id*="${anchorId}"]`);
           }
           
-          // Fallback 3: Search headings by content
           if (!target) {
             const headings = window.editorCore.preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
             for (const h of headings) {
-              if (h.textContent.includes(anchorId) || 
-                  h.id.includes(anchorId)) {
+              if (h.textContent.includes(anchorId) || h.id.includes(anchorId)) {
                 target = h;
                 break;
               }
             }
           }
-
+          
           if (target) {
             devLog("Scrolling to anchor:", target);
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4203,6 +4301,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       devError("Navigation error:", err);
     }
   });
+          
+
+        
 
   // Section 4.2 - Offline Support Service Worker
   if ('serviceWorker' in navigator) {
