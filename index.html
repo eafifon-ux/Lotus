@@ -1,1 +1,4266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capture</title>
+<link rel="manifest" href="manifest.json">
+<style>
+/**
+ * ====================================================================
+ * SECTION 1 - CSS STYLES
+ * ====================================================================
+ * 
+ * // Section 1.1 - Global styles (html, body, font-family) //
+ * // Section 1.2 - Top bar & GPC display styling //
+ * // Section 1.3 - Editor/Preview container styling //
+ * // Section 1.4 - Toolbar styling //
+ * // Section 1.5 - Dropdown styling //
+ * // Section 1.6 - Sidebar styling //
+ * // Section 1.7 - Preview-specific styles (code blocks, tables, lists, headings, backlinks, highlights, date stamps, RTL Hebrew) //
+ *
+ * ====================================================================
+ * SECTION 2 - HTML STRUCTURE
+ * ====================================================================
+ * 
+ * // Section 2.1 - Top bar with mode toggle //
+ * // Section 2.2 - GPC display and buttons //
+ * // Section 2.3 - Editor container with textarea and preview div //
+ * // Section 2.4 - Sidebar with navigation items //
+ * // Section 2.5 - Toolbar with action buttons //
+ * // Section 2.6 - Floating dropdowns (H, T, Date, Table, Highlight) //
+ *
+ * ====================================================================
+ * SECTION 3 - JAVASCRIPT
+ * ====================================================================
+ *
+ * ================================
+ * 3.1 VAULT DB (IndexedDB)
+ * ================================
+ * 
+ * // Section 3.1.1 - Database setup (open, get, set, list, remove methods) //
+ *
+ * ================================
+ * 3.2 EDITOR CORE CLASS
+ * ================================
+ * 
+ * // Section 3.2.1 - Constructor & Initialization //
+ * // Section 3.2.2 - Event Handlers //
+ * // Section 3.2.3 - Core Functionality //
+ * // Section 3.2.4 - Note Management //
+ * // Section 3.2.5 - Preview Rendering //
+ * // Section 3.2.6 - Table Operations //
+ * // Section 3.2.7 - Task Management //
+ * // Section 3.2.8 - UI Enhancements //
+ * // Section 3.2.9 - Toolbar Handlers //
+ * // Section 3.2.10 - Auto-Continue Lists //
+ * // Section 3.2.11 - Date Stamps //
+  * // Section 3.2.12 - Export/Import System //
+  * // Section 3.2.13 - Reminder System //
+ *
+ * ================================
+ * 3.3 GPC CALENDAR CLASS
+ * ================================
+ * 
+ * // Section 3.3.1 - Calendar configuration //
+ * // Section 3.3.2 - Heptad mapping //
+ * // Section 3.3.3 - Core calculations //
+ * // Section 3.3.4 - Display updates //
+ * // Section 3.3.5 - Button event handling //
+ *
+ * ====================================================================
+ * SECTION 4 - INITIALIZATION
+ * ====================================================================
+ * 
+ * // Section 4.1 - DOMContentLoaded event handler //
+ 
+  * // Section 4.2 - Offline Support Service Worker //
 
+
+ * SECTION 1 - CSS STYLES
+ * ====================================================================
+ *  
+ 
+/* ========== Section 1.1 - Global styles (html, body, font-family) ========== */
+html, body { height: 100%; margin: 0; padding: 0; font-family: Inter, Roboto, Arial, sans-serif; }
+body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px; box-sizing: border-box; }
+
+/* ========== Section 1.2 - Top bar & GPC display styling ========== */
+
+#top-bar { position: fixed; top: 10px; right: 10px; z-index: 1000; }
+#mode-toggle { font-size: 22px; background: none; border: none; cursor: pointer; }
+#gpc-display { font-weight: bold; margin-bottom: 12px; font-size: 18px; }
+
+#gpc-buttons { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+#gpc-buttons button { font-size: 1em; padding: 8px 12px; cursor: pointer; border-radius: 6px; border: 1px solid #ccc; background: #f9f9f9; transition: background 0.2s ease; }
+#gpc-buttons button:hover { background: #eee; }
+#gpc-buttons button.active { background: #111; color: #fff; border-color: #111; }
+
+#gpc-display a.wikilink,
+#gpc-display a.wikilink:hover,
+#gpc-display a.wikilink:focus,
+#gpc-display a.wikilink:visited,
+#gpc-display a.wikilink:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    background: none !important;
+    cursor: default !important;           /* ← important: removes hand/pointer cursor */
+    border: none !important;
+}
+
+/* Optional: very subtle hint only when someone actually tries to interact */
+#gpc-display a.wikilink:active {
+    color: inherit;
+}
+
+/* ========== Section 1.3 - EDITOR/PREVIEW ========== */
+#editor-container { flex: 1; display: flex; flex-direction: column; margin-bottom: 60px; }
+#editor, #preview { flex: 1; width: 100%; box-sizing: border-box; border: 1px solid #ddd; font-family: "Courier New", monospace; font-size: 16px; line-height: 1.4; background: #fff; overflow: auto; white-space: pre-wrap; }
+#preview {
+  white-space: normal;
+}
+#preview *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+  white-space: pre-wrap;
+}
+/* Prevent empty collapsible blocks from creating space */
+.collapsible-content:empty {
+  display: none;
+}
+#editor { display: block; padding: 20px; border-radius: 8px; }
+#preview { display: none; padding: 20px; border-radius: 8px; }
+
+/* ========== Section 1.4 - TOOLBAR ========== */
+#toolbar { display: none; position: fixed; bottom: 0; left: 0; width: 100%; background: #eee; padding: 6px 0; border-top: 1px solid #ccc; z-index: 1000; overflow-x: auto; }
+#toolbar-inner { display: inline-flex; gap: 8px; padding: 0 10px; padding-right: 140px; }
+#toolbar button { flex-shrink: 0; padding: 8px 12px; border-radius: 6px; border: 1px solid #aaa; cursor: pointer; background: #fff; font-size: 16px; }
+
+/* ========== Section 1.5 - DROPDOWNS (Existing + Deeplink Matching Colors) ========== */
+.floating-dropdown { 
+  display: none; position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); 
+  background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 -8px 20px rgba(0,0,0,0.2); 
+  z-index: 999999999; min-width: 120px; 
+  /* For 19 items: Slightly taller but no forced scroll - let it grow naturally */
+  max-height: 320px; overflow-y: auto; /* Only scrolls if screen tiny */
+}
+
+.floating-dropdown button { 
+  display: block; width: 100%; text-align: center; padding: 12px; border: none; background: none; 
+  cursor: pointer; font-size: 15px; border-bottom: 1px solid #eee; 
+}
+.floating-dropdown button:last-child { border-bottom: none; }
+.floating-dropdown button:hover { background: #f0f0f0; }
+
+.floating-dropdown.open { display: block; }
+#floating-table-dropdown { min-width: 160px; }
+
+/* DEEPLINK: Exact match to button style - Sexy like Colors (centered, clean stack) */
+.floating-dropdown a.deeplink-btn {
+  display: block; width: 100%; text-align: left; padding: 10px 12px; /* Slightly less padding for compactness */
+  border: none; background: none; cursor: pointer; font-size: 15px; 
+  border-bottom: 1px solid #eee; text-decoration: none; color: #333; /* No underline, dark text like buttons */
+  transition: background 0.2s; /* Same subtle hover as buttons */
+  line-height: 1.3; /* Tighter lines for stack */
+  /* Emoji + text: Simple left-align with small gap - no jumble */
+  display: flex; align-items: center; gap: 8px; /* Emoji left, text follows */
+  white-space: nowrap; /* No wrap - keeps "Text Homie" on one line */
+}
+
+.floating-dropdown a.deeplink-btn:hover { 
+  background: #f0f0f0; /* Exact same hover as colors buttons */
+}
+
+.floating-dropdown a.deeplink-btn:last-child { 
+  border-bottom: none; 
+  border-radius: 0 0 8px 8px; /* Rounded bottom like dropdown */
+}
+
+.floating-dropdown a.deeplink-btn:first-child { 
+  border-radius: 8px 8px 0 0; /* Rounded top */
+}
+
+/* Emoji polish: Consistent size, no extra spacing */
+.floating-dropdown a.deeplink-btn > svg, /* If emoji as SVG */
+.floating-dropdown a.deeplink-btn::before { /* Fallback for emoji */
+  font-size: 16px; flex-shrink: 0; margin-right: 0; /* Tight emoji */
+  line-height: 1;
+}
+
+/* If too many items, subtle scrollbar (matches app feel) */
+.floating-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+.floating-dropdown::-webkit-scrollbar-track { background: #f5f5f5; }
+.floating-dropdown::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+.floating-dropdown::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* Mobile: Slightly wider for thumbs, no jumble */
+@media (max-width: 768px) {
+  .floating-dropdown { min-width: 140px; }
+  .floating-dropdown a.deeplink-btn { padding: 12px 14px; gap: 10px; font-size: 16px; }
+}
+
+
+/* ========== Section 1.6 - SIDEBAR ========== */
+#sidebar { width: 250px; background: #f0f0f0; position: fixed; top: 0; bottom: 0; left: -250px; padding: 1em; overflow-y: auto; z-index: 100; box-shadow: 2px 0 6px rgba(0,0,0,0.2); transition: left 0.25s ease, opacity 0.25s ease; pointer-events: none; opacity: 0; }
+#sidebar.open { left: 0; pointer-events: auto; opacity: 1; }
+
+.sidebar-item { font-size: 1.2em; padding: 14px 20px; margin-bottom: 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s ease, transform 0.1s ease; user-select: none; }
+.sidebar-item:hover { background: #e0e0e0; transform: translateX(2px); }
+.sidebar-item.active { background: #d0d0d0; font-weight: 600; }
+
+.note-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #e5e5e5; transition: background 0.2s; }
+.note-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-item .icons { display: flex; align-items: center; gap: 4px; }
+.note-item .delete-note { cursor: pointer; color: #c00; font-size: 0.9em; user-select: none; margin-left: 8px; }
+.note-item:hover .delete-note { color: #f00; }
+.note-item.active { background: #ffeb3b !important; font-weight: bold; }
+
+/* ========== Section 1.7 - PREVIEW STYLES ========== */
+
+/* Add to your CSS section */
+.folder-item {
+  background-color: #f0f0f0;
+  border-left: 3px solid #666;
+  padding-left: 12px;
+  font-weight: 600;
+}
+
+.folder-item:hover {
+  background-color: #e8e8e8;
+}
+
+.folder-item.active {
+  background-color: #ffeaa7 !important;
+}
+
+
+/* Task List Styles */
+.task-item.task-completed {
+  opacity: 0.7;
+  text-decoration: line-through;
+  color: #666;
+  background-color: rgba(0,0,0,0.03);
+}
+
+.task-item {
+  cursor: grab;
+  transition: all 0.2s;
+  padding: 3px 5px;
+  border-radius: 4px;
+  list-style-type: none;
+  position: relative;
+  padding-left: 25px;
+  margin: 2px 0;
+}
+
+.task-item input[type="checkbox"] {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.task-item.dragging {
+  opacity: 0.7;
+  background: rgba(100, 149, 237, 0.4);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.task-item.task-completed {
+  opacity: 0.7;
+  text-decoration: line-through;
+  color: #666;
+}
+
+.task-list {
+  padding-left: 0;
+  margin: 8px 0;
+}
+
+/* Drag end */
+
+#preview pre { position: relative; background: #f5f5f5; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: "Courier New", monospace; }
+.copy-btn { position: absolute; top: 4px; right: 4px; padding: 4px 6px; font-size: 14px; cursor: pointer; border: none; background: #eee; border-radius: 4px; z-index: 10; }
+
+#preview table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+#preview th,
+#preview td {
+  border: 1px solid #999;
+  padding: 6px 10px;
+}
+
+#preview th:not([align]):not([style*="text-align"]),
+#preview td:not([align]):not([style*="text-align"]) {
+  text-align: left;
+}
+#preview th { background-color: #f2f2f2; }
+
+#preview ul, #preview ol { padding-left: 1.6em; margin: 0.4em 0; }
+#preview li { margin-bottom: 0.15em; line-height: 1.35; }
+
+#preview li.task-unchecked { cursor: grab; padding: 3px 5px; border-radius: 5px; transition: background 0.2s; }
+#preview li.task-unchecked:active { cursor: grabbing; }
+#preview li.task-unchecked.dragging { opacity: 0.7; background: rgba(100, 149, 237, 0.4) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 10; }
+#preview li.task-unchecked.drag-over { background: rgba(100, 149, 237, 0.15); border-top: 2px solid cornflowerblue; }
+
+#preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { 
+  cursor: pointer; user-select: none; position: relative; padding-left: 1.2em; 
+}
+#preview h2 { margin-left: 1.2em; } #preview h3 { margin-left: 2.4em; } 
+#preview h4 { margin-left: 3.6em; } #preview h5 { margin-left: 4.8em; } 
+#preview h6 { margin-left: 6em; }
+
+h1::before, h2::before, h3::before, h4::before, h5::before, h6::before { 
+  content: '▶'; position: absolute; left: 0; transition: transform 0.2s ease; font-size: 0.9em; top: 0.05em; 
+}
+h1.collapsed::before, h2.collapsed::before, h3.collapsed::before, 
+h4.collapsed::before, h5.collapsed::before, h6.collapsed::before { transform: rotate(0deg); }
+h1:not(.collapsed)::before, h2:not(.collapsed)::before, h3:not(.collapsed)::before, 
+h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::before { transform: rotate(90deg); }
+.collapsed + .collapsible-content { display: none; }
+
+/* ========== Section 1.7 - PREVIEW STYLES (Add this to your existing CSS) ========== */
+
+/* Add to your CSS styles */
+#preview {
+  scroll-behavior: smooth;
+}
+
+#preview h1[id],
+#preview h2[id],
+#preview h3[id],
+#preview h4[id],
+#preview h5[id],
+#preview h6[id] {
+  scroll-margin-top: 5px;
+  /* Adjust based on your header height */
+  position: relative;
+}
+
+/* Add to your CSS */
+#preview {
+  content-visibility: auto;
+}
+
+
+#preview h1, #preview h2, #preview h3, 
+#preview h4, #preview h5, #preview h6 {
+  position: relative; /* Allows absolute positioning of tooltip */
+  padding-right: 20px; /* Prevents text from overlapping icon */
+}
+
+
+/* Heading collapse styles */
+#preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { 
+  cursor: pointer; 
+  user-select: none; 
+  position: relative; 
+  padding-left: 1.2em; 
+}
+#preview h2 { margin-left: 1.2em; } 
+#preview h3 { margin-left: 2.4em; } 
+#preview h4 { margin-left: 3.6em; } 
+#preview h5 { margin-left: 4.8em; } 
+#preview h6 { margin-left: 6em; }
+
+#preview h1::before, #preview h2::before, #preview h3::before, 
+#preview h4::before, #preview h5::before, #preview h6::before { 
+  content: '▶'; 
+  position: absolute; 
+  left: 0; 
+  transition: transform 0.2s ease; 
+  font-size: 0.9em; 
+  top: 0.05em; 
+}
+
+#preview h1.collapsed::before, #preview h2.collapsed::before, #preview h3.collapsed::before, 
+#preview h4.collapsed::before, #preview h5.collapsed::before, #preview h6.collapsed::before { 
+  transform: rotate(0deg); 
+}
+
+#preview h1:not(.collapsed)::before, #preview h2:not(.collapsed)::before, #preview h3:not(.collapsed)::before, 
+#preview h4:not(.collapsed)::before, #preview h5:not(.collapsed)::before, #preview h6:not(.collapsed)::before { 
+  transform: rotate(90deg); 
+}
+
+.collapsed + .collapsible-content { 
+  display: none; 
+}
+
+/* Checkbox heading styles */
+#preview h1.checkbox-heading::before,
+#preview h2.checkbox-heading::before,
+#preview h3.checkbox-heading::before,
+#preview h4.checkbox-heading::before,
+#preview h5.checkbox-heading::before,
+#preview h6.checkbox-heading::before {
+  content: '☐';
+  position: absolute;
+  left: 0;
+  font-size: 1em;
+  top: 0.05em;
+}
+
+#preview h1.checkbox-heading.checked::before,
+#preview h2.checkbox-heading.checked::before,
+#preview h3.checkbox-heading.checked::before,
+#preview h4.checkbox-heading.checked::before,
+#preview h5.checkbox-heading.checked::before,
+#preview h6.checkbox-heading.checked::before {
+  content: '☑';
+}
+
+/* === Checkbox headings: hide collapse triangle / arrow completely === */
+#preview h1.checkbox-heading::after,
+#preview h2.checkbox-heading::after,
+#preview h3.checkbox-heading::after,
+#preview h4.checkbox-heading::after,
+#preview h5.checkbox-heading::after,
+#preview h6.checkbox-heading::after {
+  display: none !important;
+}
+
+/* Optional but very recommended: strikethrough + visual feedback when checked */
+#preview h1.checkbox-heading.checked,
+#preview h2.checkbox-heading.checked,
+#preview h3.checkbox-heading.checked,
+#preview h4.checkbox-heading.checked,
+#preview h5.checkbox-heading.checked,
+#preview h6.checkbox-heading.checked {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.2px;
+  text-decoration-color: #888;
+  color: #555;
+  opacity: 0.85;
+  background: rgba(0,0,0,0.015);
+}
+
+/* Make checkbox symbol a bit more prominent when checked */
+#preview h1.checkbox-heading.checked::before,
+#preview h2.checkbox-heading.checked::before,
+#preview h3.checkbox-heading.checked::before,
+#preview h4.checkbox-heading.checked::before,
+#preview h5.checkbox-heading.checked::before,
+#preview h6.checkbox-heading.checked::before {
+  color: #2e7d32;           /* nice green for checked */
+  font-size: 1.1em;
+}
+
+#preview .backlinks { margin: 2em 0 1em 0; padding: 0.5em 0; border-top: 1px solid #e5e5e5; }
+#preview .backlinks h4 { margin: 0 0 0.8em 0; font-size: 1em; color: #666; font-weight: 400; }
+#preview .backlinks ul { margin: 0; padding-left: 0; list-style: none; }
+#preview .backlinks li { margin: 0.4em 0; }
+#preview .backlinks a.backlink { color: #1a73e8; text-decoration: none; font-weight: 500; padding: 0.1em 0.3em; border-radius: 3px; border-bottom: 1px solid transparent; transition: all 0.15s ease; }
+#preview .backlinks a.backlink:hover { background: rgba(26,115,232,0.08); border-bottom-color: #1a73e8; transform: translateX(1px); }
+
+#preview .highlight { background-color: yellow; }
+#preview .highlight.pink { background-color: #ffc0cb !important; }
+#preview .highlight.orange { background-color: #ffdab9 !important; }
+#preview .highlight.yellow { background-color: #ffff99 !important; }
+#preview .highlight.green { background-color: #90ee90 !important; }
+#preview .highlight.blue { background-color: #add8e6 !important; }
+#preview .highlight.purple { background-color: #e6ccff !important; }
+#preview .highlight.gray { background-color: #d3d3d3 !important; }
+#preview .highlight.brown { background-color: #d2b48c !important; }
+
+#preview .gpc-stamp { font-family: "Times New Roman", Times, serif !important; text-decoration: none !important; }
+#preview .gregorian-stamp { font-family: Helvetica, Arial, sans-serif !important; text-decoration: none !important; }
+
+/* Ordered lists: default LTR, RTL only when Hebrew is detected */
+#preview ol {
+    direction: ltr;
+    text-align: left;
+    list-style-position: outside;   /* better alignment in RTL */
+}
+
+/* Auto RTL for lists containing Hebrew */
+#preview ol:has([lang="he" i], [dir="rtl"], .custom-rtl-hebrew) {
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+/* Also apply to Hebrew-context lists */
+.custom-rtl-hebrew ol {
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+/* Fix numbering position in RTL */
+#preview ol[style*="direction: rtl"],
+#preview ol[dir="rtl"] {
+    padding-right: 2.5em;   /* space for numbers on the right */
+    padding-left: 0;
+}
+
+.custom-rtl-hebrew { direction: rtl !important; text-align: right !important; unicode-bidi: isolate !important; }
+.custom-rtl-hebrew * { unicode-bidi: isolate; }
+.custom-rtl-hebrew li { display: flex; flex-direction: row-reverse; align-items: flex-start; }
+.custom-rtl-hebrew li input[type="checkbox"] { order: 2; margin-right: 0; margin-left: 8px; flex-shrink: 0; }
+
+/* Section 1.8 - Folder CSS*/
+.folder-item {
+  background-color: #f0f0f0;
+  border-left: 3px solid #666;
+  padding-left: 12px;
+  font-weight: 600;
+}
+
+.folder-item:hover {
+  background-color: #e8e8e8;
+}
+
+.folder-item.active {
+  background-color: #ffeaa7 !important;
+}
+
+/* Add to Section 1.8 - Folder CSS */
+.note-item .action-btn {
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-left: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.note-item:hover .action-btn {
+  opacity: 1;
+}
+
+.note-item .rename-note {
+  color: #0066cc;
+}
+
+.note-item .move-note {
+  color: #008800;
+}
+
+.note-item .action-btn:hover {
+  transform: scale(1.1);
+}
+
+/* View stays clean white */
+#preview {
+  background: #ffffff;
+}
+
+/* Edit gets tiny psychological cues */
+#editor {
+  background: #fdfdf5;          /* just enough tint to feel different */
+  font-weight: 500;             /* thicker = "I'm active here" */
+  caret-color: #3b82f6;         /* blue blinking line = clear typing zone */
+  padding: 28px 24px;           /* more space = feels open/editable */
+}
+
+#editor:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.12);
+}
+
+/* Search UI in sidebar */
+#search-container {
+  margin-bottom: 16px;
+  position: relative;
+}
+
+#search-input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1em;
+  box-sizing: border-box;
+  background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="gray" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat 12px center;
+  background-size: 16px;
+}
+
+#search-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+#search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.1em;
+  color: #999;
+  cursor: pointer;
+  display: none;
+}
+
+#search-clear:hover {
+  color: #333;
+}
+
+#search-results {
+  margin-top: 8px;
+}
+
+.search-result {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+
+.search-result:hover,
+.search-result.active {
+  background: #e0f2fe;
+}
+
+.search-result .title {
+  font-weight: 600;
+  color: #1e40af;
+  display: block;
+}
+
+.search-result .snippet {
+  font-size: 0.9em;
+  color: #555;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+.search-result mark {
+  background: #fef08a;
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.search-no-results {
+  padding: 12px;
+  color: #666;
+  font-style: italic;
+}
+.note-item.folder-item .title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;          /* gentle spacing between name and count */
+}
+
+.note-item.folder-item .title .count {
+  font-size: 0.78em;   /* noticeably smaller than main text, but clear */
+  color: #000;         /* pure black — no gray, fully visible */
+  font-weight: 400;    /* normal weight, not bold */
+  line-height: 1;      /* tight vertical fit */
+}
+/* Add this to your existing CSS - Section 1.6 or Section 1.8 */
+#recent-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+}
+
+#recent-btn .count {
+  font-size: 0.78em;   /* Same as folder count */
+  color: #000;         /* Pure black */
+  font-weight: 400;    /* Normal weight */
+  line-height: 1;      /* Tight vertical fit */
+}
+
+
+</style>
+</head>
+<body>
+  
+  
+<!-- ========== Section 2 - UI STRUCTURE ========== -->
+<!-- ========== Section 2.1 - TOP BAR with Google mode========== -->
+<div id="top-bar">
+  <button id="mode-toggle" title="View / Edit">✏️</button>
+  <div id="offline-alert" style="display:none; position:fixed; top:10px; left:10px; background:#ffcc00; padding:6px 12px; border-radius:4px; font-size:14px; z-index:10000;">
+    ⚠️ Offline Mode
+  </div>
+</div>
+
+
+<!-- ========== Section 2.2 - GPC DISPLAY and buttons ========== -->
+<div id="gpc-display"></div>
+
+<div id="gpc-buttons">
+  <button data-mode="DOY" class="active">DOY</button>
+  <button data-mode="DOS">DOS</button>
+  <button data-mode="DOM">DOM</button>
+  <button data-mode="HEPTAD">Heptad</button>
+  <button id="sidebar-toggle" title="Toggle Sidebar">📁</button>
+</div>
+
+<!-- ========== Section 2.3 - EDITOR CONTAINER ========== -->
+<div id="editor-container">
+  <textarea id="editor" placeholder="Capture…"># Home
+
+| [[📁 Boomerang/Capture|Capture]] | [[📁 Boomerang/Events|Events]] | [[📁 Boomerang/To Do|ToDo]] | [[📁 Boomerang/Shopping|Shopping]] |
+| -- | -- | -- | -- |
+
+<br><br>
+
+| [🗓️ Today](https://www.gpc364.com/p/today.html?m=1) | [☯️ Balance](https://www.gpc364.com/2025/12/calendar_95.html) | [📅 EZDates](https://www.gpc364.com/2026/01/ez-dates.html) | [🌙 Moon](https://www.gpc364.com/2026/01/my-moon.html) |
+| :---: | :---: | :---: | :---: |
+
+<br><br>
+
+| Q1 | Q2 | Q3 | Q4 |
+| :--: | :--: | :--: | :--: |
+| [[📁 Boomerang/Unspring|🟠 Unspring]] <br><br> | [[📁 Boomerang/Quadsum|🟠 Quadsum]] <br><br> | [[📁 Boomerang/Sepafall|🟠 Sepafall]] <br><br> | [[📁 Boomerang/Dekawint|🟠 Dekawint]] <br><br> |
+| [[📁 Boomerang/Duspring|🌺 Duspring]] <br><br> | [[📁 Boomerang/Fivesum|🌺 Fivesum]] <br><br> | [[📁 Boomerang/Oktafall|🌺 Oktafall]] <br><br> | [[📁 Boomerang/Elvawint|🌺 Elvawint]] <br><br> |
+| [[📁 Boomerang/Trispring|🟢 Trispring]] <br><br> | [[📁 Boomerang/Sixsum|🟢 Sixsum]] <br><br> | [[📁 Boomerang/Novafall|🟢 Novafall]] <br><br> | [[📁 Boomerang/Dozawint|🟢 Dozawint]] <br><br> |
+
+<br><br>
+
+| **[[📁 Boomerang/1|1]]** <br><br> | [[📁 Boomerang/2|2]] <br><br> | [[📁 Boomerang/3|3]] <br><br> | [[📁 Boomerang/4|4]] <br><br> | [[📁 Boomerang/5|5]] <br><br> | [[📁 Boomerang/6|6]] <br><br> | [[📁 Boomerang/7|7]] <br><br> |
+| -- | -- | -- | -- | -- | -- | -- |
+| **[[📁 Boomerang/8|8]]** <br><br> | [[📁 Boomerang/9|9]] <br><br> | [[📁 Boomerang/10|10]] <br><br> | [[📁 Boomerang/11|11]] <br><br> | [[📁 Boomerang/12|12]] <br><br> | [[📁 Boomerang/13|13]] <br><br> | [[📁 Boomerang/14|14]] <br><br> |
+| **[[📁 Boomerang/15|15]]** <br><br> | [[📁 Boomerang/16|16]] <br><br> | [[📁 Boomerang/17|17]] <br><br> | [[📁 Boomerang/18|18]] <br><br> | [[📁 Boomerang/19|19]] <br><br> | [[📁 Boomerang/20|20]] <br><br> | [[📁 Boomerang/21|21]] <br><br> |
+| **[[📁 Boomerang/22|22]]** <br><br> | [[📁 Boomerang/23|23]] <br><br> | [[📁 Boomerang/24|24]] <br><br> | [[📁 Boomerang/25|25]] <br><br> | [[📁 Boomerang/26|26]] <br><br> | [[📁 Boomerang/27|27]] <br><br> | [[📁 Boomerang/28|28]] <br><br> |
+| **[[📁 Boomerang/29|29]]** <br><br> | [[📁 Boomerang/30|30]] <br><br> | [[📁 Boomerang/31|31]] <br><br> | | | | |
+
+<br><br><br>
+
+## - Get Started
+
+You’re already inside Lotus — start using it right now.
+
+- Click any link above (Today, Capture, Events, ToDo…) to begin  
+- Create new pages: type [[New Page]] → highlight → click 🗒️ icon in toolbar  
+- Use the bottom toolbar for bold, colors, tables, checkboxes, date stamps, export…
+
+**Optional – Offline version (full vault)**
+
+To download Lotus.zip reliably without Google login:
+
+1. Copy one of the URLs below  
+2. Paste it directly into your browser's address bar & press Enter  
+3. On the Google Drive page that opens, click **Download** (top right)
+
+Copy this (view/preview):
+```
+https://drive.google.com/file/d/1HYIzs9Drv4PJRLJMMirTANknlsqGrF3q/view?usp=drivesdk
+```
+
+
+Or this (direct):
+```
+https://drive.google.com/uc?export=download&id=1HYIzs9Drv4PJRLJMMirTANknlsqGrF3q
+```
+
+After unzip → open folder as vault.
+
+Then read: [[📁 Boomerang/Manual|Manual]]
+
+</textarea>
+  <div id="preview"></div>
+</div>
+
+<!-- ========== Section 2.4 - SIDEBAR ========== -->
+<div id="sidebar">
+  <div class="sidebar-section">
+    <!-- New search container at the top -->
+    <div id="search-container">
+      <input type="text" id="search-input" placeholder="Search notes..." autocomplete="off">
+      <button id="search-clear" title="Clear search">×</button>
+    </div>
+    
+    <div class="sidebar-item" id="back-btn">🔙 Back</div>
+    <div class="sidebar-item" id="recent-btn">🗒️ Notes</div>
+    
+    <!-- This div will show either recent notes or search results -->
+    <div id="sidebar-content">
+      <div id="recent-list" style="margin-top:8px;"></div>
+    </div>
+    
+    <div class="sidebar-item" id="create-folder-btn">📁 New Folder</div>
+    <div class="sidebar-item">⚙ System</div>
+    <div class="sidebar-item" data-action="export-all">📤 Export All</div>
+    <div class="sidebar-item" data-action="import-all">📥 Import All</div>
+  </div>
+</div>
+
+
+<!-- ========== Section 2.5 - TOOLBAR ========== -->
+<div id="toolbar">
+  <div id="toolbar-inner">
+    <button data-action="undo">↶</button>
+    <button data-action="redo">↷</button>
+    <button id="t-button">T ▼</button>
+    <button data-action="highlight">🖍</button>
+    <button id="highlight-button">🎨 ▼</button>
+    <button data-action="quote">❝</button>
+    <button data-action="code">📋</button>
+    <button id="h-button">H ▼</button>
+    <button id="date-button">📅 ▼</button>
+    <button id="table-button">▦ ▼</button>
+    <button data-action="ul">•</button>
+    <button data-action="ol">1.</button>
+    <button data-action="checkbox">☑</button>
+<button id="deeplink-button">🚀 ▼</button>
+    <button data-action="link">🔗</button>
+    <button data-action="wikilink">📄</button>
+    <!-- Add to Toolbar -->
+<button data-action="folder">📁</button>
+  </div>
+</div>
+
+<!-- ========== Section 2.6 - DROPDOWNS ========== -->
+<div id="floating-h-dropdown" class="floating-dropdown">
+  <button data-action="h1">H1</button>
+  <button data-action="h2">H2</button>
+  <button data-action="h3">H3</button>
+  <button data-action="h4">H4</button>
+  <button data-action="h5">H5</button>
+  <button data-action="h6">H6</button>
+</div>
+
+<div id="floating-t-dropdown" class="floating-dropdown">
+  <button data-action="bold"><b>B</b></button>
+  <button data-action="italic"><i>I</i></button>
+  <button data-action="underline"><u>U</u></button>
+  <button data-action="strike">S</button>
+  <button data-action="sub">X₂</button>
+  <button data-action="sup">X²</button>
+</div>
+
+<div id="floating-date-dropdown" class="floating-dropdown">
+  <button data-stamp="doy">DOY</button>
+  <button data-stamp="dos">DOS</button>
+  <button data-stamp="dom">DOM</button>
+  <button data-stamp="heptad">Heptad</button>
+  <button data-stamp="gregorian">Civil Date</button>
+</div>
+
+<div id="floating-table-dropdown" class="floating-dropdown">
+  <button data-action="add-table">Add table</button>
+  <button data-action="add-row">+ Row</button>
+  <button data-action="del-row">- Row</button>
+  <button data-action="add-col">+ Col</button>
+  <button data-action="del-col">- Col</button>
+  <button data-action="add-remaining">🧾 Remaining</button>
+  <button data-action="add-calc">🧮 Calculator</button>
+  <button data-action="row-up">Row ↑</button>
+  <button data-action="row-down">Row ↓</button>
+  <button data-action="col-left">Col ←</button>
+  <button data-action="col-right">Col →</button>
+</div>
+
+<div id="floating-highlight-dropdown" class="floating-dropdown">
+  <button data-color="pink">pink</button>
+  <button data-color="orange">orange</button>
+  <button data-color="yellow">yellow</button>
+  <button data-color="green">green</button>
+  <button data-color="blue">blue</button>
+  <button data-color="purple">purple</button>
+  <button data-color="gray">gray</button>
+  <button data-color="brown">brown</button>
+</div>
+  
+  <!-- Add this complete dropdown -->
+<div id="floating-deeplink-dropdown" class="floating-dropdown">
+  <a href="mailto:user@gmail.com" target="_blank" class="deeplink-btn">📨 Email</a>
+  <a href="sms:+10001234567?body=" class="deeplink-btn">📞 Text Homie</a>
+  <a href="https://wa.me/10001234567?text=" class="deeplink-btn">🍏 WhatsApp</a>
+  <a href="http://m.me/facebook?ref=yourpage" class="deeplink-btn">💬 Messenger</a>
+  <a href="zoomus://join?action=join&confno=yourmeetingid" class="deeplink-btn">🎥 Zoom</a>
+  <a href="snapchat://add/yourusername" class="deeplink-btn">👻 Snapchat</a>
+  <a href="https://maps.app.goo.gl/XKqHcBTfN2xYz9jg7" target="_blank" class="deeplink-btn">🗺️ Maps</a>
+  <a href="uber://?action=setPickup" class="deeplink-btn">🚕 Uber</a>
+  <a href="ubereats://home" class="deeplink-btn">🍔 Uber Eats</a>
+  <a href="amazon://cart" class="deeplink-btn">🛍️ Amazon</a>
+  <a href="walmart://home" class="deeplink-btn">🛒 Walmart</a>
+  <a href="upi://pay?pa=rahul@upi&pn=Rahul&cu=INR" class="deeplink-btn">💸 Pay</a>
+  <a href="cashapp://scan" class="deeplink-btn">💵 Cash App</a>
+  <a href="venmo://pay" class="deeplink-btn">💳 Venmo</a>
+  <a href="audible://home" class="deeplink-btn">🎧 Audible</a>
+  <a href="spotify://home" class="deeplink-btn">📻 Spotify</a>
+  <a href="https://facebook.com/zuck" target="_blank" class="deeplink-btn">👍 Facebook</a>
+  <a href="tiktok://home" class="deeplink-btn">🎵 TikTok</a>
+  <a href="vnd.youtube://watch" class="deeplink-btn">▶️ YouTube</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js">
+
+</script>
+
+<script>
+
+function devWarn(...args) {
+  if (window.location.hostname === 'localhost' ||
+    window.location.hostname.includes('192.168') ||
+    window.location.hostname.includes('127.0.0.1')) {
+    console.warn(...args);
+  }
+}
+
+function devError(...args) {
+  if (window.location.hostname === 'localhost' ||
+    window.location.hostname.includes('192.168') ||
+    window.location.hostname.includes('127.0.0.1')) {
+    console.error(...args);
+  }
+}
+
+// ── Dev-only console logging ─────────────────────────────────────────────
+// Only shows messages when running locally (SPCK preview, localhost, home Wi-Fi)
+// Disappears automatically on GitHub Pages, Vercel, etc.
+function devLog(...args) {
+  if (window.location.hostname === 'localhost' ||
+      window.location.hostname.includes('192.168') ||
+      window.location.hostname.includes('127.0.0.1')) {
+    console.log(...args);
+  }
+}
+
+ // ====================================================================
+ // SECTION 3 - JAVASCRIPT
+ // ====================================================================
+ //
+ 
+// =============================================
+// Section 3.1 - VAULT DB (SINGLE SOURCE OF TRUTH)
+// =============================================
+const VaultDB = (() => {
+  const DB_NAME = "capture-vault";
+  const STORE = "notes";
+  const VERSION = 1;
+  let db = null;
+  
+  function open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, VERSION);
+      
+      req.onupgradeneeded = e => {
+        const database = e.target.result;
+        if (!database.objectStoreNames.contains(STORE)) {
+          database.createObjectStore(STORE, { keyPath: "name" });
+        }
+      };
+      
+      req.onsuccess = () => {
+        db = req.result;
+        resolve();
+      };
+      
+      req.onerror = () => reject(req.error);
+    });
+  }
+  
+  async function get(name) {
+    try {
+      if (!db) await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readonly");
+        const store = tx.objectStore(STORE);
+        const req = store.get(name);
+        req.onsuccess = () => resolve(req.result?.content || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (err) {
+      devLog('IndexedDB failed, falling back to localStorage:', err);
+      return localStorage.getItem(`note-${name}`);
+    }
+  }
+  
+  async function set(name, content) {
+    try {
+      if (!db) await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put({ name, content });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (err) {
+      devLog('IndexedDB failed, falling back to localStorage:', err);
+      localStorage.setItem(`note-${name}`, content);
+    }
+  }
+  
+  async function list() {
+    if (!db) await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).getAllKeys();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  
+  async function remove(name) {
+    if (!db) await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(name);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  
+  // Fixed createFolder method - properly reference the set function
+  async function createFolder(name) {
+    // Just create a note with folder prefix
+    return await set(`📁 ${name}`, `# ${name}\n\nFolder contents...`);
+  }
+  
+  return { 
+    open, get, set, list, remove,
+    createFolder
+  };
+})();
+
+// =============================================
+// Helper: Slugify function for heading IDs
+// =============================================
+// =============================================
+// Helper: Robust Slugify function for heading IDs
+// =============================================
+function slugify(text) {
+  if (!text) return ''; // Handle null/undefined
+  
+  try {
+    // Convert numbers to strings and pad DOY numbers
+    let str = String(text).trim();
+    if (/^\d+$/.test(str)) {
+      str = str.padStart(3, '0'); // Format numbers as 001, 012, 350
+    }
+
+    return str
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')     // Remove special chars
+      .replace(/\s+/g, '-')         // Replace spaces with hyphens
+      .replace(/-+/g, '-')          // Collapse multiple hyphens
+      .replace(/^-+|-+$/g, '');     // Trim leading/trailing hyphens
+  } catch (err) {
+    devError('Slugify error:', err);
+    return 'note'; // Fallback for unexpected errors
+  }
+}
+
+
+
+// ── Utility: debounce for delayed actions ────────────────────────────────
+function debounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+
+// =============================================
+// Section 3.2 - EDITOR CORE (FIXED FUNCTIONALITY)
+// =============================================
+class EditorCore {
+  constructor() {
+    this.editor = document.getElementById('editor');
+    this.preview = document.getElementById('preview');
+    this.currentNote = "Home";
+    this.history = {}; // History per note
+this.currentHistoryIndex = {};
+this.debouncedReindex = null; // will be set in init
+
+    this.noteCache = {};
+    this.backlinksMap = {};
+    this.cachedIndex = null;   // ← ADD THIS LINE
+    this.init();
+  }
+  
+  // ===== Section 3.2.1 - Initialize database and load first note =====
+async init() {
+  await VaultDB.open();
+  
+  // Initialize UI events
+  this.initEditorEvents();
+  this.initToolbarEvents();
+  this.initDropdownEvents();
+  this.initSidebarEvents();
+  this.initExportImport();
+  // Initialize reminders
+this.initReminders();
+
+// Setup debounced re-indexing
+this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
+
+  // Add offline support monitoring
+  window.addEventListener('offline', () => {
+    const alert = document.getElementById('offline-alert');
+    if (alert) alert.style.display = 'block';
+    devLog('📴 Offline mode activated');
+  });
+  
+  window.addEventListener('online', () => {
+    const alert = document.getElementById('offline-alert');
+    if (alert) alert.style.display = 'none';
+    devLog('📶 Online mode restored');
+  });
+  
+  // Load initial note
+  let content = await VaultDB.get(this.currentNote);
+  if (!content) {
+    content = this.editor.value;
+    await VaultDB.set(this.currentNote, content);
+  }
+  
+  this.editor.value = content;
+  this.noteCache[this.currentNote] = content;
+  this.pushHistory(true);
+  await this.updatePreviewAndSave();
+  await this.buildNoteIndex();
+  devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
+  await this.updateNoteCount();
+}
+
+pushHistory(force = false) {
+  const value = this.editor.value;
+  
+  // Initialize history for new note if needed
+  if (!this.history[this.currentNote]) {
+    this.history[this.currentNote] = [];
+    this.currentHistoryIndex[this.currentNote] = -1;
+  }
+
+  const history = this.history[this.currentNote];
+  const index = this.currentHistoryIndex[this.currentNote];
+
+  // Don't push if identical to latest history item
+  if (!force && history[index] === value) return;
+
+  // Clear forward history
+  history.splice(index + 1);
+  
+  // Add new state
+  history.push(value);
+  if (history.length > 100) history.shift();
+
+  // Update index
+  this.currentHistoryIndex[this.currentNote] = history.length - 1;
+}
+
+undo() {
+  if (!this.history[this.currentNote]) return;
+  
+  const history = this.history[this.currentNote];
+  const index = this.currentHistoryIndex[this.currentNote];
+
+  if (index <= 0) return; // Can't undo past first state
+  
+  // Move back in history
+  this.currentHistoryIndex[this.currentNote]--;
+  this.editor.value = history[index - 1];
+  this.updatePreviewAndSave();
+}
+
+redo() {
+  if (!this.history[this.currentNote]) return;
+  
+  const history = this.history[this.currentNote];
+  const index = this.currentHistoryIndex[this.currentNote];
+
+  if (index >= history.length - 1) return; // Can't redo past latest state
+  
+  // Move forward in history
+  this.currentHistoryIndex[this.currentNote]++;
+  this.editor.value = history[index + 1];
+  this.updatePreviewAndSave();
+}
+
+async switchToNote(noteName) {
+    if (!noteName || noteName === this.currentNote) return;
+    
+    // FAST PATH: Check cache first
+    let content = this.noteCache[noteName];
+    
+    if (!content) {
+      // Cache miss - load from storage
+      content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+      this.noteCache[noteName] = content;
+    }
+    
+    // Save current note (deferred for performance)
+    setTimeout(async () => {
+      if (this.currentNote) {
+        const currentContent = this.editor.value;
+        await VaultDB.set(this.currentNote, currentContent);
+        this.noteCache[this.currentNote] = currentContent;
+      }
+    }, 0);
+    
+    // INSTANT UI update
+    this.currentNote = noteName;
+    this.editor.value = content;
+    
+    // Push history and update preview
+    this.pushHistory();
+    this.updatePreviewAndSave();
+    this.updateActiveNoteUI();
+}
+// ── Lightweight note counter (only runs when sidebar is opened) ──
+async updateNoteCount() {
+  try {
+    const keys = await VaultDB.list();
+    
+    const count = keys.filter(k => {
+      if (!k || k.startsWith('__')) return false; // skip internal
+      if (k === 'Home') return false; // optional: skip Home
+      if (k.startsWith('📁 ') && !k.includes('/')) return false; // skip pure folder placeholders
+      
+      return true; // count everything else: root notes + notes in folders (e.g. 📁 Folder/Note)
+    }).length;
+    
+    const notesBtn = document.getElementById('recent-btn');
+    // In your updateNoteCount() method, change this part:
+if (notesBtn) {
+  notesBtn.innerHTML = count > 0 ?
+    `🗒️ Notes <span class="count">(${count})</span>` :
+    '🗒️ Notes';
+}
+
+    
+    // Debug helper — remove after testing
+    devLog(`Counted ${count} notes — full keys:`, keys);
+  } catch (err) {
+    devWarn('Note count failed:', err);
+    const notesBtn = document.getElementById('recent-btn');
+    if (notesBtn) notesBtn.textContent = '🗒️ Notes';
+  }
+}
+
+
+
+  
+  // ===== Section 3.2.2 - EVENT INITIALIZATION =====
+  initEditorEvents() {
+    this.editor.addEventListener('input', () => {
+      this.pushHistory();
+      this.updatePreviewAndSave();
+    });
+    
+    this.editor.addEventListener('keydown', (e) => {
+      this.handleAutoContinue(e);
+    });
+    
+// Wikilink clicks in preview
+this.preview.addEventListener('click', async (e) => {
+  const wikiLink = e.target.closest('.wikilink, .backlink');
+  if (!wikiLink) return;
+  
+  e.preventDefault();
+  const noteName = wikiLink.dataset.note?.trim();
+  const anchorId = wikiLink.dataset.anchor;
+  
+  if (noteName) {
+    await this.switchToNote(noteName);
+    
+    // Updated anchor scroll with polling
+    if (anchorId) {
+      const tryScroll = (attempt = 0) => {
+        const targetElement = this.preview.querySelector(`#${anchorId}`);
+        
+        if (targetElement) {
+          devLog(`Anchor #${anchorId} FOUND after ${attempt} attempts`);
+          targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetElement.style.backgroundColor = '#fffacd';
+          setTimeout(() => {
+            targetElement.style.backgroundColor = '';
+          }, 1500);
+        } else if (attempt < 25) {
+          devLog(`Attempt \( {attempt + 1}: # \){anchorId} not found yet — retrying...`);
+          setTimeout(() => tryScroll(attempt + 1), 100);
+        } else {
+          devLog(`Gave up after \( {attempt} attempts — # \){anchorId} never appeared`);
+        }
+      };
+      
+      setTimeout(tryScroll, 300);
+    }
+  }
+});
+
+  }
+  
+  initToolbarEvents() {
+    const toolbar = document.getElementById('toolbar');
+    toolbar.addEventListener('click', (e) => {
+      this.handleToolbarClick(e);
+    });
+    
+    document.getElementById('mode-toggle').addEventListener('click', () => {
+      this.toggleEditMode();
+    });
+  }
+  
+  initDropdownEvents() {
+  const dropdowns = ['h', 't', 'date', 'highlight', 'table', 'deeplink'];
+  
+  devLog('🔧 initDropdownEvents() starting...'); // Keep for now
+  
+  dropdowns.forEach(type => {
+    const button = document.getElementById(`${type}-button`);
+    const dropdown = document.getElementById(`floating-${type}-dropdown`);
+    
+    devLog(`🔧 Processing ${type}:`, { button: button ? 'FOUND' : 'MISSING', dropdown: dropdown ? 'FOUND' : 'MISSING' });
+    
+    if (button && dropdown) {
+      devLog(`🔧 Attaching listeners to ${type}...`);
+      
+      button.addEventListener('click', (e) => {
+        devLog(`🔧 ${type} BUTTON CLICKED!`);
+        e.stopPropagation();
+        this.closeAllDropdowns();
+        dropdown.classList.toggle('open');
+        devLog(`🔧 ${type} dropdown toggled: open=${dropdown.classList.contains('open')}`);
+      });
+      
+      // CRITICAL: Stop propagation on ALL clicks inside dropdown (prevents bubbling to document)
+      dropdown.addEventListener('click', (e) => {
+        e.stopPropagation(); // ← This stops bubble to document
+        devLog(`🔧 ${type} INNER CLICK (target: ${e.target.nodeName})`);
+        this.handleDropdownClick(type, e);
+        // Don't auto-close here—let handleDropdownClick decide
+      });
+      devLog(`✅ Listeners attached for ${type}`);
+    } else {
+      devError(`❌ FAILED to attach ${type}`);
+    }
+  });
+  
+  // FIXED: Document click only closes if NOT clicking inside a dropdown
+  document.addEventListener('click', (e) => {
+    const isClickInsideDropdown = e.target.closest('.floating-dropdown');
+    const isClickOnToolbar = e.target.closest('#toolbar');
+    
+    if (!isClickInsideDropdown && !isClickOnToolbar) {
+      devLog('🔧 Document clicked OUTSIDE - closing all dropdowns');
+      this.closeAllDropdowns();
+    } else {
+      devLog('🔧 Click inside dropdown/toolbar - ignoring close');
+    }
+  });
+  
+  devLog('🔧 initDropdownEvents() complete!');
+}
+
+  
+  initSidebarEvents() {
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+  
+  sidebarToggle.addEventListener('click', async () => {
+    sidebar.classList.toggle('open');
+    if (sidebar.classList.contains('open')) {
+      this.loadRecentNotes();
+    }
+  });
+  
+  document.getElementById('recent-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await this.loadRecentNotes();
+    await this.updateNoteCount();
+    await this.updateNoteCount();
+  });
+  
+  // Add folder creation handler
+  document.getElementById('create-folder-btn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const folderName = prompt('Enter folder name:');
+  if (!folderName || !folderName.trim()) return;
+  
+  try {
+    await VaultDB.createFolder(folderName.trim());
+    await this.loadRecentNotes();
+    if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
+    devLog("Folder created:", folderName.trim());
+  } catch (err) {
+    devError("Folder creation failed:", err);
+    alert("Couldn't create folder: " + err.message);
+  }
+});
+  
+ // Replace the current back button handler with this:
+document.getElementById('back-btn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  
+  // Always go to Home, regardless of current location
+  if (this.currentNote !== 'Home') {
+    await this.switchToNote('Home');
+  } else {
+    devLog('Already at Home');
+  }
+  
+  // Close sidebar after navigation
+  sidebar.classList.remove('open');
+});
+
+
+  
+  // Updated note deletion handler with folder support
+  // Updated note handler with rename, move, and delete support
+document.getElementById('recent-list').addEventListener('click', async (e) => {
+  const renameBtn = e.target.closest('.rename-note');
+  const moveBtn = e.target.closest('.move-note');
+  const deleteBtn = e.target.closest('.delete-note');
+  const noteItem = e.target.closest('.note-item');
+  
+  if (!noteItem) return;
+  
+  const noteName = noteItem.dataset.note;
+  
+  if (renameBtn) {
+    e.stopPropagation();
+    await this.renameNote(noteName);
+  } else if (moveBtn) {
+    e.stopPropagation();
+    await this.moveNote(noteName);
+  } else if (deleteBtn) {
+    e.stopPropagation();
+    // Special message for folders
+    const isFolder = noteName.startsWith('📁 ');
+    const message = isFolder ? 
+      `Delete folder "${noteName.replace('📁 ', '')}" and all its contents?` : 
+      `Delete note "${noteName}"?`;
+    
+    if (!confirm(message)) return;
+    
+    await this.deleteNote(noteName);
+  } else {
+    await this.switchToNote(noteName);
+  }
+});
+
+}
+
+  
+
+  
+  toggleEditMode() {
+    const editMode = this.editor.style.display !== 'none';
+    
+    if (editMode) {
+      this.editor.style.display = 'none';
+      this.preview.style.display = 'block';
+      document.getElementById('toolbar').style.display = 'none';
+      document.getElementById('mode-toggle').textContent = '👁';
+    } else {
+      this.editor.style.display = 'block';
+      this.preview.style.display = 'none';
+      document.getElementById('toolbar').style.display = 'block';
+      document.getElementById('mode-toggle').textContent = '✏️';
+    }
+    
+    this.closeAllDropdowns();
+  }
+  
+  closeAllDropdowns() {
+    document.querySelectorAll('.floating-dropdown').forEach(dd => {
+      dd.classList.remove('open');
+    });
+  }
+  
+  // Add these methods to the EditorCore class
+
+// Helper method to insert text at cursor
+insertAtCursor(text) {
+  const start = this.editor.selectionStart;
+  this.editor.value = this.editor.value.substring(0, start) + text + this.editor.value.substring(this.editor.selectionEnd);
+  this.editor.selectionStart = this.editor.selectionEnd = start + text.length;
+  this.updatePreviewAndSave();
+}
+
+// Remove list prefix helper (for auto-continue lists)
+removeListPrefix(lineStart, prefix) {
+  const end = this.editor.value.indexOf('\n', lineStart);
+  const lineText = this.editor.value.substring(lineStart, end === -1 ? undefined : end);
+  this.editor.value = this.editor.value.substring(0, lineStart) + 
+                     lineText.substring(prefix.length) + 
+                     this.editor.value.substring(end === -1 ? this.editor.value.length : end);
+  this.editor.selectionStart = this.editor.selectionEnd = lineStart;
+  this.updatePreviewAndSave();
+}
+
+// Insert new list line helper (for auto-continue lists)
+insertNewListLine(cursor, prefix) {
+  // Insert new line with prefix at cursor position
+  this.editor.value = this.editor.value.substring(0, cursor) + 
+                     '\n' + prefix + 
+                     this.editor.value.substring(cursor);
+  
+  // Position cursor after the prefix
+  this.editor.selectionStart = this.editor.selectionEnd = cursor + prefix.length + 1;
+  this.updatePreviewAndSave();
+}
+
+  
+// ===== Section 3.2.4 - NOTE MANAGEMENT =====
+
+
+async findNoteInFolders(noteName) {
+    const notes = await VaultDB.list();
+    // Find note in any folder (format: "📁 folder/note")
+    return notes.find(n => n.endsWith(`/${noteName}`));
+}
+
+async deleteNote(noteName) {
+    if (!noteName || noteName === 'Home') return alert('Cannot delete Home');
+    if (!confirm(`Delete "${noteName.replace(/^📁 [^/]+\//, '')}"?`)) return;
+    
+    try {
+        await VaultDB.remove(noteName);
+        delete this.noteCache[noteName];
+        
+        if (this.currentNote === noteName) {
+            await this.switchToNote('Home');
+        }
+        
+       await this.loadRecentNotes();
+await this.updateCacheForSingleNote(noteName); // ← ADD THIS LINE
+if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
+    } catch (err) {
+        devError('Delete failed:', err);
+        alert('Delete failed');
+    }
+}
+
+async renameNote(oldName) {
+    if (oldName === 'Home') return;
+    
+    const isFolder = oldName.startsWith('📁 ') && !oldName.includes('/');
+    const currentDisplayName = isFolder ? oldName.replace('📁 ', '') : oldName.split('/').pop();
+    
+    const newName = prompt(`Rename "${currentDisplayName}" to:`, currentDisplayName);
+    if (!newName || newName.trim() === '') return;
+    
+    let finalNewName;
+    if (isFolder) {
+        finalNewName = `📁 ${newName.trim()}`;
+    } else {
+        const folder = oldName.includes('/') ? oldName.split('/')[0] : null;
+        finalNewName = folder ? `${folder}/${newName.trim()}` : newName.trim();
+    }
+    
+    if (finalNewName === oldName) return;
+    
+    try {
+        const content = await VaultDB.get(oldName);
+        if (content === null) {
+            alert('Note not found');
+            return;
+        }
+        
+        let newContent = content;
+        if (content.startsWith(`# ${currentDisplayName}`)) {
+            newContent = content.replace(`# ${currentDisplayName}`, `# ${newName.trim()}`);
+        }
+        
+        await VaultDB.set(finalNewName, newContent);
+        
+        // Update backlinks using the display name (without folder prefix)
+        await this.updateBacklinksForRename(oldName, finalNewName);
+        
+        await VaultDB.remove(oldName);
+        
+        if (this.noteCache[oldName]) {
+            this.noteCache[finalNewName] = newContent;
+            delete this.noteCache[oldName];
+        }
+        
+        if (this.currentNote === oldName) {
+            this.currentNote = finalNewName;
+            this.editor.value = newContent;
+            this.pushHistory(true);
+            await this.updatePreviewAndSave();
+        }
+        
+        await this.loadRecentNotes();
+await this.updateCacheForSingleNote(oldName); // ← ADD
+if (finalNewName !== oldName) {
+  await this.updateCacheForSingleNote(finalNewName); // ← ADD
+}
+if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
+    } catch (err) {
+        devError('Rename failed:', err);
+        alert('Rename failed: ' + err.message);
+    }
+}
+
+async moveNote(noteName) {
+    if (noteName === 'Home') return alert('Cannot move Home');
+    
+    const notes = await VaultDB.list();
+    const folders = notes.filter(n => n.startsWith('📁 ') && !n.includes('/')).sort();
+    
+    if (folders.length === 0) {
+        alert('No folders available to move into. Create a folder first.');
+        return;
+    }
+    
+    const noteDisplayName = noteName.includes('/') ? noteName.split('/')[1] : noteName;
+    const targetFolder = prompt(`Move "${noteDisplayName}" to folder:\n\nAvailable folders: ${folders.map(f => f.replace('📁 ', '')).join(', ')}\n\nEnter folder name (leave empty for root):`, '');
+    
+    if (targetFolder === null) return;
+    
+    let newName = noteName;
+    
+    if (targetFolder && targetFolder.trim() !== '') {
+        const foundFolder = folders.find(f => 
+            f.replace('📁 ', '').toLowerCase() === targetFolder.trim().toLowerCase()
+        );
+        
+        if (!foundFolder) {
+            alert(`Folder "${targetFolder}" not found`);
+            return;
+        }
+        
+        newName = `${foundFolder}/${noteDisplayName}`;
+    } else {
+        // Moving to root - remove folder prefix if exists
+        newName = noteDisplayName;
+    }
+    
+    if (newName === noteName) return;
+    
+    try {
+        const content = await VaultDB.get(noteName);
+        if (content === null) {
+            alert('Note not found');
+            return;
+        }
+        
+        // Check if note already exists at destination
+        const existingNote = await VaultDB.get(newName);
+        if (existingNote !== null) {
+            alert(`Note "${noteDisplayName}" already exists in destination`);
+            return;
+        }
+        
+        await VaultDB.set(newName, content);
+        await this.updateBacklinksForRename(noteName, newName);
+        await VaultDB.remove(noteName);
+        
+        if (this.noteCache[noteName]) {
+            this.noteCache[newName] = content;
+            delete this.noteCache[noteName];
+        }
+        
+        if (this.currentNote === noteName) {
+            this.currentNote = newName;
+            this.editor.value = content;
+            this.pushHistory(true);
+            await this.updatePreviewAndSave();
+        }
+        
+        await this.loadRecentNotes();
+await this.updateCacheForSingleNote(noteName); // old name ← ADD
+if (newName !== noteName) {
+  await this.updateCacheForSingleNote(newName); // new name ← ADD
+}
+if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
+    } catch (err) {
+        devError('Move failed:', err);
+        alert('Move failed: ' + err.message);
+    }
+}
+
+async updateBacklinksForRename(oldName, newName) {
+    const allNotes = await VaultDB.list();
+    const oldDisplayName = oldName.includes('/') ? oldName.split('/')[1] : oldName;
+    const newDisplayName = newName.includes('/') ? newName.split('/')[1] : newName;
+    
+    for (const note of allNotes) {
+        if (note === oldName || note === newName) continue;
+        
+        const content = await VaultDB.get(note);
+        if (content) {
+            // Match wikilinks with or without folder prefix - AUTOMATICALLY ADD ALIASES
+            const updatedContent = content.replace(
+                new RegExp(`\\[\\[\\s*(${oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${oldDisplayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?:\\||\\]\\])`, 'g'),
+                (match) => {
+                    // If moving to folder, automatically add alias with simple name
+                    if (newName.includes('/') && oldDisplayName === newDisplayName) {
+                        return `[[${newName}|${newDisplayName}]]`;
+                    }
+                    // Otherwise keep existing logic
+                    if (match.includes(`[[${oldName}`)) {
+                        return match.replace(`[[${oldName}`, `[[${newName}`);
+                    } else {
+                        return match.replace(`[[${oldDisplayName}`, `[[${newDisplayName}`);
+                    }
+                }
+            );
+            
+            if (updatedContent !== content) {
+                await VaultDB.set(note, updatedContent);
+                if (this.noteCache[note]) {
+                    this.noteCache[note] = updatedContent;
+                }
+            }
+        }
+    }
+    
+    if (this.backlinksMap[oldName]) {
+        this.backlinksMap[newName] = this.backlinksMap[oldName];
+        delete this.backlinksMap[oldName];
+    }
+}
+
+
+async loadRecentNotes() {
+    const recentList = document.getElementById('recent-list');
+    try {
+        const notes = await VaultDB.list();
+        const validNotes = notes.filter(n => n && n !== '__folders__');
+        
+        // Separate folders and root-level notes
+        const folders = validNotes.filter(n => n.startsWith('📁 ') && !n.includes('/'));
+        const rootNotes = validNotes.filter(n => !n.startsWith('📁 ') && !n.includes('/'));
+        
+        // Check if we're viewing a folder
+        const isViewingFolder = this.currentNote.startsWith('📁 ') && !this.currentNote.includes('/');
+        
+        let html = '';
+        
+        function getChildCount(folder, allNotes) {
+  return allNotes.filter(n => n.startsWith(`${folder}/`)).length;
+}
+        
+        // Always show folders first
+        folders.sort((a, b) => a.localeCompare(b));
+        html += folders.map(folder => `
+            <div class="note-item folder-item ${folder === this.currentNote ? 'active' : ''}" data-note="${folder}">
+                <span class="title">${folder}<span class="count">(${getChildCount(folder, validNotes)})</span></span>
+                <span class="icons">
+                    <span class="action-btn rename-note" title="Rename">✏️</span>
+                    <span class="action-btn move-note" title="Move">🚚</span>
+                    <span class="delete-note" title="Delete Folder">🗑</span>
+                </span>
+            </div>
+        `).join('');
+        
+        // Show notes based on current view
+        if (isViewingFolder) {
+            // Show notes in current folder
+            const folderNotes = validNotes
+                .filter(n => n.startsWith(`${this.currentNote}/`))
+                .map(n => ({
+                    fullName: n,
+                    displayName: n.split('/')[1]
+                }))
+                .sort((a, b) => a.displayName.localeCompare(b.displayName));
+            
+            html += folderNotes.map(note => `
+                <div class="note-item ${note.fullName === this.currentNote ? 'active' : ''}" data-note="${note.fullName}">
+                    <span class="title">${note.displayName}</span>
+                    <span class="icons">
+                        <span class="action-btn rename-note" title="Rename">✏️</span>
+                        <span class="action-btn move-note" title="Move">🚚</span>
+                        <span class="delete-note" title="Delete">🗑</span>
+                    </span>
+                </div>
+            `).join('');
+        } else {
+            // Show root-level notes (excluding Home's rename button)
+            rootNotes
+                .filter(n => n !== 'Home')
+                .sort((a, b) => a.localeCompare(b))
+                .forEach(note => {
+                    html += `
+                        <div class="note-item ${note === this.currentNote ? 'active' : ''}" data-note="${note}">
+                            <span class="title">${note}</span>
+                            <span class="icons">
+                                <span class="action-btn rename-note" title="Rename">✏️</span>
+                                <span class="action-btn move-note" title="Move">🚚</span>
+                                <span class="delete-note" title="Delete">🗑</span>
+                            </span>
+                        </div>
+                    `;
+                });
+            
+            // Always show Home at the top without rename button
+            html = `
+                <div class="note-item ${'Home' === this.currentNote ? 'active' : ''}" data-note="Home">
+                    <span class="title">Home</span>
+                    <span class="icons">
+                        <span class="action-btn move-note" title="Move">🚚</span>
+                    </span>
+                </div>
+            ` + html;
+        }
+        
+        if (html === '') {
+            html = '<div class="note-item">No notes yet</div>';
+        }
+        
+        recentList.innerHTML = html;
+        
+        // Add click handler for folders
+        document.querySelectorAll('.note-item.folder-item').forEach(item => {
+            item.addEventListener('click', async (e) => {
+                if (e.target.closest('.action-btn, .delete-note')) return;
+                const folderName = item.dataset.note;
+                
+                // Toggle folder view: if already viewing this folder, go back to root
+                if (this.currentNote === folderName) {
+                    await this.switchToNote('Home');
+                } else {
+                    // Switch to folder view
+                    this.currentNote = folderName;
+                }
+                await this.loadRecentNotes();
+            });
+        });
+        
+        this.initSearch();
+        
+    } catch (err) {
+        devError('Error loading notes:', err);
+        recentList.innerHTML = '<div class="note-item">Error loading notes</div>';
+    }
+}
+
+updateActiveNoteUI() {
+    document.querySelectorAll('.note-item.active').forEach(el => {
+        el.classList.remove('active');
+    });
+    document.querySelectorAll(`.note-item[data-note="${this.currentNote}"]`).forEach(el => {
+        el.classList.add('active');
+    });
+}
+
+// ===== SEARCH FUNCTIONALITY =====
+
+initSearch() {
+  const searchInput = document.getElementById('search-input');
+  const searchClear = document.getElementById('search-clear');
+  const sidebarContent = document.getElementById('sidebar-content');
+  
+  if (!searchInput) return;
+  
+  // Live search on input
+  searchInput.addEventListener('input', debounce(() => {
+    const query = searchInput.value.trim().toLowerCase();
+    
+    if (query.length === 0) {
+      // Show normal recent list
+      searchClear.style.display = 'none';
+      this.showRecentNotes();
+    } else {
+      // Show search results
+      searchClear.style.display = 'block';
+      this.renderSearchResults(query);
+    }
+  }, 300));
+  
+  // Clear button
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    searchClear.style.display = 'none';
+    this.showRecentNotes();
+    searchInput.focus();
+  });
+  
+  // Optional: focus search when sidebar opens
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    if (document.getElementById('sidebar').classList.contains('open')) {
+      setTimeout(() => searchInput.focus(), 300);
+    }
+  });
+}
+
+showRecentNotes() {
+  // Re-show the original recent list
+  document.getElementById('recent-list').style.display = 'block';
+  this.loadRecentNotes(); // refresh just in case
+}
+
+async renderSearchResults(query) {
+  if (!this.cachedIndex) {
+    await this.buildNoteIndex();
+  }
+  
+  const resultsContainer = document.getElementById('recent-list');
+  resultsContainer.innerHTML = ''; // clear previous content
+  
+  if (!query) {
+    this.showRecentNotes();
+    return;
+  }
+  
+  const terms = query.split(/\s+/).filter(t => t.length > 1);
+  if (terms.length === 0) {
+    resultsContainer.innerHTML = '<div class="search-no-results">Type to search...</div>';
+    return;
+  }
+  
+  const matching = this.cachedIndex
+    .map(item => {
+      let score = 0;
+      const titleLower = item.title.toLowerCase();
+      const snippetLower = item.snippet;
+      
+      // Title matches are very important
+      terms.forEach(term => {
+        if (titleLower.includes(term)) score += 100;
+        if (snippetLower.includes(term)) score += 30;
+      });
+      
+      // Bonus for exact prefix match in title
+      if (titleLower.startsWith(query)) score += 150;
+      
+      return { ...item, score };
+    })
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 30); // limit to top 30 results
+  
+  if (matching.length === 0) {
+    resultsContainer.innerHTML = '<div class="search-no-results">No matching notes found.</div>';
+    return;
+  }
+  
+  let html = '';
+  for (const item of matching) {
+    // Highlight matching terms in title and snippet
+    let highlightedTitle = item.title;
+let highlightedSnippet = item.rawSnippet;
+
+terms.forEach(term => {
+  // Properly escape the term for regex
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp('(' + escaped + ')', 'gi');
+  
+  highlightedTitle = highlightedTitle.replace(regex, '<mark>$1</mark>');
+  highlightedSnippet = highlightedSnippet.replace(regex, '<mark>$1</mark>');
+});
+    
+    // Shorten snippet if too long
+    if (highlightedSnippet.length > 160) {
+      highlightedSnippet = highlightedSnippet.slice(0, 157) + '...';
+    }
+    
+    // Show folder prefix if present
+    let displayPath = '';
+    if (item.name.includes('/')) {
+      const folder = item.name.split('/')[0].replace('📁 ', '');
+      displayPath = `<small style="color:#666;">${folder} / </small>`;
+    }
+    
+    let titleContent = highlightedTitle;
+if (displayPath) {
+  titleContent = `<small style="color:#666;">\( {displayPath} / </small> \){titleContent}`;
+}
+
+html += `
+      <div class="search-result note-item" data-note="${item.name}">
+        <div class="title">${titleContent}</div>
+        <div class="snippet">${highlightedSnippet}</div>
+      </div>
+    `;
+  }
+  
+  resultsContainer.innerHTML = html;
+  
+  // Add click handlers for results
+  resultsContainer.querySelectorAll('.search-result').forEach(el => {
+    el.addEventListener('click', async () => {
+      const noteName = el.dataset.note;
+      await this.switchToNote(noteName);
+      // Optional: close sidebar after selection
+      document.getElementById('sidebar').classList.remove('open');
+    });
+  });
+}
+
+
+  // ===== Section 3.2.5 - PREVIEW RENDERING =====
+  async updatePreviewAndSave() {
+  try {
+    const raw = this.editor.value;
+    this.noteCache[this.currentNote] = raw;
+    
+    // Update backlinks
+    this.updateBacklinks(this.currentNote, raw);
+    
+    // Process markdown
+    // In updatePreviewAndSave(), modify this part:
+let html = this.renderWikilinks(raw);
+html = this.processHighlights(html);
+html = this.processSubSuperScript(html);
+
+// Convert markdown tasks to HTML before parsing with proper markdown support
+html = html.replace(
+  /^- \[([ xX])\] (.*)$/gm,
+  (match, checkbox, content) => {
+    // Process the content with inline markdown first
+    const processedContent = marked.parseInline(content.trim());
+    return `<li class="task-item"><input type="checkbox" ${checkbox === 'x' ? 'checked' : ''}/>${processedContent}</li>`;
+  }
+);
+
+
+
+html = marked.parse(html);
+
+// Renumber checkbox lists with repeated "1." to show 1, 2, 3... in preview
+const tempDiv = document.createElement('div');
+tempDiv.innerHTML = html;
+
+// Find all <li> that contain checkbox + "1."
+const items = tempDiv.querySelectorAll('li');
+let currentCounter = 1;
+let inList = false;
+
+items.forEach(li => {
+  const text = li.textContent.trim();
+  const hasCheckbox = li.querySelector('input[type="checkbox"]');
+  const hasNumber = text.match(/1\.\s/);
+  
+  if (hasCheckbox && hasNumber) {
+    if (!inList) {
+      currentCounter = 1;
+      inList = true;
+    }
+    
+    // Replace the "1." with current counter
+    li.innerHTML = li.innerHTML.replace(/1\.\s/, `${currentCounter}. `);
+    currentCounter++;
+  } else {
+    // End of list block
+    inList = false;
+  }
+});
+
+html = tempDiv.innerHTML;
+
+// Ensure task lists have the proper class
+html = html.replace(/<ul>/g, '<ul class="task-list">');
+
+
+
+    html = this.processGPCStamps(html);
+    
+    // Update preview
+    this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
+    
+    // Apply behaviors
+    this.addCopyButtons();
+    this.makeCheckboxesInteractive();
+    this.makeTasksDraggable();
+    this.wrapHeadingsForCollapse();
+    this.applyRTL();
+    this.recalcTables();
+    
+    // Save after delay
+    clearTimeout(this.saveTimeout);
+this.saveTimeout = setTimeout(async () => {
+  await VaultDB.set(this.currentNote, raw);
+  await this.updateCacheForSingleNote(this.currentNote); // ← ADD THIS LINE
+  if (this.debouncedReindex) this.debouncedReindex();
+}, 500);
+    
+  } catch (error) {
+    devError('Preview error:', error);
+  }
+}
+
+  
+  renderWikilinks(text) {
+  return text.replace(/\[\[([^#\|\]]+)(?:#([^\|\]]+))?(?:\|([^\]]+))?\]\]/g, 
+    (m, page, anchor, alias) => {
+      const note = (page || '').trim();
+      const headingAnchor = (anchor || '').trim();
+      const label = alias ? alias.trim() : (headingAnchor ? `${note}#${headingAnchor}` : note);
+      
+      // Build data attributes
+      let dataAttrs = `data-note="${note}"`;
+      if (headingAnchor) {
+        dataAttrs += ` data-anchor="${slugify(headingAnchor)}"`;
+      }
+      
+      return `<a href="#" class="wikilink" ${dataAttrs}>${label}</a>`;
+    }
+  );
+}
+
+  
+  processHighlights(html) {
+    return html.replace(/==(\w+):([\s\S]+?)==/g, '<span class="highlight $1">$2</span>')
+              .replace(/==([\s\S]+?)==/g, '<span class="highlight">$1</span>')
+              .replace(/~~([^~]+)~~/g, '<s>$1</s>'); // Add this line for strike-through
+  }
+  
+  processSubSuperScript(html) {
+    return html.replace(/~([\s\S]+?)~/g, '<sub>$1</sub>')
+              .replace(/\^([\s\S]+?)\^/g, '<sup>$1</sup>');
+  }
+  
+  processGPCStamps(html) {
+    // 1. First handle ALL emoji-triggered DOM patterns using their exact Unicode escapes
+    const emojiPattern = /(\uD83D[\uDD35\uDFE0-\uDFE4]|\uD83C\uDF7A|\u26AB)\s(\d{2}\.\d{2})/g;
+    html = html.replace(emojiPattern, '<span class="gpc-stamp">$1 $2</span>');
+    
+    // 2. Then handle all other patterns (unchanged)
+    html = html.replace(/([♣♠♦♥]️)\s*(\d+)/g, '<span class="gpc-stamp">$1</span> <strong>$2</strong>');
+    html = html.replace(/(\d{4}\.\d{3})/g, '<span class="gpc-stamp">$&</span>');
+    html = html.replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="gregorian-stamp">$&</span>');
+    html = html.replace(
+  /(Q\d \d{2}|(?<![\d,])\b\d{3}\b(?![\d,]))/g,
+  '<span class="gpc-stamp">$1</span>'
+);
+    
+    return html;
+}
+
+  
+  updateBacklinks(currentNote, text) {
+    for (const note in this.backlinksMap) {
+      this.backlinksMap[note].delete(currentNote);
+      if (this.backlinksMap[note].size === 0) delete this.backlinksMap[note];
+    }
+    
+    const matches = [...text.matchAll(/\[\[([^\|\]]+)(?:\|[^\]]+)?\]\]/g)];
+    matches.forEach(match => {
+      const linkedNote = match[1].trim();
+      if (!this.backlinksMap[linkedNote]) this.backlinksMap[linkedNote] = new Set();
+      this.backlinksMap[linkedNote].add(currentNote);
+    });
+  }
+  
+  renderBacklinks(note) {
+    const links = this.backlinksMap[note] ? Array.from(this.backlinksMap[note]) : [];
+    if (links.length === 0) return '';
+    
+    return `
+      <div class="backlinks">
+        <h4>Backlinks</h4>
+        <ul>${links.map(linkNote => 
+          `<li><a href="#" class="backlink" data-note="${linkNote}">${linkNote}</a></li>`
+        ).join('')}</ul>
+      </div>
+    `;
+  }
+  
+// ===== Section 3.2.6 - TABLE OPERATIONS (FINAL, WORKING) =====
+
+// ---------- TABLE DETECTION ----------
+
+getTableAtCursor() {
+  const cursor = this.editor.selectionStart;
+  const text = this.editor.value;
+  const lines = text.split('\n');
+
+  const currentLine =
+    text.substring(0, cursor).split('\n').length - 1;
+
+  let start = currentLine;
+  while (start > 0 && lines[start].trim().startsWith('|')) start--;
+  if (!lines[start].trim().startsWith('|')) start++;
+
+  let end = start;
+  while (end < lines.length && lines[end].trim().startsWith('|')) end++;
+  end--;
+
+  if (end - start < 2) return null;
+
+  return { lines, start, end, currentLine };
+}
+
+getColumnIndex(table) {
+  const line = table.lines[table.currentLine];
+  const cursor = this.editor.selectionStart;
+  const lineStart =
+    this.editor.value.lastIndexOf('\n', cursor - 1) + 1;
+  const offset = cursor - lineStart;
+
+  let pipes = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '|') {
+      if (i >= offset) break;
+      pipes++;
+    }
+  }
+  return Math.max(0, pipes - 1);
+}
+
+splitRow(line) {
+  return line.slice(1, -1).split('|');
+}
+
+joinRow(cells) {
+  return '|' + cells.join('|') + '|';
+}
+
+// ---------- ACTION DISPATCH ----------
+
+handleTableAction(action) {
+  if (action === 'add-table') {
+    this.insertTable();
+    return;
+  }
+
+  const table = this.getTableAtCursor();
+  if (!table) return;
+
+  const actions = {
+    'add-row':   () => this.addRow(table),
+    'del-row':   () => this.deleteRow(table),
+    'add-col':   () => this.addColumn(table),
+    'del-col':   () => this.deleteColumn(table),
+    'row-up':    () => this.moveRowUp(table),
+    'row-down':  () => this.moveRowDown(table),
+    'col-left':  () => this.moveColumnLeft(table),
+    'col-right': () => this.moveColumnRight(table),
+      'add-remaining':    () => this.addRemainingRow(table),
+    'add-calc':  () => this.addCalculator(table)
+  };
+
+  actions[action]?.();
+  this.editor.value = table.lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+// ---------- ROW OPS ----------
+
+addRow(table) {
+  const cols = this.splitRow(table.lines[table.start]).length;
+  table.lines.splice(
+    table.currentLine + 1,
+    0,
+    this.joinRow(Array(cols).fill('   '))
+  );
+}
+
+deleteRow(table) {
+  if (table.currentLine <= table.start + 1) return;
+  table.lines.splice(table.currentLine, 1);
+}
+
+moveRowUp(table) {
+  if (table.currentLine <= table.start + 1) return;
+  const i = table.currentLine;
+  [table.lines[i - 1], table.lines[i]] =
+  [table.lines[i], table.lines[i - 1]];
+}
+
+moveRowDown(table) {
+  if (table.currentLine >= table.end) return;
+  const i = table.currentLine;
+  [table.lines[i + 1], table.lines[i]] =
+  [table.lines[i], table.lines[i + 1]];
+}
+
+// ---------- COLUMN OPS ----------
+
+addColumn(table) {
+  const col = this.getColumnIndex(table);
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    cells.splice(col + 1, 0, i === table.start + 1 ? '---' : '   ');
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+deleteColumn(table) {
+  const col = this.getColumnIndex(table);
+  const cols = this.splitRow(table.lines[table.start]).length;
+  if (cols <= 1) return;
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    cells.splice(col, 1);
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+moveColumnLeft(table) {
+  const col = this.getColumnIndex(table);
+  if (col === 0) return;
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    [cells[col - 1], cells[col]] = [cells[col], cells[col - 1]];
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+moveColumnRight(table) {
+  const col = this.getColumnIndex(table);
+  const max = this.splitRow(table.lines[table.start]).length - 1;
+  if (col >= max) return;
+
+  for (let i = table.start; i <= table.end; i++) {
+    const cells = this.splitRow(table.lines[i]);
+    [cells[col], cells[col + 1]] = [cells[col + 1], cells[col]];
+    table.lines[i] = this.joinRow(cells);
+  }
+}
+
+// ---------- INSERT ----------
+
+insertTable() {
+  const table =
+`|    |    |
+|----|----|
+|    |    |`;
+
+  const cursor = this.editor.selectionStart;
+  const before = this.editor.value.slice(0, cursor);
+  const after = this.editor.value.slice(cursor);
+
+  this.editor.value =
+    before +
+    (before.endsWith('\n') || !before ? '' : '\n') +
+    table +
+    (after.startsWith('\n') ? '' : '\n') +
+    after;
+
+  this.editor.selectionStart =
+  this.editor.selectionEnd =
+    before.length + 6;
+
+  this.updatePreviewAndSave();
+}
+
+// ---------- CALCULATOR INSERT ----------
+
+addCalculator(table) {
+  const cols = this.splitRow(table.lines[table.start]).length;
+  const row = this.joinRow(['Σ', ...Array(cols - 1).fill('+')]);
+  table.lines.splice(table.end + 1, 0, row);
+}
+
+// NEW: Remaining row insert
+addRemainingRow(table) {
+  const cols = this.splitRow(table.lines[table.start]).length;
+  
+  const formulaCells = [
+    "Remaining",
+    "1000+@Σ",
+    ...Array(cols - 2).fill("   ")
+  ];
+  
+  const newRow = this.joinRow(formulaCells);
+  
+  let insertPos = table.end + 1;
+  
+  // If there's already a Σ/total row → insert just before it
+  if (table.lines[table.end]?.trim().startsWith('| Σ ')) {
+    insertPos = table.end;
+  }
+  
+  table.lines.splice(insertPos, 0, newRow);
+}
+
+// ---------- CALCULATOR ENGINE (CORRECT) ----------
+
+recalcTables() {
+  this.preview.querySelectorAll('table').forEach(table => {
+    const rows = Array.from(table.rows);
+    if (rows.length < 2) return;
+
+    const col = 1;
+
+    const rowType = row => {
+      const first = row.cells[0]?.textContent.trim();
+      if (first === 'Σ') return 'total';
+      if (first === 'Remaining') return 'formula'; // Special case for formula rows
+      return 'data'; // All other rows are treated as data
+    };
+
+    const sumDataAbove = (idx) => {
+  let sum = 0;
+  for (let i = 1; i < idx; i++) { // skip header
+    if (rowType(rows[i]) !== 'formula' && rowType(rows[i]) !== 'total') {
+      let text = rows[i].cells[col]?.textContent?.trim() || "0";
+      
+      // ── Key fix ────────────────────────────────
+      text = text.replace(/,/g, ""); // remove thousand separators
+      text = text.replace(/\s+/g, ""); // optional: remove any spaces too
+      
+      const num = parseFloat(text);
+      // ───────────────────────────────────────────
+      
+      if (!isNaN(num)) {
+        sum += num;
+      }
+    }
+  }
+  return sum;
+};
+
+    // formulas first - skip header row (index 0)
+    rows.forEach((row, i) => {
+      if (i === 0) return; // Skip header
+      if (rowType(row) !== 'formula') return;
+
+      const cell = row.cells[col];
+      const m = cell.textContent.trim()
+        .match(/^([+\-]?\d*\.?\d+)\s*([+\-*/])\s*@Σ$/);
+      if (!m) return;
+
+      const base = parseFloat(m[1]);
+      const op = m[2];
+      const sum = sumDataAbove(i);
+
+      const result =
+        op === '+' ? base + sum :
+        op === '-' ? base - sum :
+        op === '*' ? base * sum :
+        sum ? base / sum : 0;
+
+      // Format with commas (US/English style)
+const formatted = Number(result).toLocaleString('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2 // or 0 if you want no decimals
+});
+
+cell.innerHTML = `<strong style="color:#0066cc">${formatted}</strong>`;
+    });
+
+    // totals last - skip header row (index 0)
+    rows.forEach((row, i) => {
+      if (i === 0) return; // Skip header
+      if (rowType(row) !== 'total') return;
+
+      const total = sumDataAbove(i);
+      row.cells[0].innerHTML = `<strong>Total</strong>`;
+      // Format number with commas (US/English style)
+const formattedTotal = Number(total).toLocaleString('en-US', {
+  minimumFractionDigits: 0, // no decimals if whole number
+  maximumFractionDigits: 2 // show up to 2 decimals if needed
+});
+
+row.cells[col].innerHTML = `<strong style="color:green">${formattedTotal}</strong>`;
+    });
+  });
+}
+  
+// ===== Section 3.2.7 - TASK MANAGEMENT (PRESERVE LINKS FIX) =====
+makeCheckboxesInteractive() {
+  // Clear and reinitialize checkboxes
+  this.preview.querySelectorAll('li.task-item input[type="checkbox"]').forEach(checkbox => {
+    const newCheckbox = checkbox.cloneNode(true);
+    checkbox.replaceWith(newCheckbox);
+  });
+
+  // Initialize fresh checkboxes
+  this.preview.querySelectorAll('li.task-item input[type="checkbox"]').forEach((checkbox, previewIndex) => {
+    checkbox.disabled = false;
+    checkbox.dataset.previewIndex = previewIndex;
+    
+    // Set initial state
+    const taskItem = checkbox.closest('li');
+    const taskText = this.getTaskTextContent(taskItem);
+    const lines = this.editor.value.split('\n');
+    
+    let editorIndex = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const taskMatch = lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/);
+      if (taskMatch) {
+        const editorTaskText = this.getTaskTextContentFromLine(taskMatch[3]);
+        
+        if (editorIndex === previewIndex || this.taskTextsMatch(editorTaskText, taskText)) {
+          checkbox.checked = taskMatch[2].toLowerCase() === 'x';
+          taskItem.classList.toggle('task-completed', checkbox.checked);
+          break;
+        }
+        editorIndex++;
+      }
+    }
+
+    checkbox.addEventListener('change', (e) => {
+      e.preventDefault();
+      const isChecked = e.target.checked;
+      const taskItem = e.target.closest('li');
+      
+      taskItem.classList.toggle('task-completed', isChecked);
+      this.updateTaskInEditor(taskItem, isChecked);
+      this.reorderTask(taskItem, isChecked);
+    });
+  });
+}
+
+getTaskTextContent(taskItem) {
+  // Get normalized text content from preview
+  const clone = taskItem.cloneNode(true);
+  const checkbox = clone.querySelector('input[type="checkbox"]');
+  if (checkbox) checkbox.remove();
+  
+  let text = clone.textContent.replace(/^\s*-\s*\[\s*[xX]?\s*\]\s*/, '').trim();
+  
+  // Preserve links - replace <a> tags with their href
+  clone.querySelectorAll('a').forEach(link => {
+    text = text.replace(link.textContent, `[${link.textContent}](${link.href})`);
+  });
+  
+  return text.trim();
+}
+
+getTaskTextContentFromLine(editorLine) {
+  // Normalize text content from editor
+  let text = editorLine.trim();
+  
+  // Transform markdown links into simplified format
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+  
+  // Remove formatting
+  text = text.replace(/\*\*(.*?)\*\*/g, '$1');
+  text = text.replace(/__(.*?)__/g, '$1');
+  
+  return text.trim();
+}
+
+taskTextsMatch(editorText, previewText) {
+  return this.normalizeTaskText(editorText) === this.normalizeTaskText(previewText);
+}
+
+normalizeTaskText(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim()
+    .toLowerCase();
+}
+
+updateTaskInEditor(taskItem, isChecked) {
+  const taskText = this.getTaskTextContent(taskItem);
+  const lines = this.editor.value.split('\n');
+  let found = false;
+  
+  // Try matching based on normalized text
+  for (let i = 0; i < lines.length; i++) {
+    const taskMatch = lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/);
+    if (taskMatch) {
+      const editorTaskText = this.getTaskTextContentFromLine(taskMatch[3]);
+      
+      if (this.taskTextsMatch(editorTaskText, taskText)) {
+        // Found matching task - update checkbox while preserving formatting
+        lines[i] = lines[i].replace(
+          /^(- \[)([ xX])(\] )/,
+          `$1${isChecked ? 'x' : ' '}$3`
+        );
+        found = true;
+        break;
+      }
+    }
+  }
+  
+  // Fallback: use preview index if text matching fails
+  if (!found) {
+    const checkbox = taskItem.querySelector('input[type="checkbox"]');
+    const previewIndex = parseInt(checkbox?.dataset.previewIndex || '0');
+    let taskCount = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const taskMatch = lines[i].match(/^(\s*)- \[([ xX])\] (.*)$/);
+      if (taskMatch) {
+        if (taskCount === previewIndex) {
+          lines[i] = lines[i].replace(
+            /^(- \[)([ xX])(\] )/,
+            `$1${isChecked ? 'x' : ' '}$3`
+          );
+          break;
+        }
+        taskCount++;
+      }
+    }
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+syncTaskOrder() {
+  const taskItems = Array.from(this.preview.querySelectorAll('li.task-item'));
+  if (taskItems.length === 0) return;
+  
+  const lines = this.editor.value.split('\n');
+  const newLines = [...lines];
+  const reorderedRawLines = [];
+  
+  taskItems.forEach((taskItem) => {
+    const checkbox = taskItem.querySelector('input[type="checkbox"]');
+    const isChecked = checkbox?.checked ?? false;
+    
+    // Get rendered content without checkbox
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = taskItem.innerHTML;
+    tempDiv.querySelector('input')?.remove();
+    const renderedContent = tempDiv.innerHTML.trim();
+    
+    // Enhanced reverse conversion with CORRECT highlight handling
+    let markdownLike = renderedContent
+      // Wikilinks
+      .replace(/<a[^>]*data-note="([^"]*)"[^>]*>(.*?)<\/a>/g, '[[$1|$2]]')
+      .replace(/<a[^>]*>(.*?)<\/a>/g, '[[$1]]')
+      
+      // Highlights - CRITICAL FIX: No color prefix for simple highlights
+      .replace(/<span class="highlight\s+([a-z]+)">([^<]+)<\/span>/gi, '==$1:$2==')
+      .replace(/<span class="highlight">([^<]+)<\/span>/gi, '==$1==')  // Simple highlight
+      
+      // Other formatting
+      .replace(/<s>(.*?)<\/s>/gi, '~~$1~~')
+      .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
+      .replace(/<em>(.*?)<\/em>/gi, '*$1*')
+      .replace(/<u>(.*?)<\/u>/gi, '<u>$1</u>')
+      .replace(/<sub>(.*?)<\/sub>/gi, '~$1~')
+      .replace(/<sup>(.*?)<\/sup>/gi, '^$1^')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+    
+    // Find the best matching original line
+    let bestMatchLine = null;
+    let bestScore = -1;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const match = line.match(/^(\s*)- \[[ xX]\] (.*)$/);
+      if (!match) continue;
+      
+      const rawIndent = match[1] || '';
+      const rawContent = match[2].trim();
+      
+      let score = 0;
+      
+      // 1. Check for highlight patterns
+      const hasHighlight = rawContent.includes('==');
+      const hasHighlightInPreview = markdownLike.includes('==');
+      
+      if (hasHighlight && hasHighlightInPreview) {
+        score += 80;
+        
+        // Check if it's the same type of highlight
+        const hasColorPrefix = /==\w+:/.test(rawContent);
+        const hasColorPrefixInPreview = /==\w+:/.test(markdownLike);
+        
+        if (hasColorPrefix === hasColorPrefixInPreview) score += 40;
+      }
+      
+      // 2. Text content match (ignoring formatting)
+      const rawTextOnly = rawContent.replace(/==[^=]*?==/g, '').trim();
+      const previewTextOnly = markdownLike.replace(/==[^=]*?==/g, '').trim();
+      
+      if (rawTextOnly && rawTextOnly === previewTextOnly) score += 100;
+      
+      // 3. Checkbox state
+      const wasChecked = line.match(/\[([xX])\]/)?.[1]?.toLowerCase() === 'x';
+      if (wasChecked === isChecked) score += 30;
+      
+      // 4. Length similarity
+      const lenDiff = Math.abs(rawContent.length - markdownLike.length);
+      if (lenDiff <= 5) score += 20;
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatchLine = line;
+      }
+    }
+    
+    // Use best match or create fallback
+    let finalLine;
+    
+    if (bestMatchLine && bestScore >= 100) {
+      // Update checkbox state while preserving formatting
+      finalLine = bestMatchLine.replace(
+        /^(- \[)([ xX])(\] )(.*)$/,
+        `$1${isChecked ? 'x' : ' '}$3$4`
+      );
+    } else {
+      // Fallback with proper indentation
+      const indentLevel = (taskItem.closest('ul')?.querySelectorAll('ul')?.length || 0);
+      const indent = '  '.repeat(indentLevel);
+      
+      // Use the markdown we reconstructed
+      finalLine = `${indent}- [${isChecked ? 'x' : ' '}] ${markdownLike}`;
+    }
+    
+    reorderedRawLines.push(finalLine);
+  });
+  
+  // Rebuild editor content
+  let taskIdx = 0;
+  for (let i = 0; i < newLines.length; i++) {
+    if (/^(\s*)- \[[ xX]\] /.test(newLines[i])) {
+      if (taskIdx < reorderedRawLines.length) {
+        newLines[i] = reorderedRawLines[taskIdx];
+        taskIdx++;
+      }
+    }
+  }
+  
+  this.editor.value = newLines.join('\n');
+  this.pushHistory();
+  this.updatePreviewAndSave();
+}
+
+
+makeTasksDraggable() {
+    const taskItems = this.preview.querySelectorAll('li.task-item');
+    
+    if (taskItems.length === 0) {
+      devLog('No tasks found to make draggable');
+      return;
+    }
+    
+    let draggedItem = null;
+    
+    const handleDragStart = (e) => {
+      draggedItem = e.target.closest('li');
+      if (!draggedItem) return;
+      
+      draggedItem.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'task');
+    };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const targetItem = e.target.closest('li.task-item');
+    if (!targetItem || targetItem === draggedItem) return;
+
+    const rect = targetItem.getBoundingClientRect();
+    const offset = e.clientY - rect.top;
+    
+    if (offset < rect.height / 2) {
+      targetItem.parentNode.insertBefore(draggedItem, targetItem);
+    } else {
+      targetItem.parentNode.insertBefore(draggedItem, targetItem.nextSibling);
+    }
+  };
+
+  const handleDragEnd = (e) => {
+    e.preventDefault();
+    if (draggedItem) {
+      draggedItem.classList.remove('dragging');
+      this.syncTaskOrder();
+      draggedItem = null;
+    }
+  };
+
+  this.preview.querySelectorAll('li.task-item').forEach(item => {
+    item.draggable = true;
+    
+    // Remove old listeners
+    item.ondragstart = null;
+    item.ondragover = null;
+    item.ondragend = null;
+    
+    // Add new listeners
+    item.ondragstart = handleDragStart;
+    item.ondragover = handleDragOver;
+    item.ondragend = handleDragEnd;
+  });
+  
+  devLog('Made', this.preview.querySelectorAll('li.task-item').length, 'tasks draggable with links support');
+}
+
+
+
+
+
+  
+// ===== Section 3.2.8 - UI ENHANCEMENTS =====
+addCopyButtons() {
+  this.preview.querySelectorAll('pre').forEach(block => {
+    if (block.querySelector('.copy-btn')) return;
+    
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = '📋';
+    btn.onclick = () => {
+      const blockText = block.cloneNode(true);
+      blockText.querySelector('.copy-btn')?.remove();
+      const textToCopy = blockText.textContent.trim();
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        btn.textContent = '✅';
+        setTimeout(() => btn.textContent = '📋', 1000);
+      });
+    };
+    
+    block.appendChild(btn);
+  });
+}
+
+wrapHeadingsForCollapse() {
+  this.preview.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
+    if (h.dataset.processed) return;
+
+    const headingText = h.textContent.trim();
+
+    // NEW IMPROVED ID GENERATION
+    let cleanForId = headingText
+      .replace(/^[\s+-]+/, '')       // Remove leading +/-
+      .replace(/^\[[\sxX]?\]\s*/, '') // Remove [ ] or [x] checkboxes
+      .replace(/\s+/g, ' ')          // Collapse multiple spaces
+      .trim();
+
+    // Special handling for numbered headings (like DOY dates)
+    if (/^\d{1,3}$/.test(cleanForId)) {
+      cleanForId = cleanForId.padStart(3, '0'); // Format as 001, 350, etc.
+    }
+    
+    // Generate the final ID
+    const headingId = slugify(cleanForId);
+    h.id = headingId;
+    devLog("Heading ID generated:", headingId, "from original text:", headingText);
+
+    // Optional: helpful for debugging or future features
+    h.dataset.anchorName = cleanForId.trim();
+    
+    // Check for checkbox heading patterns: + [ ] or - [ ]
+    const checkboxMatch = headingText.match(/^([+-])\s*\[([ xX])\]\s*(.*)$/);
+    
+    if (checkboxMatch) {
+      const prefix = checkboxMatch[1]; // + or -
+      const checkboxState = checkboxMatch[2].toLowerCase(); // x or space
+      const actualText = checkboxMatch[3].trim();
+      
+      // Update the heading text to show only the actual content
+      h.textContent = actualText;
+      
+      // Add checkbox heading classes
+      h.classList.add('checkbox-heading');
+      if (checkboxState === 'x') {
+        h.classList.add('checked');
+      }
+      
+      // Store original prefix for toggling
+      h.dataset.prefix = prefix;
+      h.dataset.originalText = actualText;
+      
+      // Set collapse state based on prefix
+      if (prefix === '-') {
+        h.classList.add('collapsed');
+      } else {
+        h.classList.remove('collapsed');
+      }
+    } else {
+      // Original logic for + or - collapse prefixes (non-checkbox)
+      const hasPlusPrefix = headingText.startsWith('+');
+      const hasMinusPrefix = headingText.startsWith('-');
+      
+      if (hasPlusPrefix || hasMinusPrefix) {
+        h.textContent = headingText.substring(1).trim();
+      }
+      
+      // Set collapse state based on prefix
+      if (hasMinusPrefix) {
+        h.classList.add('collapsed');
+      } else if (hasPlusPrefix) {
+        h.classList.remove('collapsed');
+      }
+    }
+    
+    // ── CREATE WRAPPER FOR H2+ ONLY (first H1 has no wrapper) ──
+    const isFirstH1 = h.tagName === 'H1' && h.parentNode === this.preview && !h.previousElementSibling;
+    
+    let wrapper;
+    if (!isFirstH1) {
+      // Create wrapper for H2+ or subsequent H1s
+      wrapper = document.createElement('div');
+      wrapper.className = 'collapsible-content';
+      
+      // CONDENSED MODE - tight spacing
+      wrapper.style.cssText = `
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        line-height: 1.2 !important; /* Tight line height */
+        min-height: 0 !important;
+        height: auto !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+        display: block !important;
+      `;
+      
+      // Set initial display based on collapse state
+      wrapper.style.display = h.classList.contains('collapsed') ? 'none' : 'block';
+      
+      // Find all content until next same/higher level heading
+      let next = h.nextElementSibling;
+      while (next && (!next.tagName || !next.tagName.match(/^H[1-6]$/) || parseInt(next.tagName[1]) > parseInt(h.tagName[1]))) {
+        const temp = next.nextElementSibling;
+        wrapper.appendChild(next);
+        next = temp;
+      }
+      
+      h.after(wrapper);
+      
+      // FORCE zero spacing on ALL content inside wrapper
+      const contentElements = wrapper.querySelectorAll('*');
+      contentElements.forEach(el => {
+        el.style.margin = '0 0 2px 0 !important'; // TINY bottom margin only
+        el.style.padding = '0 !important';
+        el.style.lineHeight = '1.2 !important'; // Tight lines
+      });
+    }
+
+    // ── HEADING MARGINS - zero bottom for all ──
+    if (h.tagName === 'H1') {
+      h.style.margin = '12px 0 0 0 !important'; // H1: top only
+    } else {
+      // H2+: Small top + indent, ZERO bottom
+      h.style.margin = '6px 0 0 1em !important'; // Smaller top margin for tighter H2
+    }
+
+    // Add click handler for toggling
+    h.addEventListener('click', (e) => {
+      // If clicking on the checkbox area (first 24px)
+      const rect = h.getBoundingClientRect();
+      const isCheckboxClick = e.clientX - rect.left < 24; // 24px click area
+      
+      if (h.classList.contains('checkbox-heading') && isCheckboxClick) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleCheckboxHeading(h);
+      } else {
+        // Otherwise toggle collapse
+        h.classList.toggle('collapsed');
+        
+        // Toggle wrapper if it exists
+        if (!isFirstH1 && wrapper) {
+          wrapper.style.display = h.classList.contains('collapsed') ? 'none' : 'block';
+        }
+        
+        this.updateCollapsePrefixInEditor(h);
+      }
+    });
+    
+    h.dataset.processed = true;
+  });
+}
+
+
+applyRTL() {
+  this.preview.querySelectorAll('p, li, td, th').forEach(el => {
+    if (/[\u0590-\u05FF]/.test(el.textContent)) {
+      el.classList.add('custom-rtl-hebrew');
+    } else {
+      el.classList.remove('custom-rtl-hebrew');
+    }
+  });
+}
+
+  
+// ===== Section 3.2.9 - TOOLBAR HANDLERS =====
+handleToolbarClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+
+  const action = btn.dataset.action;
+
+  // Handle undo/redo
+  if (action === 'undo') return this.undo();
+  if (action === 'redo') return this.redo();
+  if (action === 'checkbox') return this.toggleCheckbox();
+  if (action === 'quote') {
+  const cursor = this.editor.selectionStart;
+  const textBefore = this.editor.value.substring(0, cursor);
+  const lineStart = textBefore.lastIndexOf('\n') + 1;
+  this.formatLineAsQuote(lineStart);
+  return;
+}
+  if (action === 'code') return this.wrapSelection('```\n', '\n```');
+  if (action === 'link') return this.insertLink();
+  if (action === 'wikilink') return this.insertWikilink();
+if (action === 'folder') return this.insertFolderLink();
+
+  if (action === 'ul') return this.insertBullet();
+  if (action === 'ol') return this.insertNumberedList();
+  if (action === 'highlight') return this.wrapSelection('==', '==');
+  
+  // Handle formatting
+  const formats = {
+    'bold': ['**', '**'],
+    'italic': ['*', '*'], 
+    'underline': ['<u>', '</u>'],
+    'strike': ['~~', '~~'],
+    'sub': ['~', '~'],
+    'sup': ['^', '^']
+  };
+  
+  if (formats[action]) {
+    const [before, after] = formats[action];
+    this.wrapSelection(before, after);
+  }
+}
+
+// ===== TOOLBAR ACTION METHODS =====
+insertLink() {
+  const url = prompt('Enter URL:', 'https://');
+  const text = prompt('Enter link text:', this.getSelectedText() || '');
+  if (url) {
+    const link = `[${text}](${url})`;
+    this.replaceSelection(text ? link : url);
+  }
+}
+
+insertWikilink() {
+  const selectedText = this.getSelectedText() || '';
+  const noteName = prompt('Note name (optional #Heading):', selectedText);
+  if (noteName) {
+    let wikilink;
+    
+    // Check if user included a #heading
+    if (noteName.includes('#')) {
+      const [page, heading] = noteName.split('#');
+      const displayText = prompt('Display text (optional):', heading || page);
+      wikilink = displayText ? `[[${page}#${heading}|${displayText}]]` : `[[${page}#${heading}]]`;
+    } else {
+      const displayText = prompt('Display text (optional):', noteName);
+      wikilink = displayText ? `[[${noteName}|${displayText}]]` : `[[${noteName}]]`;
+    }
+    
+    this.replaceSelection(wikilink);
+  }
+}
+
+
+insertFolderLink() {
+  const selectedText = this.getSelectedText();
+  if (!selectedText) {
+    alert('Please select text first');
+    return;
+  }
+  
+  const wikilink = `[[📁 Boomerang/${selectedText}|${selectedText}]]`;
+  this.replaceSelection(wikilink);
+}
+
+getSelectedText() {
+  return this.editor.value.substring(this.editor.selectionStart, this.editor.selectionEnd);
+}
+
+replaceSelection(text) {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  this.editor.value = this.editor.value.substring(0, start) + text + this.editor.value.substring(end);
+  this.editor.selectionStart = this.editor.selectionEnd = start + text.length;
+  this.updatePreviewAndSave();
+}
+
+handleDropdownClick(type, e) {
+  // Handle button-based dropdowns (unchanged - headings, text, date, colors, table)
+  const btn = e.target.closest('button');
+  if (btn) {
+    const action = btn.dataset.action || btn.dataset.stamp || btn.dataset.color;
+    if (!action) return;
+    
+    switch(type) {
+      case 'h': this.applyHeading(action); break;
+      case 't': this.applyTextFormat(action); break;
+      case 'date': this.insertDateStamp(action); break;
+      case 'highlight': this.applyHighlight(action); break;
+      case 'table': this.handleTableAction(action); break;
+    }
+    return; // Exit after button action
+  }
+  
+  // DEEPLINK SPECIAL: Only insert markdown (paste [Text](url) at cursor)
+  if (type === 'deeplink') {
+    const link = e.target.closest('a.deeplink-btn');
+    if (link) {
+      e.preventDefault(); // Stop normal link behavior
+      const url = link.href;
+      const text = link.textContent.trim(); // FIXED: Just trim—preserves internal spaces (e.g., "🍏 WhatsApp")
+      
+      // JUST PASTE THE MARKDOWN LINK AT CURSOR
+      const markdown = `[${text}](${url})`;
+      this.insertAtCursor(markdown);
+      
+      devLog(`✅ Inserted: [${text}](${url})`); // Optional log
+    }
+  }
+  
+  // Close dropdown after any action
+  e.currentTarget.classList.remove('open');
+}
+
+// Bullet list (• button) - toggle on/off for multi-line
+// Bullet list (• button) - single-line: keep bullet when removing checkbox
+insertBullet() {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  
+  if (start === end) {
+    const cursor = this.editor.selectionStart;
+    const lines = this.editor.value.split('\n');
+    const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+    let line = lines[lineIdx] || '';
+    
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    let content = line.substring(indent.length).trimStart();
+    
+    if (content.match(/^- \[[ xX]\]/)) {
+      // Has checkbox → convert to plain bullet (remove checkbox only, keep -)
+      content = content.replace(/^- \[[ xX]\]\s*/, '- ');
+    } else if (content.startsWith('- ')) {
+      // Has plain bullet → remove it completely
+      content = content.replace(/^- /, '');
+    } else {
+      // No marker → add bullet
+      content = '- ' + content;
+    }
+    
+    lines[lineIdx] = indent + content.trimStart();
+    this.editor.value = lines.join('\n');
+    this.updatePreviewAndSave();
+    return;
+  }
+  
+  // Multi-line part: unchanged (your current version)
+  let selected = this.editor.value.substring(start, end);
+  let lines = selected.split('\n');
+  
+  const isCheckboxList = lines.every(l => !l.trim() || l.trimStart().match(/^- \[[ xX]\] /));
+  
+  if (isCheckboxList) {
+    lines = lines.map(l => l.replace(/^- \[[ xX]\]\s*/, '- '));
+  } else {
+    const allAreBullets = lines.every(l => !l.trim() || l.trimStart().startsWith('- '));
+    if (allAreBullets) {
+      lines = lines.map(l => l.replace(/^\s*- /, '').trimStart());
+    } else {
+      lines = lines.map(l => {
+        const cleaned = l.replace(/^\s*([-*+]|\d+\.|- \[[ xX]\]?\s*)/, '').trimStart();
+        return cleaned.trim() ? `- ${cleaned}` : l;
+      });
+    }
+  }
+  
+  const newText = lines.join('\n');
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start;
+  this.editor.selectionEnd = start + newText.length;
+  this.updatePreviewAndSave();
+}
+
+// Numbered list (1. button) - always 1. on every line + toggle off
+insertNumberedList() {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  
+  // Single-line: keep your original smart checkbox + number logic (unchanged)
+  if (start === end) {
+    const cursor = this.editor.selectionStart;
+    const lines = this.editor.value.split('\n');
+    const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+    let line = lines[lineIdx] || '';
+    
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    
+    let checkboxPart = '';
+    let rest = line.replace(/^\s*- \[[ xX]\] /, m => {
+      checkboxPart = m;
+      return '';
+    });
+    
+    rest = rest.replace(/\d+\.\s*/g, '').trimStart();
+    
+    const hasCheckbox = !!checkboxPart;
+    
+    if (/\d+\./.test(line)) {
+      if (hasCheckbox) {
+        lines[lineIdx] = indent + checkboxPart + rest;
+      } else {
+        lines[lineIdx] = indent + rest;
+      }
+    } else {
+      const numberPrefix = hasCheckbox ? '1. ' : '1. ';
+      const beforeNumber = hasCheckbox ? checkboxPart : '';
+      lines[lineIdx] = indent + beforeNumber + numberPrefix + rest;
+    }
+    
+    this.editor.value = lines.join('\n');
+    this.updatePreviewAndSave();
+    return;
+  }
+  
+  // ── Multi-line: smart toggle numbering (especially after checkbox) ──
+  let selected = this.editor.value.substring(start, end);
+  let lines = selected.split('\n');
+  
+  // Check two cases for "already numbered":
+  // 1. Normal: starts with "1. "
+  // 2. After checkbox: starts with "- [ ] 1. " or "- [x] 1. "
+  const allAreNumbered = lines.every(line => {
+    const trimmed = line.trimStart();
+    if (!trimmed) return true;
+    // Normal numbered
+    if (trimmed.startsWith('1. ')) return true;
+    // Numbered after checkbox
+    return trimmed.match(/^- \[[ xX]\] 1\. /);
+  });
+  
+  if (allAreNumbered) {
+    // Toggle OFF: remove the "1. " part (wherever it is)
+    lines = lines.map(line => {
+      if (!line.trim()) return line;
+      // Remove "1. " after checkbox
+      let updated = line.replace(/(\s*- \[[ xX]\] )\s*1\. /, '$1');
+      // Or remove standalone "1. "
+      updated = updated.replace(/^\s*1\. /, '');
+      return updated;
+    });
+  } else {
+    // Toggle ON: add "1. " after checkbox (or at start if no checkbox)
+    lines = lines.map(line => {
+      if (!line.trim()) return line;
+      // If has checkbox → insert 1. after it
+      if (line.match(/^- \[[ xX]\] /)) {
+        return line.replace(/^(\s*- \[[ xX]\] )(.*)$/, '$11. $2');
+      }
+      // No checkbox → normal add at start
+      const cleaned = line.replace(/^\s*(\d+\.|- \[[ xX]\]?|-|\*)\s*/, '').trimStart();
+      return `1. ${cleaned}`;
+    });
+  }
+  
+  const newText = lines.join('\n');
+  
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start;
+  this.editor.selectionEnd = start + newText.length;
+  this.updatePreviewAndSave();
+}
+
+// Checkbox list (☑ button) - toggle on/off for multi-line
+// Checkbox list (☑ button) - single-line: remove both checkbox and bullet when toggling off
+toggleCheckbox() {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  
+  if (start === end) {
+    const cursor = this.editor.selectionStart;
+    const lines = this.editor.value.split('\n');
+    const lineIdx = this.editor.value.substring(0, cursor).split('\n').length - 1;
+    let line = lines[lineIdx] || '';
+    
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    let content = line.substring(indent.length).trimStart();
+    
+    // Case 1: Already has checkbox → remove checkbox AND bullet (become plain text)
+    if (content.match(/^- \[[ xX]\]/)) {
+      content = content.replace(/^- \[[ xX]\]\s*/, '');
+    }
+    // Case 2: Has plain bullet → convert to checkbox
+    else if (content.startsWith('- ')) {
+      content = content.replace(/^- /, '- [ ] ');
+    }
+    // Case 3: No marker → add checkbox with bullet
+    else {
+      content = '- [ ] ' + content;
+    }
+    
+    lines[lineIdx] = indent + content.trimStart();
+    this.editor.value = lines.join('\n');
+    this.updatePreviewAndSave();
+    return;
+  }
+  
+  // Multi-line: unchanged
+  let selected = this.editor.value.substring(start, end);
+  let lines = selected.split('\n');
+  
+  const allAreCheckboxes = lines.every(line => {
+    const trimmed = line.trimStart();
+    return trimmed === '' || trimmed.match(/^- \[[ xX]\] /);
+  });
+  
+  if (allAreCheckboxes) {
+    lines = lines.map(line =>
+      line.replace(/^\s*- \[[ xX]\] /, '').trimStart()
+    );
+  } else {
+    lines = lines.map(line => {
+      const cleaned = line.replace(/^\s*([-*+]|\d+\.|- \[[ xX]\]?\s*)/, '').trimStart();
+      return cleaned.trim() ? `- [ ] ${cleaned}` : line;
+    });
+  }
+  
+  const newText = lines.join('\n');
+  
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start;
+  this.editor.selectionEnd = start + newText.length;
+  this.updatePreviewAndSave();
+}
+
+applyHeading(level) {
+  this.wrapLineWithPrefix('#'.repeat(parseInt(level.slice(1))) + ' ');
+}
+
+applyTextFormat(action) {
+  const formats = {
+    'bold': ['**', '**'],
+    'italic': ['*', '*'], 
+    'underline': ['<u>', '</u>'],
+    'strike': ['~~', '~~'],
+    'sub': ['~', '~'],
+    'sup': ['^', '^']
+  };
+  
+  const [before, after] = formats[action] || ['', ''];
+  this.wrapSelection(before, after);
+}
+
+applyHighlight(color) {
+  this.wrapSelection(`==${color}:`, '==');
+}
+
+wrapLineWithPrefix(prefix) {
+  const cursor = this.editor.selectionStart;
+  const lines = this.editor.value.split('\n');
+  const lineIndex = this.editor.value.substring(0, cursor).split('\n').length - 1;
+  
+  if (lines[lineIndex].startsWith(prefix)) {
+    lines[lineIndex] = lines[lineIndex].substring(prefix.length);
+  } else {
+    lines[lineIndex] = prefix + lines[lineIndex];
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+wrapSelection(before, after) {
+  const start = this.editor.selectionStart;
+  const end = this.editor.selectionEnd;
+  const selected = this.editor.value.substring(start, end);
+  const isWrapped = selected.startsWith(before) && selected.endsWith(after);
+  const newText = isWrapped ? selected.slice(before.length, -after.length) : before + selected + after;
+  
+  this.editor.value = this.editor.value.substring(0, start) + newText + this.editor.value.substring(end);
+  this.editor.selectionStart = start + (isWrapped ? 0 : before.length);
+  this.editor.selectionEnd = this.editor.selectionStart + newText.length - before.length - after.length;
+  this.updatePreviewAndSave();
+}
+
+// ===== NEW QUOTE INPUT HANDLER =====
+handleQuoteInput(e) {
+  // Only trigger when '>' is typed
+  if (e.key !== '>') return;
+  
+  const cursor = this.editor.selectionStart;
+  const textBefore = this.editor.value.substring(0, cursor);
+  const lineStart = textBefore.lastIndexOf('\n') + 1;
+  
+  // If we're already at start of line with '>', do nothing
+  if (textBefore.substring(lineStart).startsWith('>')) return;
+  
+  // If there's text before cursor on this line, move '>' to start
+  if (cursor > lineStart) {
+    e.preventDefault();
+    this.formatLineAsQuote(lineStart);
+  }
+}
+
+// Add this new method for quote formatting
+formatLineAsQuote(lineStart) {
+  // Get the current line content
+  const lineEnd = this.editor.value.indexOf('\n', lineStart);
+  const currentLine = this.editor.value.substring(
+    lineStart, 
+    lineEnd === -1 ? undefined : lineEnd
+  );
+  
+  // Rebuild the line with '>' at start
+  const newLine = '> ' + currentLine.replace(/^> ?/, '');
+  
+  // Update the editor content
+  this.editor.value = 
+    this.editor.value.substring(0, lineStart) + 
+    newLine + 
+    this.editor.value.substring(lineEnd === -1 ? this.editor.value.length : lineEnd);
+  
+  // Position cursor after the new quote marker
+  this.editor.selectionStart = this.editor.selectionEnd = lineStart + 2;
+  this.updatePreviewAndSave();
+}
+
+
+  
+// ===== Section 3.2.10 - AUTO-CONTINUE LISTS =====
+handleAutoContinue(e) {
+  if (e.key !== 'Enter' || e.shiftKey) return;
+  
+  const cursor = this.editor.selectionStart;
+  const textBefore = this.editor.value.substring(0, cursor);
+  const lineStart = textBefore.lastIndexOf('\n') + 1;
+  const line = textBefore.substring(lineStart);
+  
+  const ulMatch = line.match(/^(\s*)- /);
+  const olMatch = line.match(/^(\s*)(\d+)\. /);
+  const taskMatch = line.match(/^(\s*)- \[[ xX]\] /);
+  
+  // Check if cursor is at the end of the line
+  const textAfter = this.editor.value.substring(cursor);
+  const lineEnd = textAfter.indexOf('\n');
+  const restOfLine = lineEnd === -1 ? textAfter : textAfter.substring(0, lineEnd);
+  const isCursorAtEnd = restOfLine.trim() === '';
+  
+  if ((taskMatch && line.substring(taskMatch[0].length).trim() === '') || 
+      (ulMatch && line.substring(ulMatch[0].length).trim() === '') || 
+      (olMatch && line.substring(olMatch[0].length).trim() === '')) {
+    // Remove bullet/number/checkbox if cursor is at end of an empty line
+    e.preventDefault();
+    const prefix = taskMatch ? taskMatch[0] : (ulMatch ? ulMatch[0] : olMatch[0]);
+    this.removeListPrefix(lineStart, prefix);
+  } else if (taskMatch || ulMatch || olMatch) {
+    // Continue the list (create new item)
+    e.preventDefault();
+    
+    if (taskMatch) {
+      // Handle checkbox list - continue with unchecked checkbox
+      const indent = taskMatch[1];
+      const prefix = '- [ ] ';
+      this.insertNewListLine(cursor, indent + prefix);
+    } else if (ulMatch) {
+      // Handle bullet list
+      const indent = ulMatch[1];
+      const prefix = '- ';
+      this.insertNewListLine(cursor, indent + prefix);
+    } else if (olMatch) {
+      // Handle numbered list - increment the number
+      const indent = olMatch[1];
+      const currentNum = parseInt(olMatch[2]);
+      const prefix = (currentNum + 1) + '. ';
+      this.insertNewListLine(cursor, indent + prefix);
+    }
+  }
+}
+
+
+removeListPrefix(lineStart, prefix) {
+  const end = this.editor.value.indexOf('\n', lineStart);
+  const lineText = this.editor.value.substring(lineStart, end === -1 ? undefined : end);
+  this.editor.value = this.editor.value.substring(0, lineStart) + 
+                     lineText.substring(prefix.length) + 
+                     this.editor.value.substring(end === -1 ? this.editor.value.length : end);
+  this.editor.selectionStart = this.editor.selectionEnd = lineStart;
+  this.updatePreviewAndSave();
+}
+
+insertNewListLine(cursor, prefix) {
+  // Insert new line with prefix at cursor position
+  this.editor.value = this.editor.value.substring(0, cursor) + 
+                     '\n' + prefix + 
+                     this.editor.value.substring(cursor);
+  
+  // Position cursor after the prefix
+  this.editor.selectionStart = this.editor.selectionEnd = cursor + prefix.length + 1;
+  this.updatePreviewAndSave();
+}
+
+  
+  // ===== Section 3.2.11 - DATE STAMPS =====
+  insertDateStamp(type) {
+    const { doyToday } = GPCCalendar.calculateGPC();
+    const weekEmoji = GPCCalendar.weekEmojis[(doyToday - 1) % 7] || '';
+    const heptad = GPCCalendar.heptadMap[doyToday] || '';
+    
+    let stamp = '';
+    
+    // If Heptad mode is enabled
+    if (GPCCalendar.heptadEnabled) {
+      switch(type) {
+        case 'doy': 
+          stamp = `${weekEmoji} ${String(doyToday).padStart(3, '0')} ${heptad}`;
+          break;
+        case 'dos': 
+          const quarter = Math.floor((doyToday - 1) / 91) + 1;
+          const dayInSeason = ((doyToday - 1) % 91) + 1;
+          stamp = `${weekEmoji} Q${quarter} ${String(dayInSeason).padStart(2, '0')} ${heptad}`;
+          break;
+        case 'dom':
+          let remaining = doyToday, monthIndex = 0;
+          for (let i = 0; i < GPCCalendar.gpcMonths.length; i++) {
+            if (remaining <= GPCCalendar.gpcMonths[i].days) { 
+              monthIndex = i; 
+              break; 
+            }
+            remaining -= GPCCalendar.gpcMonths[i].days;
+          }
+          stamp = `${weekEmoji} ${String(monthIndex + 1).padStart(2, '0')}.${String(remaining).padStart(2, '0')} ${heptad}`;
+          break;
+        case 'heptad': 
+          stamp = heptad;
+          break;
+        case 'gregorian': 
+          const date = new Date();
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          stamp = `${year}-${month}-${day} ${heptad}`;
+          break;
+      }
+    } else {
+      // Normal mode (Heptad disabled)
+      switch(type) {
+        case 'doy': 
+          stamp = `${weekEmoji} ${String(doyToday).padStart(3, '0')}`; 
+          break;
+        case 'dos': 
+          const quarter = Math.floor((doyToday - 1) / 91) + 1;
+          const dayInSeason = ((doyToday - 1) % 91) + 1;
+          stamp = `${weekEmoji} Q${quarter} ${String(dayInSeason).padStart(2, '0')}`;
+          break;
+        case 'dom':
+          let remaining = doyToday, monthIndex = 0;
+          for (let i = 0; i < GPCCalendar.gpcMonths.length; i++) {
+            if (remaining <= GPCCalendar.gpcMonths[i].days) { 
+              monthIndex = i; 
+              break; 
+            }
+            remaining -= GPCCalendar.gpcMonths[i].days;
+          }
+          stamp = `${weekEmoji} ${String(monthIndex + 1).padStart(2, '0')}.${String(remaining).padStart(2, '0')}`;
+          break;
+        case 'heptad': 
+          stamp = heptad;
+          break;
+        case 'gregorian': 
+          const date = new Date();
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          stamp = `${year}-${month}-${day}`;
+          break;
+      }
+    }
+    
+    this.insertAtCursor(stamp);
+  }
+
+  
+  insertAtCursor(text) {
+    const start = this.editor.selectionStart;
+    this.editor.value = this.editor.value.substring(0, start) + text + this.editor.value.substring(this.editor.selectionEnd);
+    this.editor.selectionStart = this.editor.selectionEnd = start + text.length;
+    this.updatePreviewAndSave();
+  }
+
+// ===== Section 3.2.12 - Export/Import System (FIXED) =====
+initExportImport() {
+  document.querySelector('[data-action="export-all"]').addEventListener('click', () => {
+    this.exportAllNotes();
+  });
+  
+  document.querySelector('[data-action="import-all"]').addEventListener('click', () => {
+    this.importAllNotes();
+  });
+}
+
+// Fixed export method - properly handles folder structure
+async exportAllNotes() {
+  devLog('Export function called');
+  
+  try {
+    // Show loading indicator
+    const exportBtn = document.querySelector('[data-action="export-all"]');
+    const originalText = exportBtn.textContent;
+    exportBtn.textContent = '⏳ Exporting...';
+    exportBtn.disabled = true;
+    
+    // Ensure JSZip is loaded
+    if (typeof JSZip === 'undefined') {
+      devError('JSZip is undefined!');
+      throw new Error('JSZip library not loaded. Check if the script tag is loading.');
+    }
+    
+    const notes = await VaultDB.list();
+    devLog('Notes found:', notes.length, notes);
+    
+    if (notes.length === 0) {
+      alert('No notes to export!');
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      return;
+    }
+    
+    const zip = new JSZip();
+    devLog('Zip instance created');
+
+    // Add each note to the zip file with proper folder structure
+    for (const note of notes) {
+      try {
+        const content = await VaultDB.get(note);
+        if (!content) {
+          devWarn('Note ' + note + ' has no content, skipping');
+          continue;
+        }
+        
+        // Handle folder structure properly
+        let filePath;
+        if (note.includes('/')) {
+          // This is a note inside a folder - maintain the folder structure
+          const parts = note.split('/');
+          const folderName = parts[0];
+          const noteFileName = parts[1];
+          
+          // Create folder if it doesn't exist
+          if (!zip.folder(folderName)) {
+            zip.folder(folderName);
+          }
+          filePath = folderName + '/' + noteFileName + '.md';
+        } else {
+          // Regular note in root
+          filePath = note + '.md';
+        }
+        
+        devLog('Adding note to zip: ' + filePath);
+        zip.file(filePath, content);
+      } catch (err) {
+        devError('Error exporting note ' + note + ':', err);
+      }
+    }
+
+    // Generate the zip file
+    devLog('Generating zip file...');
+    const content = await zip.generateAsync({ type: "blob" });
+    devLog('Zip generated, size:', content.size, 'bytes');
+    
+    if (content.size === 0) {
+      alert('Export failed: Generated zip file is empty!');
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      return;
+    }
+    
+    // Create download link
+    const today = new Date();
+    const dateString = today.toISOString().slice(0, 10);
+    const filename = 'CaptureNotes-' + dateString + '.zip';
+    const url = URL.createObjectURL(content);
+    
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    
+    document.body.appendChild(a);
+    devLog('Triggering download...');
+    a.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      devLog('Export complete! File should download as:', filename);
+    }, 100);
+      
+  } catch (err) {
+    devError('Export failed:', err);
+    alert('Export failed: ' + (err.message || 'Unknown error'));
+    
+    // Reset button text
+    const exportBtn = document.querySelector('[data-action="export-all"]');
+    if (exportBtn) {
+      exportBtn.textContent = '📤 Export All';
+      exportBtn.disabled = false;
+    }
+  }
+}
+
+// Fixed import method - properly handles folder structure
+async importAllNotes() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.zip';
+
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm('⚠️ WARNING: This will replace ALL existing notes. Continue?')) return;
+
+    try {
+      // Show loading indicator
+      const importBtn = document.querySelector('[data-action="import-all"]');
+      const originalText = importBtn.textContent;
+      importBtn.textContent = '⏳ Importing...';
+
+      const zip = new JSZip();
+      const result = await zip.loadAsync(file);
+
+      // Clear existing notes first
+      const existingNotes = await VaultDB.list();
+      for (const note of existingNotes) {
+        await VaultDB.remove(note);
+      }
+
+      // Import each file with proper folder handling
+      for (const filename in result.files) {
+        if (result.files[filename].dir) continue;
+
+        const content = await result.files[filename].async('text');
+        const noteName = filename.replace('.md', '');
+
+        // Handle folder structure during import
+        if (filename.includes('/')) {
+          // This is a note inside a folder
+          const parts = filename.split('/');
+          if (parts.length === 2) {
+            const folderName = parts[0];
+            const actualNoteName = parts[1].replace('.md', '');
+
+            // Reconstruct the proper folder structure
+            const fullNoteName = `${folderName}/${actualNoteName}`;
+            await VaultDB.set(fullNoteName, content);
+          }
+        } else {
+          // Regular note
+          await VaultDB.set(noteName, content);
+        }
+      }
+
+      alert('✅ Import complete! Refreshing notes...');
+      await this.switchToNote('Home');
+      await this.loadRecentNotes();
+
+    } catch (err) {
+      devError('Import failed:', err);
+      alert('❌ Import failed: ' + err.message);
+    } finally {
+      // Reset button text
+      const importBtn = document.querySelector('[data-action="import-all"]');
+      importBtn.textContent = originalText || '📥 Import All';
+    }
+  };
+
+  input.click();
+}
+
+
+
+
+// ===== Section 3.2.13 - Reminder System =====
+initReminders() {
+  this.showWednesdayReminder();
+}
+
+showWednesdayReminder() {
+  const today = new Date();
+  if (today.getDay() === 3) { // Wednesday (0=Sunday, 3=Wednesday)
+    const lastShown = localStorage.getItem('lastWednesdayReminder');
+    const todayString = today.toDateString();
+    
+    if (lastShown !== todayString) {
+      setTimeout(() => {
+        if (confirm('📅 Wednesday Reminder: Clearing your browser cache could dissolve notes not yet backed up. Export your notes now to avoid data loss.\n\nClick OK to export, Cancel to dismiss.')) {
+          this.exportAllNotes();
+        }
+        localStorage.setItem('lastWednesdayReminder', todayString);
+      }, 2000); // Show after 2 seconds
+    }
+  }
+}
+
+// ===== Section 3.2.14 - CHECKBOX HEADINGS =====
+toggleCheckboxHeading(headingElement) {
+  headingElement.classList.toggle('checked');
+  this.updateCheckboxHeadingInEditor(headingElement);
+}
+
+updateCheckboxHeadingInEditor(headingElement) {
+  const actualText = headingElement.dataset.originalText || headingElement.textContent.trim();
+  const isChecked = headingElement.classList.contains('checked');
+  const prefix = headingElement.dataset.prefix || '+';
+  const headingLevel = parseInt(headingElement.tagName[1]);
+  
+  // Find the original line in editor
+  const lines = this.editor.value.split('\n');
+  const headingPrefix = '#'.repeat(headingLevel) + ' ';
+  
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith(headingPrefix) && 
+        lines[i].includes(actualText)) {
+      
+      // Check if this line already has checkbox formatting
+      const checkboxMatch = lines[i].match(/^#{1,6}\s*([+-])\s*\[([ xX])\]\s*(.*)$/);
+      
+      if (checkboxMatch) {
+        // Update existing checkbox
+        lines[i] = `${headingPrefix}${prefix} [${isChecked ? 'x' : ' '}] ${actualText}`;
+      } else {
+        // Check if it's a regular heading with + or - prefix
+        const regularMatch = lines[i].match(/^#{1,6}\s*([+-]?)\s*(.*)$/);
+        if (regularMatch) {
+          const existingPrefix = regularMatch[1] || '+';
+          const existingText = regularMatch[2];
+          lines[i] = `${headingPrefix}${existingPrefix} [${isChecked ? 'x' : ' '}] ${existingText}`;
+        } else {
+          // Convert regular heading to checkbox heading
+          lines[i] = `${headingPrefix}+ [${isChecked ? 'x' : ' '}] ${actualText}`;
+        }
+      }
+      break;
+    }
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+// ── Search index building ────────────────────────────────────────────────
+async buildNoteIndex() {
+  if (this.cachedIndex) {
+    devLog('Using existing cache');
+    return;
+  }
+  devLog('Building cache (first time or forced)...');
+  
+  const names = await VaultDB.list();
+  this.cachedIndex = [];
+  
+  for (const name of names) {
+    if (name === '__folders__' || name.startsWith('__')) continue;
+    
+    const content = await VaultDB.get(name);
+    if (!content) continue; // Skip if no content
+    
+    let snippet = String(content) // Ensure content is a string
+      .replace(/^#+\s.*$/m, '') // Remove headings
+      .replace(/[\n\r]+/g, ' ') // Replace newlines with spaces
+      .replace(/\s+/g, ' ') // Collapse multiple spaces
+      .trim()
+      .slice(0, 450); // Limit length
+    
+    snippet = snippet.replace(/(\*\*|__|\[\[|\]\]|\*|_)/g, ''); // Remove formatting
+    
+    this.cachedIndex.push({
+      name,
+      title: name.replace(/^📁\s*/, '').replace(/\/.*/, '').trim(),
+      snippet: snippet.toLowerCase(),
+      rawSnippet: snippet
+    });
+  }
+  
+  devLog(`Search cache built: ${this.cachedIndex.length} notes indexed`);
+}
+
+
+async updateCacheForSingleNote(noteName) {
+  if (!this.cachedIndex) return; // cache not ready yet
+  
+  // Remove old version of this note from cache
+  this.cachedIndex = this.cachedIndex.filter(entry => entry.name !== noteName);
+  
+  // Read only this one note and rebuild its search snippet
+  const full = await VaultDB.get(noteName) || '';
+  let snippet = full
+    .replace(/^#+\s.*$/m, '') // remove heading
+    .replace(/[\n\r]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 450);
+  
+  snippet = snippet.replace(/(\*\*|__|\[\[|\]\]|\*|_)/g, '');
+  
+  // Add fresh entry back
+  this.cachedIndex.push({
+    name: noteName,
+    title: noteName
+      .replace(/^📁\s*/, '')
+      .replace(/\/.*/, '')
+      .trim(),
+    snippet: snippet.toLowerCase(),
+    rawSnippet: snippet
+  });
+  
+  devLog(`Cache updated for single note: ${noteName}`);
+}
+
+updateCollapsePrefixInEditor(headingElement) {
+  const headingText = headingElement.textContent.trim();
+  const isCollapsed = headingElement.classList.contains('collapsed');
+  const headingLevel = parseInt(headingElement.tagName[1]);
+  const isCheckboxHeading = headingElement.classList.contains('checkbox-heading');
+  
+  // Don't update checkbox headings here - they're handled separately
+  if (isCheckboxHeading) return;
+  
+  // Find the original line in editor
+  const lines = this.editor.value.split('\n');
+  const headingPrefix = '#'.repeat(headingLevel) + ' ';
+  
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith(headingPrefix) && 
+        lines[i].includes(headingText)) {
+      
+      // Check if it already has + or - prefix
+      const prefixMatch = lines[i].match(/^#{1,6}\s*([+-]?)\s*(.*)$/);
+      
+      if (prefixMatch) {
+        const existingText = prefixMatch[2];
+        const newPrefix = isCollapsed ? '-' : '+';
+        lines[i] = `${headingPrefix}${newPrefix} ${existingText}`;
+      } else {
+        // Add prefix to heading
+        const newPrefix = isCollapsed ? '-' : '+';
+        lines[i] = `${headingPrefix}${newPrefix} ${headingText}`;
+      }
+      break;
+    }
+  }
+  
+  this.editor.value = lines.join('\n');
+  this.updatePreviewAndSave();
+}
+
+
+} // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
+
+
+// =============================================
+// Section 3.3 - GPC CALENDAR (YOUR ORIGINAL LOGIC)
+// =============================================
+// Section 3.3.1 - Calendar Configuration
+class GPCCalendar {
+  static gpcMonths = [
+    { name: 'Unspring', days: 30 }, { name: 'Duspring', days: 30 }, { name: 'Trispring', days: 31 },
+    { name: 'Quadsum', days: 30 }, { name: 'Fivesum', days: 30 }, { name: 'Sixsum', days: 31 },
+    { name: 'Sepafall', days: 30 }, { name: 'Oktafall', days: 30 }, { name: 'Novafall', days: 31 },
+    { name: 'Dekawint', days: 30 }, { name: 'Elvawint', days: 30 }, { name: 'Dozawint', days: 31 }
+  ];
+  
+   // Section 3.3.2 - Heptad mapping
+  static baseMode = "DOY";
+  static heptadEnabled = false;
+  static epochDate = new Date(Date.UTC(1982, 2, 24));
+  static epochYear = 5979;
+  static weekEmojis = ['🟠','🟤','🌺','⚫','🟢','🔵','🟣'];
+  static heptadMap = {};
+  static suitEmojis = ['♣️','♦️','♥️','♠️'];
+  static baseStartDOYs = [
+    1,8,15,22,31,38,45,52,61,68,75,82,89,92,99,106,113,122,129,136,143,152,159,166,173,180,
+    183,190,197,204,213,220,227,234,243,250,257,264,271,274,281,288,295,304,311,318,325,334,341,348,355,362
+  ];
+  
+  static init() {
+    this.initHeptadMap();
+    this.initEvents();
+    this.updateGPC();
+    setInterval(() => this.updateGPC(), 60000);
+  }
+  
+  static initHeptadMap() {
+    let weekNum = 1;
+    for(let s = 0; s < 4; s++) {
+      const suit = this.suitEmojis[s];
+      for(let w = 0; w < 13; w++) {
+        let startDOY = this.baseStartDOYs[s * 13 + w];
+        const isLongWeek = (w === 3 || w === 7 || w === 11);
+        const daysInWeek = isLongWeek ? 9 : 7;
+        
+        for(let d = 0; d < daysInWeek; d++) {
+          const doy = startDOY + d;
+          if(doy <= 364) this.heptadMap[doy] = suit + ' ' + weekNum;
+        }
+        weekNum++;
+      }
+      weekNum = 1;
+    }
+  }
+  
+  // Section 3.3.3 - Core calculations
+  static calculateGPC() {
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    let remainingDays = Math.floor((todayUTC - this.epochDate.getTime()) / 86400000);
+    let gpcYear = this.epochYear;
+    
+    while(true) {
+      const rel = gpcYear - this.epochYear;
+      let leapDays = 0;
+      if(rel % 7 === 6) leapDays += 7;
+      if(rel % 49 === 48) leapDays += 7;
+      if((rel + 29) % 70 === 0) leapDays += 7;
+      const yearLength = 364 + leapDays;
+      if(remainingDays < yearLength) break;
+      remainingDays -= yearLength;
+      gpcYear++;
+    }
+    
+    const doyToday = Math.max(1, Math.min(364, remainingDays + 1));
+    return { gpcYear, doyToday };
+  }
+  
+  // Section 3.3.3 - Core calculations (add this method)
+static getSeason(doy) {
+  if (doy >= 1 && doy <= 91) return 'Spring';
+  if (doy >= 92 && doy <= 182) return 'Summer';
+  if (doy >= 183 && doy <= 273) return 'Fall';
+  return 'Winter'; // DOY 274-364 or invalid
+}
+
+// ===== Section 3.3.4 - Display Updates =====
+static updateGPC() {
+  const { doyToday } = this.calculateGPC();
+  const emoji = this.weekEmojis[(doyToday - 1) % 7] || '';
+  let displayHtml = emoji + ' ';
+  
+  if (this.baseMode === 'DOY') {
+    const text = String(doyToday).padStart(3, '0');
+    
+    // Find current month from DOY
+    let remaining = doyToday;
+    let monthIndex = 0;
+    for (let i = 0; i < this.gpcMonths.length; i++) {
+      if (remaining <= this.gpcMonths[i].days) {
+        monthIndex = i;
+        break;
+      }
+      remaining -= this.gpcMonths[i].days;
+    }
+    
+    const monthName = this.gpcMonths[monthIndex].name;
+    const noteKey = '📁 Boomerang/' + monthName;
+    displayHtml += '<a href="#" class="wikilink" data-note="' + noteKey + '">' + text + '</a>';
+    
+ } else if (this.baseMode === 'DOS') {
+  const quarter = Math.floor((doyToday - 1) / 91) + 1;
+  const dayInSeason = ((doyToday - 1) % 91) + 1;
+  const text = 'Q' + quarter + ' ' + String(dayInSeason).padStart(2, '0');
+  
+  // ← CHANGED: point to the rich quarter page instead of giant DOY
+  const targetNote = `📁 Boomerang/Q${quarter}`;
+  const targetAnchor = "D" + String(doyToday).padStart(3, '0');
+  
+  displayHtml +=
+    '<a href="#" class="wikilink" ' +
+    'data-note="' + targetNote + '" ' +
+    'data-anchor="' + targetAnchor + '">' +
+    text +
+    '</a>';
+} else if (this.baseMode === 'DOM') {
+    let remaining = doyToday;
+    let monthIndex = 0;
+    for (let i = 0; i < this.gpcMonths.length; i++) {
+      if (remaining <= this.gpcMonths[i].days) {
+        monthIndex = i;
+        break;
+      }
+      remaining -= this.gpcMonths[i].days;
+    }
+    const monthNum = String(monthIndex + 1).padStart(2, '0');
+    const dayNum = String(remaining).padStart(2, '0');
+    const dayNumber = parseInt(remaining, 10);
+    
+    const noteKey = '📁 Boomerang/' + dayNumber;
+    const text = monthNum + '.' + dayNum;
+    displayHtml += '<a href="#" class="wikilink dom-day" data-note="' + noteKey + '">' + text + '</a>';
+  }
+  
+  // Heptad (UPDATED: Add data-anchor based on season when enabled)
+  if (this.heptadEnabled) {
+    const heptad = this.heptadMap[doyToday];
+    if (heptad) {
+      const season = this.getSeason(doyToday); // NEW: Get current season
+      const anchorAttr = ` data-anchor="${season}"`; // NEW: Add anchor for season (e.g., "Summer")
+      
+      displayHtml += ' <a href="#" class="wikilink heptad-link" data-note="📁 Boomerang/🎴Weeks - Heptad"' + anchorAttr + '>' + heptad + '</a>';
+    }
+  }
+  
+  document.getElementById('gpc-display').innerHTML = displayHtml;
+}
+
+
+
+  
+  // Section 3.3.5 - Button event handling
+  static initEvents() {
+    document.querySelectorAll('#gpc-buttons button[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        
+        if(mode === 'HEPTAD') {
+          this.heptadEnabled = !this.heptadEnabled;
+          btn.classList.toggle('active', this.heptadEnabled);
+        } else {
+          this.baseMode = mode;
+          document.querySelectorAll('#gpc-buttons button[data-mode]').forEach(b => {
+            if(b.dataset.mode !== 'HEPTAD') b.classList.toggle('active', b === btn);
+          });
+        }
+        
+        this.updateGPC();
+      });
+    });
+  }
+}
+
+// =============================================
+// Section 4 - INITIALIZATION
+// =============================================
+
+// Section 4.1 - DOMContentLoaded event handler
+document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize calendar system
+  GPCCalendar.init();
+  
+  // Create and initialize editor core
+  window.editorCore = new EditorCore();
+  window.editorCore.toggleEditMode(); // Start in view mode
+
+  // Optimized GPC display click handler
+  document.getElementById('gpc-display').addEventListener('click', async (e) => {
+    const wikiLink = e.target.closest('a.wikilink');
+    if (!wikiLink) return;
+    
+    e.preventDefault();
+    
+    const noteName = wikiLink.dataset.note?.trim();
+    const anchorId = wikiLink.dataset.anchor;
+    const { doyToday } = GPCCalendar.calculateGPC();
+    
+    devLog("GPC navigation initiated:", { 
+      targetNote: noteName, 
+      anchor: anchorId, 
+      currentDOY: doyToday 
+    });
+
+    if (!noteName) return;
+
+    // 1. FAST PATH: Already on target note with anchor
+    if (window.editorCore.currentNote === noteName && anchorId) {
+      const target = document.getElementById(anchorId) || 
+                    document.getElementById(anchorId.padStart(3, '0'));
+      
+      if (target) {
+        devLog("Fast scroll to existing anchor");
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const highlight = target.style.backgroundColor;
+        target.style.backgroundColor = '#fffacd';
+        setTimeout(() => target.style.backgroundColor = highlight, 1500);
+        return;
+      }
+    }
+
+    try {
+      // 2. Switch notes if needed
+      if (window.editorCore.currentNote !== noteName) {
+        console.time('NoteSwitch');
+        await window.editorCore.switchToNote(noteName);
+        console.timeEnd('NoteSwitch');
+      }
+
+      // 3. Handle anchor after note loads
+      if (anchorId) {
+        // Adaptive timing based on device
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        const initialDelay = isMobile ? 400 : 150;
+        
+        setTimeout(() => {
+          // First try exact ID match
+          let target = document.getElementById(anchorId);
+          
+          // Fallback 1: Try padded number (for DOY)
+          if (!target && /^\d+$/.test(anchorId)) {
+            target = document.getElementById(anchorId.padStart(3, '0'));
+          }
+          
+          // Fallback 2: Try contains match
+          if (!target) {
+            target = document.querySelector(`[id*="${anchorId}"]`);
+          }
+          
+          // Fallback 3: Search headings by content
+          if (!target) {
+            const headings = window.editorCore.preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
+            for (const h of headings) {
+              if (h.textContent.includes(anchorId) || 
+                  h.id.includes(anchorId)) {
+                target = h;
+                break;
+              }
+            }
+          }
+
+          if (target) {
+            devLog("Scrolling to anchor:", target);
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const highlight = target.style.backgroundColor;
+            target.style.backgroundColor = '#fffacd';
+            setTimeout(() => target.style.backgroundColor = highlight, 1500);
+          } else {
+            devWarn("Anchor not found after all attempts:", anchorId);
+          }
+        }, initialDelay);
+      }
+    } catch (err) {
+      devError("Navigation error:", err);
+    }
+  });
+
+  // Section 4.2 - Offline Support Service Worker
+  if ('serviceWorker' in navigator) {
+    const swScript = `
+      const CACHE_NAME = 'lotus-v1.2';
+      const OFFLINE_URL = './';
+      
+      self.addEventListener('install', (e) => {
+        e.waitUntil(
+          caches.open(CACHE_NAME)
+            .then(cache => cache.addAll([OFFLINE_URL]))
+            .then(() => self.skipWaiting())
+        );
+      });
+      
+      self.addEventListener('fetch', (e) => {
+        if (e.request.mode === 'navigate') {
+          e.respondWith(
+            fetch(e.request).catch(() => caches.match(OFFLINE_URL))
+          );
+        } else {
+          e.respondWith(
+            caches.match(e.request).then(res => res || fetch(e.request))
+          );
+        }
+      });
+      
+      self.addEventListener('activate', (e) => {
+        e.waitUntil(
+          caches.keys().then(cacheNames => {
+            return Promise.all(
+              cacheNames.map(cache => {
+                if (cache !== CACHE_NAME) {
+                  return caches.delete(cache);
+                }
+              })
+            );
+          })
+        );
+      });
+    `;
+    
+    try {
+      const blob = new Blob([swScript], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      await navigator.serviceWorker.register(swUrl);
+      devLog('✅ Offline support enabled');
+    } catch (err) {
+      devLog('Service Worker registration skipped (expected in some environments)');
+    }
+  }
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/Lotus/service-worker.js')
+    .then(() => console.log('SW registered'))
+    .catch(err => console.log('SW failed:', err));
+}
+</script>
+</body>
+</html>
