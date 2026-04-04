@@ -4092,7 +4092,7 @@ static updateGPC() {
 
 // Section 4.1 - DOMContentLoaded event handler
 
- // ====================== FULL VAULT AUTO + MANUAL LOADER ======================
+// ====================== FULL VAULT AUTO + MANUAL LOADER ======================
 async function loadFullVault(isAuto = false) {
   const VAULT_KEY = 'lotus-full-vault-loaded';
   
@@ -4109,251 +4109,150 @@ async function loadFullVault(isAuto = false) {
     return false;
   }
   
-  const msg = isAuto ?
-    "📥 First time here?\n\nWould you like to automatically download and load the complete Lotus vault?\n(This gives you all notes & folders for the best offline experience)" :
-    "📥 Load the full Lotus vault now?\nThis will import all notes and folders from the official zip.";
-  
-  if (!confirm(msg)) {
-    if (isAuto) localStorage.setItem(VAULT_KEY, 'skipped');
-    return false;
-  }
-  
-  try {
-    // Create loading overlay
-    const loading = document.createElement('div');
-    loading.id = 'vault-loading-overlay';
-    loading.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.85);
-      color: white;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 999999;
-      font-family: sans-serif;
-      text-align: center;
-      padding: 20px;
-    `;
+  // FOR AUTO MODE: Use custom confirm with checkbox
+  if (isAuto) {
+    const userChoice = await showVaultConfirm();
     
-    loading.innerHTML = `
-      <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
-      <div style="font-size: 18px; margin-bottom: 10px;">Downloading full Lotus vault...</div>
-      <div style="font-size: 14px; opacity: 0.8; margin-bottom: 20px;">Please wait 10-20 seconds</div>
-      <div id="vault-progress" style="width: 80%; max-width: 300px; height: 4px; background: #333; border-radius: 2px; overflow: hidden;">
-        <div id="vault-progress-bar" style="width: 0%; height: 100%; background: #4CAF50; transition: width 0.3s;"></div>
-      </div>
-    `;
-    
-    document.body.appendChild(loading);
-    
-    // Update progress
-    const updateProgress = (percent) => {
-      const bar = document.getElementById('vault-progress-bar');
-      if (bar) bar.style.width = percent + '%';
-    };
-    
-    updateProgress(10);
-    
-    // SIMPLIFIED APPROACH: Just show manual instructions if auto fails
-    // Many browsers block direct ZIP downloads from fetch
-    setTimeout(() => {
-      updateProgress(30);
-      
-      // Show manual instructions after short wait
-      loading.innerHTML = `
-        <div style="font-size: 24px; margin-bottom: 15px;">📥</div>
-        <div style="font-size: 18px; margin-bottom: 10px;">Rythos - Manual Download Required</div>
-        <div style="font-size: 14px; margin-bottom: 20px; max-width: 500px;">
-          Some browsers block automatic downloads.<br>
-          Please follow these simple manual steps:
-        </div>
-        
-        <div style="
-          background: #1a1a1a;
-          border-radius: 8px;
-          padding: 20px;
-          margin: 20px 0;
-          max-width: 500px;
-          border: 1px solid #333;
-          text-align: left;
-        ">
-          <div style="margin-bottom: 15px; font-size: 14px;">
-            <strong>Step 1:</strong> Copy this download link:
-          </div>
-          
-          <div onclick="
-            navigator.clipboard.writeText('${ZIP_URL}');
-            const original = this.innerHTML;
-            this.innerHTML = '✅ Copied to clipboard!';
-            this.style.background='#2E7D32';
-            setTimeout(()=>{
-              this.innerHTML=original;
-              this.style.background='#1a1a1a';
-            },2000);
-          " style="
-            background: #1a1a1a;
-            padding: 10px;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 12px;
-            word-break: break-all;
-            cursor: pointer;
-            border: 1px solid #444;
-            margin-bottom: 15px;
-            user-select: all;
-          ">
-            ${ZIP_URL}
-          </div>
-          
-          <div style="margin-bottom: 15px; font-size: 14px;">
-            <strong>Step 2:</strong> Paste the link in your browser's address bar and download the ZIP file
-          </div>
-          
-          <div style="margin-bottom: 15px; font-size: 14px;">
-            <strong>Step 3:</strong> Come back here and select the downloaded file:
-          </div>
-          
-          <div style="text-align: center;">
-            <input type="file" id="manual-upload" accept=".zip" style="display: none;">
-            <button onclick="document.getElementById('manual-upload').click();" style="
-              padding: 12px 24px;
-              background: #4CAF50;
-              color: white;
-              border: none;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 16px;
-              font-weight: bold;
-              margin-bottom: 10px;
-            ">
-              📁 SELECT DOWNLOADED ZIP FILE
-            </button>
-            <div style="font-size: 12px; opacity: 0.8;">
-              Look for: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">Lotus2.8.zip</code>
-            </div>
-          </div>
-        </div>
-        
-        <button onclick="this.parentElement.remove();" style="
-          padding: 10px 20px;
-          background: #f44336;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 14px;
-        ">
-          Cancel
-        </button>
-      `;
-      
-      // Setup file input
-      setTimeout(() => {
-        const fileInput = document.getElementById('manual-upload');
-        if (fileInput) {
-          fileInput.addEventListener('change', handleManualUpload);
-        }
-      }, 100);
-      
-    }, 1500); // Show manual instructions after 1.5 seconds
-    
-    return false; // Auto-download didn't complete
-    
-  } catch (err) {
-    console.error('Vault load error:', err);
-    
-    // Show manual instructions as fallback
-    const loading = document.getElementById('vault-loading-overlay');
-    if (loading) {
-      loading.innerHTML = `
-        <div style="font-size: 24px; margin-bottom: 15px;">📥</div>
-        <div style="font-size: 18px; margin-bottom: 10px;">Rythos - Manual Download</div>
-        <div style="font-size: 14px; margin-bottom: 20px; max-width: 500px;">
-          Follow these simple steps:
-        </div>
-        
-        <div style="
-          background: #1a1a1a;
-          border-radius: 8px;
-          padding: 20px;
-          margin: 20px 0;
-          max-width: 500px;
-          border: 1px solid #333;
-          text-align: left;
-        ">
-          <div style="margin-bottom: 15px; font-size: 14px;">
-            <strong>Step 1:</strong> Copy this download link:
-          </div>
-          
-          <div onclick="
-            navigator.clipboard.writeText('${ZIP_URL}');
-            const original = this.innerHTML;
-            this.innerHTML = '✅ Copied to clipboard!';
-            this.style.background='#2E7D32';
-            setTimeout(()=>{
-              this.innerHTML=original;
-              this.style.background='#1a1a1a';
-            },2000);
-          " style="
-            background: #1a1a1a;
-            padding: 10px;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 12px;
-            word-break: break-all;
-            cursor: pointer;
-            border: 1px solid #444;
-            margin-bottom: 15px;
-            user-select: all;
-          ">
-            ${ZIP_URL}
-          </div>
-          
-          <div style="margin-bottom: 15px; font-size: 14px;">
-            <strong>Step 2:</strong> Paste the link in your browser's address bar and download
-          </div>
-          
-          <div style="margin-bottom: 15px; font-size: 14px;">
-            <strong>Step 3:</strong> Select the downloaded file:
-          </div>
-          
-          <div style="text-align: center;">
-            <input type="file" id="manual-upload-fallback" accept=".zip" style="display: none;">
-            <button onclick="document.getElementById('manual-upload-fallback').click();" style="
-              padding: 12px 24px;
-              background: #4CAF50;
-              color: white;
-              border: none;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 16px;
-              font-weight: bold;
-            ">
-              📁 UPLOAD ZIP FILE
-            </button>
-          </div>
-        </div>
-      `;
-      
-      // Setup file input
-      setTimeout(() => {
-        const fileInput = document.getElementById('manual-upload-fallback');
-        if (fileInput) {
-          fileInput.addEventListener('change', handleManualUpload);
-        }
-      }, 100);
+    if (userChoice === 'load') {
+      // User clicked "Load Full Vault"
+      // Show manual instructions (since auto download usually fails)
+      showManualInstructions();
+      return true;
+    } else if (userChoice === 'skip') {
+      // User clicked "No Thanks" or closed dialog
+      // The checkbox logic in showVaultConfirm handles "don't show again"
+      return false;
     }
-    
     return false;
   }
+  
+  // FOR MANUAL MODE (user clicked button): Go directly to manual instructions
+  showManualInstructions();
+  return false;
 }
 
-// Handle manual ZIP upload (keep this exactly as it works perfectly)
+// Show manual instructions (no checkbox here)
+function showManualInstructions() {
+  const ZIP_URL = 'https://cdn.jsdelivr.net/gh/eafifon-ux/lotus-vault@main/Lotus2.8.zip';
+  
+  const loading = document.createElement('div');
+  loading.id = 'vault-loading-overlay';
+  loading.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 999999;
+    font-family: sans-serif;
+    text-align: center;
+    padding: 20px;
+  `;
+  
+  loading.innerHTML = `
+    <div style="font-size: 24px; margin-bottom: 15px;">📥</div>
+    <div style="font-size: 18px; margin-bottom: 10px;">Rythos - Manual Download Required</div>
+    <div style="font-size: 14px; margin-bottom: 20px; max-width: 500px;">
+      Please follow these simple manual steps:
+    </div>
+    
+    <div style="
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      max-width: 500px;
+      border: 1px solid #333;
+      text-align: left;
+    ">
+      <div style="margin-bottom: 15px; font-size: 14px;">
+        <strong>Step 1:</strong> Copy this download link:
+      </div>
+      
+      <div onclick="
+        navigator.clipboard.writeText('${ZIP_URL}');
+        const original = this.innerHTML;
+        this.innerHTML = '✅ Copied to clipboard!';
+        this.style.background='#2E7D32';
+        setTimeout(()=>{
+          this.innerHTML=original;
+          this.style.background='#1a1a1a';
+        },2000);
+      " style="
+        background: #1a1a1a;
+        padding: 10px;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 12px;
+        word-break: break-all;
+        cursor: pointer;
+        border: 1px solid #444;
+        margin-bottom: 15px;
+        user-select: all;
+      ">
+        ${ZIP_URL}
+      </div>
+      
+      <div style="margin-bottom: 15px; font-size: 14px;">
+        <strong>Step 2:</strong> Paste the link in your browser's address bar and download the ZIP file
+      </div>
+      
+      <div style="margin-bottom: 15px; font-size: 14px;">
+        <strong>Step 3:</strong> Come back here and select the downloaded file:
+      </div>
+      
+      <div style="text-align: center;">
+        <input type="file" id="manual-upload" accept=".zip" style="display: none;">
+        <button onclick="document.getElementById('manual-upload').click();" style="
+          padding: 12px 24px;
+          background: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 16px;
+          font-weight: bold;
+          margin-bottom: 10px;
+        ">
+          📁 SELECT DOWNLOADED ZIP FILE
+        </button>
+        <div style="font-size: 12px; opacity: 0.8;">
+          Look for: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">Lotus2.8.zip</code>
+        </div>
+      </div>
+    </div>
+    
+    <button onclick="this.parentElement.remove();" style="
+      padding: 10px 20px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    ">
+      Cancel
+    </button>
+  `;
+  
+  document.body.appendChild(loading);
+  
+  // Setup file input
+  setTimeout(() => {
+    const fileInput = document.getElementById('manual-upload');
+    if (fileInput) {
+      fileInput.addEventListener('change', handleManualUpload);
+    }
+  }, 100);
+}
+
+// Handle manual ZIP upload
 async function handleManualUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -4440,6 +4339,123 @@ async function handleManualUpload(event) {
   }
 }
 
+// ====================== CUSTOM CONFIRM WITH CHECKBOX ======================
+async function showVaultConfirm() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.id = 'vault-confirm-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 999998;
+      font-family: sans-serif;
+    `;
+    
+    overlay.innerHTML = `
+      <div style="
+        background: white;
+        border-radius: 8px;
+        padding: 25px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      ">
+        <div style="font-size: 20px; margin-bottom: 15px; font-weight: bold; color: #333;">
+          📥 Welcome to Rythos!
+        </div>
+        
+        <div style="margin-bottom: 20px; color: #555; line-height: 1.5;">
+          Would you like to download the complete Lotus vault?<br><br>
+          This includes all notes, folders, and templates for the best offline experience.
+        </div>
+        
+        <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #4CAF50;">
+          <strong>What's included:</strong>
+          <ul style="margin: 10px 0 0 20px; padding: 0;">
+            <li>All Lotus notes & templates</li>
+            <li>Organized folders</li>
+            <li>Calendar integration</li>
+            <li>GPC system support</li>
+          </ul>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="dont-show-again" style="margin-right: 8px;">
+            <span style="color: #666; font-size: 14px;">Don't show this message again</span>
+          </label>
+        </div>
+        
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button id="vault-skip" style="
+            padding: 10px 20px;
+            background: #f5f5f5;
+            color: #666;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+          ">
+            No Thanks
+          </button>
+          <button id="vault-load" style="
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+          ">
+            Load Full Vault
+          </button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Button handlers
+    document.getElementById('vault-load').addEventListener('click', () => {
+      const checkbox = document.getElementById('dont-show-again');
+      if (checkbox && checkbox.checked) {
+        localStorage.setItem('vault-dont-show-again', 'true');
+      }
+      overlay.remove();
+      resolve('load');
+    });
+    
+    document.getElementById('vault-skip').addEventListener('click', () => {
+      const checkbox = document.getElementById('dont-show-again');
+      if (checkbox && checkbox.checked) {
+        localStorage.setItem('vault-dont-show-again', 'true');
+      }
+      overlay.remove();
+      resolve('skip');
+    });
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        const checkbox = document.getElementById('dont-show-again');
+        if (checkbox && checkbox.checked) {
+          localStorage.setItem('vault-dont-show-again', 'true');
+        }
+        overlay.remove();
+        resolve(null);
+      }
+    });
+  });
+}
+
 // Rest of your code stays exactly the same...
 function addLoadVaultButton() {
   const section = document.querySelector('#sidebar .sidebar-section');
@@ -4473,7 +4489,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Auto-load full vault on first visit (with async handling)
   const vaultStatus = localStorage.getItem('lotus-full-vault-loaded');
-  if (!vaultStatus) {
+  const dontShowAgain = localStorage.getItem('vault-dont-show-again') === 'true';
+  
+  // Only show popup if:
+  // 1. User hasn't checked "Don't show again" AND
+  // 2. No vault status flag (hasn't loaded before)
+  if (!dontShowAgain && !vaultStatus) {
     // Use setTimeout to avoid blocking initial render
     setTimeout(async () => {
       try {
@@ -4575,6 +4596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       devError("Navigation error:", err);
     }
   });
+
 
 
   
