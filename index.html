@@ -2368,6 +2368,7 @@ recalcTables() {
       const { key } = getRowInfo(row);
       if (key === 'remaining' || key.includes('remain') || key.includes('left')) return 'formula';
       if (key === 'σ' || key === 'sigma' || key === 'sum' || key === 'total') return 'total';
+      if (key === 'quests completed') return 'formula';
       return 'data';
     };
     
@@ -2384,13 +2385,47 @@ recalcTables() {
       return sum;
     };
     
+    // === NEW: Count blank rows function ===
+    const countBlankRows = () => {
+      let count = 0;
+      for (let i = 1; i < rows.length; i++) {
+        if (rowType(rows[i]) === 'data') {
+          const cell = rows[i].cells[col];
+          if (!cell) {
+            count++;
+          } else {
+            const text = cell.textContent.trim();
+            if (text === '' || text === '0' || text === '0.00') {
+              count++;
+            }
+          }
+        }
+      }
+      return count;
+    };
+    
     // === CALCULATE FIRST (before any cleaning) ===
     // Formula rows
     rows.forEach((row, i) => {
       if (i === 0 || rowType(row) !== 'formula') return;
       const cell = row.cells[col];
       if (!cell) return;
-      const m = cell.textContent.trim().match(/^([+\-]?\d*\.?\d+)\s*([+\-*/])\s*@Σ?$/i);
+      
+      const cellText = cell.textContent.trim();
+      
+      // Handle @Count (count blank rows)
+      if (cellText.includes('@Count')) {
+        const count = countBlankRows();
+        const formatted = Number(count).toLocaleString('en-US', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        });
+        cell.innerHTML = `<strong style="color:red">${formatted}</strong>`;
+        return;
+      }
+      
+      // Handle formulas with @Σ
+      const m = cellText.match(/^([+\-]?\d*\.?\d+)\s*([+\-*/])\s*@Σ?$/i);
       if (!m) return;
       
       const base = parseFloat(m[1]);
@@ -2431,6 +2466,7 @@ recalcTables() {
     });
   });
 }
+
   
 // ===== Section 3.2.7 - TASK MANAGEMENT (PRESERVE LINKS FIX) =====
 makeCheckboxesInteractive() {
