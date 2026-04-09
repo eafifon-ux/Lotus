@@ -2342,84 +2342,92 @@ addRemainingRow(table) {
 
 // ---------- CALCULATOR ENGINE (CORRECT) ----------
 
+// ========== FIXED: Key::Display Name — Calculation first, then clean display ==========
 recalcTables() {
   this.preview.querySelectorAll('table').forEach(table => {
     const rows = Array.from(table.rows);
     if (rows.length < 2) return;
-
+    
     const col = 1;
-
-    const rowType = row => {
-      const first = row.cells[0]?.textContent.trim();
-      if (first === 'Σ') return 'total';
-      if (first === 'Remaining') return 'formula'; // Special case for formula rows
-      return 'data'; // All other rows are treated as data
-    };
-
-    const sumDataAbove = (idx) => {
-  let sum = 0;
-  for (let i = 1; i < idx; i++) { // skip header
-    if (rowType(rows[i]) !== 'formula' && rowType(rows[i]) !== 'total') {
-      let text = rows[i].cells[col]?.textContent?.trim() || "0";
-      
-      // ── Key fix ────────────────────────────────
-      text = text.replace(/,/g, ""); // remove thousand separators
-      text = text.replace(/\s+/g, ""); // optional: remove any spaces too
-      
-      const num = parseFloat(text);
-      // ───────────────────────────────────────────
-      
-      if (!isNaN(num)) {
-        sum += num;
+    
+    const getRowInfo = (row) => {
+      if (!row || !row.cells || !row.cells[0]) return { key: '', display: '' };
+      let text = row.cells[0].textContent.trim();
+      text = text.replace(/\*\*/g, '');
+      if (text.includes('::')) {
+        const parts = text.split('::');
+        return {
+          key: parts[0].trim().toLowerCase(),
+          display: parts[1].trim()
+        };
       }
-    }
-  }
-  return sum;
-};
-
-    // formulas first - skip header row (index 0)
+      return { key: text.toLowerCase(), display: text };
+    };
+    
+    const rowType = (row) => {
+      const { key } = getRowInfo(row);
+      if (key === 'remaining' || key.includes('remain') || key.includes('left')) return 'formula';
+      if (key === 'σ' || key === 'sigma' || key === 'sum' || key === 'total') return 'total';
+      return 'data';
+    };
+    
+    const sumDataAbove = (idx) => {
+      let sum = 0;
+      for (let i = 1; i < idx; i++) {
+        if (rowType(rows[i]) === 'data') {
+          let text = rows[i].cells[col] ? rows[i].cells[col].textContent.trim() : "0";
+          text = text.replace(/,/g, "").replace(/\s+/g, "");
+          const num = parseFloat(text);
+          if (!isNaN(num)) sum += num;
+        }
+      }
+      return sum;
+    };
+    
+    // === CALCULATE FIRST (before any cleaning) ===
+    // Formula rows
     rows.forEach((row, i) => {
-      if (i === 0) return; // Skip header
-      if (rowType(row) !== 'formula') return;
-
+      if (i === 0 || rowType(row) !== 'formula') return;
       const cell = row.cells[col];
-      const m = cell.textContent.trim()
-        .match(/^([+\-]?\d*\.?\d+)\s*([+\-*/])\s*@Σ$/);
+      if (!cell) return;
+      const m = cell.textContent.trim().match(/^([+\-]?\d*\.?\d+)\s*([+\-*/])\s*@Σ?$/i);
       if (!m) return;
-
+      
       const base = parseFloat(m[1]);
       const op = m[2];
       const sum = sumDataAbove(i);
-
-      const result =
-        op === '+' ? base + sum :
+      
+      const result = op === '+' ? base + sum :
         op === '-' ? base - sum :
         op === '*' ? base * sum :
-        sum ? base / sum : 0;
-
-      // Format with commas (US/English style)
-const formatted = Number(result).toLocaleString('en-US', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2 // or 0 if you want no decimals
-});
-
-cell.innerHTML = `<strong style="color:#0066cc">${formatted}</strong>`;
+        (op === '/' && sum !== 0) ? base / sum : 0;
+      
+      const formatted = Number(result).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+      });
+      
+      cell.innerHTML = `<strong style="color:#0066cc">${formatted}</strong>`;
     });
-
-    // totals last - skip header row (index 0)
+    
+    // Total rows
     rows.forEach((row, i) => {
-      if (i === 0) return; // Skip header
-      if (rowType(row) !== 'total') return;
-
+      if (i === 0 || rowType(row) !== 'total') return;
       const total = sumDataAbove(i);
-      row.cells[0].innerHTML = `<strong>Total</strong>`;
-      // Format number with commas (US/English style)
-const formattedTotal = Number(total).toLocaleString('en-US', {
-  minimumFractionDigits: 0, // no decimals if whole number
-  maximumFractionDigits: 2 // show up to 2 decimals if needed
-});
-
-row.cells[col].innerHTML = `<strong style="color:green">${formattedTotal}</strong>`;
+      const formattedTotal = Number(total).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+      });
+      row.cells[col].innerHTML = `<strong style="color:green">${formattedTotal}</strong>`;
+    });
+    
+    // === NOW clean display names (hide Key::) ===
+    rows.forEach((row, i) => {
+      if (i === 0 || !row.cells[0]) return;
+      const info = getRowInfo(row);
+      if (row.cells[0].textContent.includes('::')) {
+        row.cells[0].innerHTML = `<strong>${info.display}</strong>`;
+      }
     });
   });
 }
