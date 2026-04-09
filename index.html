@@ -826,6 +826,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-action="del-col">- Col</button>
   <button data-action="add-remaining">🧾 Remaining</button>
   <button data-action="add-calc">🧮 Calculator</button>
+    <button data-action="add-count">🔢 Count</button>
   <button data-action="row-up">Row ↑</button>
   <button data-action="row-down">Row ↓</button>
   <button data-action="col-left">Col ←</button>
@@ -2199,7 +2200,8 @@ handleTableAction(action) {
     'col-left':  () => this.moveColumnLeft(table),
     'col-right': () => this.moveColumnRight(table),
       'add-remaining':    () => this.addRemainingRow(table),
-    'add-calc':  () => this.addCalculator(table)
+    'add-calc':  () => this.addCalculator(table),
+      'add-count': () => this.addCountRow(table)
   };
 
   actions[action]?.();
@@ -2318,6 +2320,29 @@ addCalculator(table) {
   table.lines.splice(table.end + 1, 0, row);
 }
 
+// Add this new method to the TABLE OPERATIONS section
+addCountRow(table) {
+  const cols = this.splitRow(table.lines[table.start]).length;
+  
+  const countCells = [
+    "Blank::**Quests**",  // First cell shows "Blank"
+    "@Count", // Second cell shows @Count formula
+    ...Array(cols - 2).fill("   ")  // Fill remaining cells if any
+  ];
+  
+  const newRow = this.joinRow(countCells);
+  
+  let insertPos = table.end + 1;
+  
+  // If there's already a Σ/total row → insert just before it
+  if (table.lines[table.end]?.trim().startsWith('| Σ ')) {
+    insertPos = table.end;
+  }
+  
+  table.lines.splice(insertPos, 0, newRow);
+}
+
+
 // NEW: Remaining row insert
 addRemainingRow(table) {
   const cols = this.splitRow(table.lines[table.start]).length;
@@ -2368,7 +2393,7 @@ recalcTables() {
       const { key } = getRowInfo(row);
       if (key === 'remaining' || key.includes('remain') || key.includes('left')) return 'formula';
       if (key === 'σ' || key === 'sigma' || key === 'sum' || key === 'total') return 'total';
-      if (key === 'quests completed') return 'formula';
+      if (key === 'blank') return 'formula';
       return 'data';
     };
     
