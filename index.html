@@ -4166,7 +4166,7 @@ async function loadFullVault(isAuto = false) {
   const VAULT_KEY = 'lotus-full-vault-loaded';
   
   // Use jsDelivr CDN for direct download (no redirects!)
-  const ZIP_URL = 'https://cdn.jsdelivr.net/gh/eafifon-ux/lotus-vault@main/Lotus2.9.zip';
+  const ZIP_URL = 'https://cdn.jsdelivr.net/gh/eafifon-ux/lotus-vault@main/Lotus3.0.zip';
   
   // Check if already loaded
   if (isAuto && localStorage.getItem(VAULT_KEY)) {
@@ -4202,7 +4202,7 @@ async function loadFullVault(isAuto = false) {
 
 // Show manual instructions (no checkbox here)
 function showManualInstructions() {
-  const ZIP_URL = 'https://cdn.jsdelivr.net/gh/eafifon-ux/lotus-vault@main/Lotus2.9.zip';
+  const ZIP_URL = 'https://cdn.jsdelivr.net/gh/eafifon-ux/lotus-vault@main/Lotus3.0.zip';
   
   const loading = document.createElement('div');
   loading.id = 'vault-loading-overlay';
@@ -4292,7 +4292,7 @@ function showManualInstructions() {
           📁 SELECT DOWNLOADED ZIP FILE
         </button>
         <div style="font-size: 12px; opacity: 0.8;">
-          Look for: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">Lotus2.9.zip</code>
+          Look for: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">Lotus3.0.zip</code>
         </div>
       </div>
     </div>
