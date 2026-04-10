@@ -3944,22 +3944,28 @@ updateCollapsePrefixInEditor(headingElement) {
   const headingLevel = parseInt(headingElement.tagName[1]);
   const isCheckboxHeading = headingElement.classList.contains('checkbox-heading');
   
+  // Don't update checkbox headings here - they're handled separately
   if (isCheckboxHeading) return;
   
+  // Find the original line in editor
   const lines = this.editor.value.split('\n');
   const headingPrefix = '#'.repeat(headingLevel) + ' ';
   
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith(headingPrefix) && lines[i].includes(headingText)) {
+    if (lines[i].startsWith(headingPrefix) && 
+        lines[i].includes(headingText)) {
+      
+      // Check if it already has + or - prefix
       const prefixMatch = lines[i].match(/^#{1,6}\s*([+-]?)\s*(.*)$/);
       
       if (prefixMatch) {
         const existingText = prefixMatch[2];
         const newPrefix = isCollapsed ? '-' : '+';
-        lines[i] = `\( {headingPrefix} \){newPrefix} ${existingText}`;
+        lines[i] = `${headingPrefix}${newPrefix} ${existingText}`;
       } else {
+        // Add prefix to heading
         const newPrefix = isCollapsed ? '-' : '+';
-        lines[i] = `\( {headingPrefix} \){newPrefix} ${headingText}`;
+        lines[i] = `${headingPrefix}${newPrefix} ${headingText}`;
       }
       break;
     }
@@ -3969,171 +3975,133 @@ updateCollapsePrefixInEditor(headingElement) {
   this.updatePreviewAndSave();
 }
 
-// ===== IMPROVED INLINE TABLE EDITING (Double-click to edit) =====
-// ===== FINAL VERSION - PRESERVES RICH TEXT AS MUCH AS POSSIBLE =====
+// ===== Section 3.2.14 - INLINE TABLE EDITING =====
 enableTableInlineEdit() {
-  this.preview.querySelectorAll('td, th').forEach(cell => {
-    cell.removeEventListener('dblclick', this._handleTableDblClick);
-  });
-
-  this.preview.querySelectorAll('td, th').forEach(cell => {
-    // Skip only real formulas
-    const html = cell.innerHTML;
-    if (html.includes('@Σ') || html.includes('@Count') || html.includes('Σ')) {
-      return;
-    }
-
-    cell.style.cursor = 'text';
-    cell.addEventListener('dblclick', this._handleTableDblClick.bind(this));
+  this.preview.querySelectorAll('td').forEach(cell => {
+    cell.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (cell.querySelector('input')) return;
+      
+      // JUST DON'T EDIT FORMATTED CELLS AT ALL
+      const cellHTML = cell.innerHTML;
+      if (cellHTML.includes('==') || cellHTML.includes('[[')) {
+        return; // Leave these alone
+      }
+      
+      const original = cell.textContent.trim();
+      const input = document.createElement('input');
+      input.value = original;
+      input.style.cssText = `
+        width: 100%;
+        border: 2px solid #3b82f6;
+        padding: 2px 4px;
+        font: inherit;
+        box-sizing: border-box;
+        background: #f8fafc;
+      `;
+      
+      cell.innerHTML = '';
+      cell.appendChild(input);
+      input.select();
+      
+      const save = () => {
+        const newValue = input.value.trim();
+        cell.textContent = newValue || ' ';
+        this.simpleUpdateTableCell(cell, newValue);
+      };
+      
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          save();
+        }
+        if (e.key === 'Escape') {
+          cell.textContent = original || ' ';
+        }
+      });
+      
+      input.focus();
+    });
   });
 }
 
-_handleTableDblClick(e) {
-  const cell = e.currentTarget;
-  if (cell.querySelector('input')) return;
-
-  e.preventDefault();
-  e.stopImmediatePropagation();
-
-  const originalHTML = cell.innerHTML;      // keep for cancel
-  const originalText = cell.textContent.trim();
-
-  const input = document.createElement('input');
-  input.value = originalText || '';
-
-  input.style.cssText = `
-    width: 100%;
-    border: 2px solid #3b82f6;
-    padding: 4px 6px;
-    font: inherit;
-    box-sizing: border-box;
-    background: white;
-  `;
-
-  cell.innerHTML = '';
-  cell.appendChild(input);
-  input.focus();
-  input.select();
-
-  const finish = (shouldSave = true) => {
-    if (shouldSave) {
-      const newText = input.value.trim() || ' ';
-      cell.textContent = newText;                    // temporary plain display
-      this.updateTableContentInEditor(cell, newText, originalHTML);
-    } else {
-      cell.innerHTML = originalHTML;                 // full restore on cancel
-    }
-  };
-
-  input.onblur = () => finish(true);
-  input.onkeydown = (ev) => {
-    if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
-    if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
-  };
-}
-
-// Updated saver - tries to preserve surrounding rich markdown
-updateTableContentInEditor(cell, newValue, originalHTML) {
+simpleUpdateTableCell(cell, newValue) {
   try {
     const table = cell.closest('table');
     if (!table) return;
-
-    const allTables = Array.from(this.preview.querySelectorAll('table'));
-    const tableIndex = allTables.indexOf(table);
-    if (tableIndex === -1) return;
-
-    const row = cell.parentElement;
-    const colIndex = Array.from(row.cells).indexOf(cell);
-
+    
+    const rowEl = cell.closest('tr');
+    
+    // ===== DOM POSITION (stable inside table only) =====
+    const allRows = Array.from(table.querySelectorAll('tr'));
+    const rowIndex = allRows.indexOf(rowEl);
+    
+    const allCells = Array.from(rowEl.querySelectorAll('td'));
+let colIndex = -1;
+for (let i = 0; i < allCells.length; i++) {
+  if (allCells[i] === cell) {
+    colIndex = i;
+    break;
+  }
+}
+    
+    if (rowIndex < 0 || colIndex < 0) return;
+    
     const lines = this.editor.value.split('\n');
-    let tableStart = -1;
-    let currentIndex = -1;
-
+    
+    // ===== STEP 1: extract ALL markdown table rows =====
+    let tableBlocks = [];
+    let current = [];
+    
+    const isTableLine = (line) =>
+      line.trim().startsWith('|') && line.trim().endsWith('|');
+    
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
-        if (tableStart === -1) tableStart = i;
-      } else if (tableStart !== -1) {
-        currentIndex++;
-        if (currentIndex === tableIndex) break;
-        tableStart = -1;
+      const line = lines[i];
+      
+      if (isTableLine(line)) {
+        current.push({ line, index: i });
+      } else {
+        if (current.length) {
+          tableBlocks.push(current);
+          current = [];
+        }
       }
     }
-
-    if (tableStart === -1) return;
-
-    let targetLine = tableStart + 2 + (Array.from(table.rows).indexOf(row) - 1);
-    if (targetLine >= lines.length) return;
-
-    let line = lines[targetLine];
-    let parts = line.split('|');
-
-    if (colIndex + 1 < parts.length - 1) {
-      // Replace only the content, try to keep existing markdown around it
-      const oldPart = parts[colIndex + 1];
-
-// Preserve spacing exactly
-const leading = oldPart.match(/^\s*/)[0];
-const trailing = oldPart.match(/\s*$/)[0];
-const core = oldPart.trim();
-
-let updated = core;
-
-// ✅ Preserve common markdown wrappers
-if (/^\*\*.*\*\*$/.test(core)) {
-  updated = `**${newValue}**`;
-  
-} else if (/^\*.*\*$/.test(core)) {
-  updated = `*${newValue}*`;
-  
-} else if (/^==.*==$/.test(core)) {
-  updated = `==${newValue}==`;
-  
-} else if (/^\[\[(.*?)\|(.*?)\]\]$/.test(core)) {
-  // [[page|alias]]
-  updated = core.replace(
-    /^\[\[(.*?)\|(.*?)\]\]$/,
-    (_, page) => `[[${page}|${newValue}]]`
-  );
-  
-} else if (/^\[\[(.*?)\]\]$/.test(core)) {
-  // [[page]]
-  updated = `[[${newValue}]]`;
-  
-} else if (/^`.*`$/.test(core)) {
-  updated = `\`${newValue}\``;
-  
-} else if (core.includes('<')) {
-  // ✅ Preserve inline HTML, replace only text nodes
-  const temp = document.createElement('div');
-  temp.innerHTML = core;
-  
-  const walker = document.createTreeWalker(temp, NodeFilter.SHOW_TEXT, null);
-  let node;
-  
-  while ((node = walker.nextNode())) {
-    if (node.nodeValue.trim()) {
-      node.nodeValue = newValue;
-    }
-  }
-  
-  updated = temp.innerHTML;
-  
-} else {
-  // fallback
-  updated = newValue;
-}
-
-// Reassemble with original spacing
-parts[colIndex + 1] = `${leading}${updated}${trailing}`;
-
-      lines[targetLine] = parts.join('|');
-
-      this.editor.value = lines.join('\n');
-      this.pushHistory();
-      this.updatePreviewAndSave();
-    }
+    if (current.length) tableBlocks.push(current);
+    
+    const tableBlock = tableBlocks[0];
+    if (!tableBlock) return;
+    
+    // ===== STEP 2: CLEAN table rows (REMOVE separator) =====
+    const dataRows = tableBlock.filter(r => !r.line.includes('---'));
+    
+    // FIX: adjust row mapping safely
+    const target = dataRows[rowIndex];
+    if (!target) return;
+    
+    const parts = lines[target.index].split('|');
+    
+    const cellIndex = colIndex + 1;
+    if (cellIndex >= parts.length - 1) return;
+    
+    const originalCell = parts[cellIndex].trim();
+    
+    if (originalCell.includes('==') || originalCell.includes('[[')) return;
+    
+    parts[cellIndex] = ` ${newValue} `;
+    
+    lines[target.index] = parts.join('|');
+    
+    this.editor.value = lines.join('\n');
+    this.pushHistory();
+    this.updatePreviewAndSave();
+    
   } catch (err) {
-    console.warn('Table edit failed:', err);
+    console.log('Simple table update failed (not critical):', err);
   }
 }
 
