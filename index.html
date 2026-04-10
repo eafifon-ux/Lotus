@@ -2140,22 +2140,49 @@ getTableAtCursor() {
   const cursor = this.editor.selectionStart;
   const text = this.editor.value;
   const lines = text.split('\n');
-
-  const currentLine =
-    text.substring(0, cursor).split('\n').length - 1;
-
-  let start = currentLine;
-  while (start > 0 && lines[start].trim().startsWith('|')) start--;
-  if (!lines[start].trim().startsWith('|')) start++;
-
-  let end = start;
-  while (end < lines.length && lines[end].trim().startsWith('|')) end++;
-  end--;
-
-  if (end - start < 2) return null;
-
-  return { lines, start, end, currentLine };
+  const currentLine = text.substring(0, cursor).split('\n').length - 1;
+  
+  // Find which table we're in by counting tables above cursor
+  let tableCount = 0;
+  let inTable = false;
+  let tableStart = -1;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const isTableLine = lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|');
+    
+    if (isTableLine && !inTable) {
+      // Start of a new table
+      inTable = true;
+      tableStart = i;
+      tableCount++;
+    } else if (!isTableLine && inTable) {
+      // End of a table
+      inTable = false;
+      if (i > currentLine) break;
+    }
+    
+    if (i === currentLine) {
+      // We found the current line's table
+      if (inTable) {
+        let end = tableStart;
+        while (end < lines.length && lines[end].trim().startsWith('|')) end++;
+        end--;
+        
+        return { 
+          lines, 
+          start: tableStart, 
+          end, 
+          currentLine,
+          tableIndex: tableCount - 1  // ← Added table index
+        };
+      }
+      break;
+    }
+  }
+  
+  return null;
 }
+
 
 getColumnIndex(table) {
   const line = table.lines[table.currentLine];
@@ -4033,28 +4060,30 @@ simpleUpdateTableCell(cell, newValue) {
     const table = cell.closest('table');
     if (!table) return;
     
-    const rowEl = cell.closest('tr');
+    // NEW: Get ALL tables in preview
+    const allTables = Array.from(this.preview.querySelectorAll('table'));
+    const tableIndex = allTables.indexOf(table);  // ← Which table is this?
     
-    // ===== DOM POSITION (stable inside table only) =====
+    const rowEl = cell.closest('tr');
     const allRows = Array.from(table.querySelectorAll('tr'));
     const rowIndex = allRows.indexOf(rowEl);
     
     const allCells = Array.from(rowEl.querySelectorAll('td'));
-let colIndex = -1;
-for (let i = 0; i < allCells.length; i++) {
-  if (allCells[i] === cell) {
-    colIndex = i;
-    break;
-  }
-}
+    let colIndex = -1;
+    for (let i = 0; i < allCells.length; i++) {
+      if (allCells[i] === cell) {
+        colIndex = i;
+        break;
+      }
+    }
     
     if (rowIndex < 0 || colIndex < 0) return;
     
     const lines = this.editor.value.split('\n');
     
-    // ===== STEP 1: extract ALL markdown table rows =====
-    let tableBlocks = [];
-    let current = [];
+    // Find ALL table blocks
+    let allTableBlocks = [];
+    let currentBlock = [];
     
     const isTableLine = (line) =>
       line.trim().startsWith('|') && line.trim().endsWith('|');
@@ -4063,47 +4092,47 @@ for (let i = 0; i < allCells.length; i++) {
       const line = lines[i];
       
       if (isTableLine(line)) {
-        current.push({ line, index: i });
+        currentBlock.push({ line, index: i });
       } else {
-        if (current.length) {
-          tableBlocks.push(current);
-          current = [];
+        if (currentBlock.length) {
+          allTableBlocks.push(currentBlock);
+          currentBlock = [];
         }
       }
     }
-    if (current.length) tableBlocks.push(current);
+    if (currentBlock.length) allTableBlocks.push(currentBlock);
     
-    const tableBlock = tableBlocks[0];
-    if (!tableBlock) return;
+    // CRITICAL: Use the correct table block based on tableIndex
+    const targetTableBlock = allTableBlocks[tableIndex];
+    if (!targetTableBlock) return;
     
-    // ===== STEP 2: CLEAN table rows (REMOVE separator) =====
-    const dataRows = tableBlock.filter(r => !r.line.includes('---'));
+    // Filter out separator rows
+    const dataRows = targetTableBlock.filter(r => !r.line.includes('---'));
     
-    // FIX: adjust row mapping safely
-    const target = dataRows[rowIndex];
-    if (!target) return;
+    // Adjust for header row (dataRows index 0 = first data row after header)
+    const targetRow = dataRows[rowIndex];
+    if (!targetRow) return;
     
-    const parts = lines[target.index].split('|');
-    
+    const parts = lines[targetRow.index].split('|');
     const cellIndex = colIndex + 1;
+    
     if (cellIndex >= parts.length - 1) return;
     
     const originalCell = parts[cellIndex].trim();
-    
     if (originalCell.includes('==') || originalCell.includes('[[')) return;
     
     parts[cellIndex] = ` ${newValue} `;
-    
-    lines[target.index] = parts.join('|');
+    lines[targetRow.index] = parts.join('|');
     
     this.editor.value = lines.join('\n');
     this.pushHistory();
     this.updatePreviewAndSave();
     
   } catch (err) {
-    console.log('Simple table update failed (not critical):', err);
+    console.log('Table update failed:', err);
   }
 }
+
 
 } // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
 
