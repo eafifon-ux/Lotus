@@ -2057,8 +2057,9 @@ this.saveTimeout = setTimeout(async () => {
 
   
   renderWikilinks(text) {
-  return text.replace(/\[\[([^#\|\]]+)(?:#([^\|\]]+))?(?:\|([^\]]+))?\]\]/g, 
-    (m, page, anchor, alias) => {
+  return text.replace(/\[\[([^#\|\]:]+)(?:#([^\|\]:]+))?(?:\|\s*([^\]]+)|::\s*([^\]]+))?\]\]/g, 
+    (m, page, anchor, aliasPipe, aliasColon) => {
+  const alias = aliasPipe || aliasColon;
       const note = (page || '').trim();
       const headingAnchor = (anchor || '').trim();
       const label = alias ? alias.trim() : (headingAnchor ? `${note}#${headingAnchor}` : note);
