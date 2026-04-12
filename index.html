@@ -3101,7 +3101,7 @@ insertWikilink() {
       wikilink = displayText ? `[[${page}#${heading}|${displayText}]]` : `[[${page}#${heading}]]`;
     } else {
       const displayText = prompt('Display text (optional):', noteName);
-      wikilink = displayText ? `[[${noteName}|${displayText}]]` : `[[${noteName}]]`;
+      wikilink = displayText ? `[[${noteName}::${displayText}]]` : `[[${noteName}]]`;
     }
     
     this.replaceSelection(wikilink);
@@ -3116,7 +3116,7 @@ insertFolderLink() {
     return;
   }
   
-  const wikilink = `[[📁 Boomerang/${selectedText}|${selectedText}]]`;
+  const wikilink = `[[📁 Boomerang/${selectedText}::${selectedText}]]`;
   this.replaceSelection(wikilink);
 }
 
