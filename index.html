@@ -467,40 +467,57 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 #preview .gpc-stamp { font-family: "Times New Roman", Times, serif !important; text-decoration: none !important; }
 #preview .gregorian-stamp { font-family: Helvetica, Arial, sans-serif !important; text-decoration: none !important; }
 
-/* Ordered lists: default LTR, RTL only when Hebrew is detected */
+/* ====================== RTL LISTS & GENERAL ====================== */
+
+/* Base ordered lists */
 #preview ol {
-    direction: ltr;
-    text-align: left;
-    list-style-position: outside;   /* better alignment in RTL */
+  direction: ltr;
+  text-align: left;
+  list-style-position: outside;
 }
 
-/* Auto RTL for lists containing Hebrew */
-#preview ol:has([lang="he" i], [dir="rtl"], .custom-rtl-hebrew) {
-    direction: rtl !important;
-    text-align: right !important;
-}
-
-/* Also apply to Hebrew-context lists */
+/* RTL lists (Hebrew + Arabic) */
+#preview ol:has([lang="he" i], [lang="ar" i], [dir="rtl"], .custom-rtl-hebrew),
 .custom-rtl-hebrew ol {
-    direction: rtl !important;
-    text-align: right !important;
+  direction: rtl !important;
+  text-align: right !important;
+  padding-right: 2.5em !important;
+  padding-left: 0 !important;
 }
 
-/* Fix numbering position in RTL */
+/* Numbering fix for RTL */
+#preview ol[dir="rtl"],
 #preview ol[style*="direction: rtl"],
-#preview ol[dir="rtl"] {
-    padding-right: 2.5em;   /* space for numbers on the right */
-    padding-left: 0;
+.custom-rtl-hebrew ol {
+  padding-right: 2.5em !important;
+  padding-left: 0 !important;
 }
 
+/* Main RTL class */
 .custom-rtl-hebrew {
   unicode-bidi: plaintext !important;
   direction: auto !important;
 }
-.custom-rtl-hebrew * { unicode-bidi: isolate; }
-.custom-rtl-hebrew li { display: flex; flex-direction: row-reverse; align-items: flex-start; }
-.custom-rtl-hebrew li input[type="checkbox"] { order: 2; margin-right: 0; margin-left: 8px; flex-shrink: 0; }
 
+.custom-rtl-hebrew * {
+  unicode-bidi: isolate;
+}
+
+/* Checkbox + list items in RTL */
+.custom-rtl-hebrew li {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.custom-rtl-hebrew li input[type="checkbox"] {
+  order: 2;
+  margin-right: 0;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+ 
 /* Section 1.8 - Folder CSS*/
 .folder-item {
   background-color: #f0f0f0;
