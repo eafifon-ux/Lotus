@@ -467,57 +467,40 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 #preview .gpc-stamp { font-family: "Times New Roman", Times, serif !important; text-decoration: none !important; }
 #preview .gregorian-stamp { font-family: Helvetica, Arial, sans-serif !important; text-decoration: none !important; }
 
-/* ====================== RTL LISTS & GENERAL ====================== */
-
-/* Base ordered lists */
+/* Ordered lists: default LTR, RTL only when Hebrew is detected */
 #preview ol {
-  direction: ltr;
-  text-align: left;
-  list-style-position: outside;
+    direction: ltr;
+    text-align: left;
+    list-style-position: outside;   /* better alignment in RTL */
 }
 
-/* RTL lists (Hebrew + Arabic) */
-#preview ol:has([lang="he" i], [lang="ar" i], [dir="rtl"], .custom-rtl-hebrew),
+/* Auto RTL for lists containing Hebrew */
+#preview ol:has([lang="he" i], [dir="rtl"], .custom-rtl-hebrew) {
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+/* Also apply to Hebrew-context lists */
 .custom-rtl-hebrew ol {
-  direction: rtl !important;
-  text-align: right !important;
-  padding-right: 2.5em !important;
-  padding-left: 0 !important;
+    direction: rtl !important;
+    text-align: right !important;
 }
 
-/* Numbering fix for RTL */
-#preview ol[dir="rtl"],
+/* Fix numbering position in RTL */
 #preview ol[style*="direction: rtl"],
-.custom-rtl-hebrew ol {
-  padding-right: 2.5em !important;
-  padding-left: 0 !important;
+#preview ol[dir="rtl"] {
+    padding-right: 2.5em;   /* space for numbers on the right */
+    padding-left: 0;
 }
 
-/* Main RTL class */
 .custom-rtl-hebrew {
   unicode-bidi: plaintext !important;
   direction: auto !important;
 }
+.custom-rtl-hebrew * { unicode-bidi: isolate; }
+.custom-rtl-hebrew li { display: flex; flex-direction: row-reverse; align-items: flex-start; }
+.custom-rtl-hebrew li input[type="checkbox"] { order: 2; margin-right: 0; margin-left: 8px; flex-shrink: 0; }
 
-.custom-rtl-hebrew * {
-  unicode-bidi: isolate;
-}
-
-/* Checkbox + list items in RTL */
-.custom-rtl-hebrew li {
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.custom-rtl-hebrew li input[type="checkbox"] {
-  order: 2;
-  margin-right: 0;
-  margin-left: 8px;
-  flex-shrink: 0;
-}
- 
 /* Section 1.8 - Folder CSS*/
 .folder-item {
   background-color: #f0f0f0;
@@ -3051,16 +3034,14 @@ applyRTL() {
     
     if (hasRtl) {
       el.classList.add('custom-rtl-hebrew');
-      el.setAttribute('dir', 'auto');
       
-      // Strong bidi isolation - best for mixed English + RTL
-      el.style.setProperty('unicode-bidi', 'plaintext', 'important');
-      el.style.setProperty('direction', 'auto', 'important');
+      // Force proper bidi for English-first mixed text
+      el.setAttribute('dir', 'auto');
+      el.style.unicodeBidi = 'plaintext';
     } else {
       el.classList.remove('custom-rtl-hebrew');
       el.removeAttribute('dir');
       el.style.unicodeBidi = '';
-      el.style.direction = '';
     }
   });
 }
