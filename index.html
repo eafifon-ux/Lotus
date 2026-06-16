@@ -3034,14 +3034,16 @@ applyRTL() {
     
     if (hasRtl) {
       el.classList.add('custom-rtl-hebrew');
-      
-      // Force proper bidi for English-first mixed text
       el.setAttribute('dir', 'auto');
-      el.style.unicodeBidi = 'plaintext';
+      
+      // Strong bidi isolation - best for mixed English + RTL
+      el.style.setProperty('unicode-bidi', 'plaintext', 'important');
+      el.style.setProperty('direction', 'auto', 'important');
     } else {
       el.classList.remove('custom-rtl-hebrew');
       el.removeAttribute('dir');
       el.style.unicodeBidi = '';
+      el.style.direction = '';
     }
   });
 }
