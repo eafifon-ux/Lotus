@@ -493,7 +493,10 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
     padding-left: 0;
 }
 
-.custom-rtl-hebrew { direction: rtl !important; text-align: right !important; unicode-bidi: isolate !important; }
+.custom-rtl-hebrew {
+  unicode-bidi: plaintext !important;
+  direction: auto !important;
+}
 .custom-rtl-hebrew * { unicode-bidi: isolate; }
 .custom-rtl-hebrew li { display: flex; flex-direction: row-reverse; align-items: flex-start; }
 .custom-rtl-hebrew li input[type="checkbox"] { order: 2; margin-right: 0; margin-left: 8px; flex-shrink: 0; }
@@ -3025,11 +3028,20 @@ wrapHeadingsForCollapse() {
 
 
 applyRTL() {
-  this.preview.querySelectorAll('p, li, td, th').forEach(el => {
-    if (/[\u0590-\u05FF]/.test(el.textContent)) {
+  this.preview.querySelectorAll('p, li, td, th, h1, h2, h3, h4, h5, h6').forEach(el => {
+    const text = el.textContent.trim();
+    const hasRtl = /[\u0590-\u05FF\u0600-\u06FF]/.test(text);
+    
+    if (hasRtl) {
       el.classList.add('custom-rtl-hebrew');
+      
+      // Force proper bidi for English-first mixed text
+      el.setAttribute('dir', 'auto');
+      el.style.unicodeBidi = 'plaintext';
     } else {
       el.classList.remove('custom-rtl-hebrew');
+      el.removeAttribute('dir');
+      el.style.unicodeBidi = '';
     }
   });
 }
