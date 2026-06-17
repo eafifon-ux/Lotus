@@ -808,6 +808,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
 <div id="floating-habit-dropdown" class="floating-dropdown">
   <button data-action="add-habit-5x6">🔴 5×6 (30 dots)</button>
   <button data-action="add-habit-7x4">🔵 7×4 (28 dots)</button>
+  <button data-action="add-habit-10x3">🟣 10×3 (31 dots)</button>
   <button data-action="add-all">+ All</button>
   <button data-action="subtract">− Subtract</button>
   <button data-action="start-date">📅 Start Date</button>
@@ -3710,12 +3711,20 @@ insertNewListLine(cursor, prefix) {
 // ===== HABIT TRACKER ACTIONS =====
 handleHabitAction(action) {
   switch (action) {
-    case 'add-habit-5x6':
+   case 'add-habit-5x6':
 case 'add-habit-7x4':
-  const is28 = action === 'add-habit-7x4';
-  const baseDots = is28 ? 28 : 30;
+case 'add-habit-10x3': {
+  // Determine dot count correctly
+  let baseDots;
+  if (action === 'add-habit-7x4') {
+    baseDots = 28;
+  } else if (action === 'add-habit-10x3') {
+    baseDots = 31;
+  } else {
+    baseDots = 30;
+  }
 
-  const dateVal = prompt('Enter start date (YYYY-MM-DD) or leave blank:');
+  const dateVal = prompt('Start date (YYYY-MM-DD) or leave blank:');
   const trimmedDate = dateVal ? dateVal.trim() : '';
 
   // Build the core tag without label
@@ -3724,9 +3733,8 @@ case 'add-habit-7x4':
     : `{{Tracker_${baseDots}}}`;
 
   // Check if an identical core tag already exists in the editor
-  const existing = this.editor.value.match(
-    new RegExp(coreTag.replace(/([$.?*|{}()\[\]\\])/g, '\\$1'), 'g')
-  );
+  const escaped = coreTag.replace(/([$.?*|{}()\[\]\\])/g, '\\$1');
+  const existing = this.editor.value.match(new RegExp(escaped, 'g'));
 
   let finalTag;
   if (existing && existing.length > 0) {
@@ -3746,6 +3754,9 @@ case 'add-habit-7x4':
 
   this.insertAtCursor(finalTag);
   break;
+}
+
+
 
 
 
@@ -5117,7 +5128,13 @@ if ('serviceWorker' in navigator) {
 
 // ===== HABIT TRACKER – per-dot states (red/gray/black) =====
 const HabitTracker = {
-  
+  // Return layout parameters based on total dots
+  getLayout(total) {
+  if (total === 31) return { columns: 10, dotSize: 12 };  // 10 columns, 4 rows (3+3+3+1)
+  if (total === 28) return { columns: 7,  dotSize: 22 };
+  return { columns: 5,  dotSize: 28 };
+},
+
 
   render(uid) {
     const container = document.getElementById(`dots-${uid}`);
@@ -5126,9 +5143,10 @@ const HabitTracker = {
     const trackerEl = container.closest('.habit-tracker');
     if (!trackerEl) return;
 
-    const columns = parseInt(trackerEl.dataset.columns) || 5;
     const totalDots = parseInt(trackerEl.dataset.total) || 30;
-    const dotSize = parseInt(trackerEl.dataset.dotsize) || 28;
+    const { columns, dotSize } = this.getLayout(totalDots);
+    trackerEl.dataset.columns = columns;
+    trackerEl.dataset.dotsize = dotSize;
 
     const statesKey = `habit-${uid}-states`;
     let states = JSON.parse(localStorage.getItem(statesKey) || '[]');
@@ -5145,7 +5163,7 @@ const HabitTracker = {
       const start = new Date(startDate);
       const today = new Date();
       const daysSince = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-      maxDots = Math.min(totalDots, Math.max(daysSince, completed));  // <<< THE FIX
+      maxDots = Math.min(totalDots, Math.max(daysSince, completed));
     }
 
     container.style.gridTemplateColumns = `repeat(${columns},1fr)`;
@@ -5154,7 +5172,7 @@ const HabitTracker = {
     for (let i = 0; i < maxDots; i++) {
       const state = states[i] || 0;
       const dot = document.createElement('div');
-      dot.style.cssText = `width:${dotSize}px;height:${dotSize}px;border-radius:50%;border:3px solid #999;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.15s;`;
+      dot.style.cssText = `width:${dotSize}px;height:${dotSize}px;border-radius:50%;border:3px solid #999;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.15s;margin:0 auto;`;
 
       if (state === 1) {
         dot.style.background = '#ef4444';
@@ -5168,35 +5186,48 @@ const HabitTracker = {
       }
 
       dot.onclick = () => {
-        const newState = (state + 1) % 3;
-        states[i] = newState;
+        states[i] = (state + 1) % 3;
         localStorage.setItem(statesKey, JSON.stringify(states));
         this.render(uid);
       };
 
       container.appendChild(dot);
     }
+    
+    if (totalDots === 31 && columns === 10) {
+  // Column-major: fill down each column, 3 per column for first 9 cols, 4 for last col
+  container.style.gridTemplateRows = 'repeat(4, 1fr)';
 
-    // Update count display
+  const dots = container.querySelectorAll('div');
+  dots.forEach((dot, i) => {
+    let col, row;
+    if (i < 27) {
+      // first 27 dots: fill 3 per column for columns 1–9
+      col = Math.floor(i / 3) + 1;
+      row = (i % 3) + 1;
+    } else {
+      // last 4 dots: column 10
+      col = 10;
+      row = (i - 27) + 1; // 1..4
+    }
+    dot.style.gridColumn = col;
+    dot.style.gridRow = row;
+  });
+}
+
+
+
+    // Update count display – show layout hint for 31
     const countEl = document.getElementById(`count-${uid}`);
     if (countEl) {
-      countEl.innerHTML = `<span style="color:#ef4444;">${completed} completed</span> / ${maxDots} days`;
+      const layoutHint = '';
+
+      countEl.innerHTML = `<span style="color:#ef4444;">${completed} done</span> / ${maxDots} days${layoutHint}`;
     }
   },
 
-  addOne(uid) {
-    const statesKey = `habit-${uid}-states`;
-    let states = JSON.parse(localStorage.getItem(statesKey) || '[]');
-    const totalDots = parseInt(document.querySelector(`.habit-tracker[data-uid="${uid}"]`)?.dataset.total || 30, 10);
-    while (states.length < totalDots) states.push(0);
+  // … (addOne, subtractOne, reset, addAll, subtractAll stay exactly the same)
 
-    const idx = states.indexOf(0);
-    if (idx !== -1) {
-      states[idx] = 1;
-      localStorage.setItem(statesKey, JSON.stringify(states));
-      this.render(uid);
-    }
-  },
 
   subtractOne(uid) {
     const statesKey = `habit-${uid}-states`;
@@ -5223,6 +5254,20 @@ const HabitTracker = {
     localStorage.removeItem(`habit-${uid}-total`);
     this.render(uid);
   },
+  
+  addOne(uid) {
+  const statesKey = `habit-${uid}-states`;
+  let states = JSON.parse(localStorage.getItem(statesKey) || '[]');
+  for (let i = 0; i < states.length; i++) {
+    if (states[i] === 0) {
+      states[i] = 1;
+      break;
+    }
+  }
+  localStorage.setItem(statesKey, JSON.stringify(states));
+  this.render(uid);
+},
+
 
   addAll() {
     document.querySelectorAll('.habit-tracker').forEach(el => {
