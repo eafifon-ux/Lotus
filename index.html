@@ -1135,6 +1135,11 @@ this.debouncedReindex = null; // will be set in init
 async init() {
   await VaultDB.open();
   
+  // Restore photo map
+const saved = await VaultDB.get('__photo_map');
+if (saved) this.photoMap = saved;
+
+  
   // Initialize UI events
   this.initEditorEvents();
   this.initToolbarEvents();
@@ -2050,9 +2055,10 @@ html += `
   // ===== Section 3.2.5 - PREVIEW RENDERING =====
   async updatePreviewAndSave() {
   try {
-    // Clean up any photo references that were deleted from the editor text
-this.cleanupPhotoMap();
+    
     const raw = this.editor.value;
+    await this.cleanupPhotoMap();
+
     this.noteCache[this.currentNote] = raw;
     
     // Update backlinks
@@ -4269,11 +4275,9 @@ async updateCacheForSingleNote(noteName) {
   devLog(`Cache updated for single note: ${noteName}`);
 }
 
-// Replace cleanupPhotoMap with this:
-cleanupPhotoMap() {
+async cleanupPhotoMap() {               // ← add async
   if (!this.photoMap) return;
 
-  // Find all photo labels currently in the editor
   const existingPhotos = new Set();
   const regex = /!\[photo-(\d+)\]/g;
   let match;
@@ -4281,16 +4285,16 @@ cleanupPhotoMap() {
     existingPhotos.add(`photo-${match[1]}`);
   }
 
-  // Delete any map entry that's not in the editor anymore
   for (const key of Object.keys(this.photoMap)) {
     if (!existingPhotos.has(key)) {
       delete this.photoMap[key];
     }
   }
 
-  // Optional: persist to IndexedDB so it survives reload
-  // VaultDB.set('__photo_map', this.photoMap);
+  // Persist so it survives reload
+  await VaultDB.set('__photo_map', this.photoMap);   // ← uncommented + await
 }
+
 
 
 updateCollapsePrefixInEditor(headingElement) {
@@ -4493,11 +4497,16 @@ async handlePhotoUpload(event) {
     
     this.editor.selectionStart = this.editor.selectionEnd = cursor + shortLabel.length;
     
-    if (!this.photoMap) this.photoMap = {};
-    this.photoMap[`photo-${photoNum}`] = fullMd;
-    
-    await this.updatePreviewAndSave();
-    event.target.value = '';
+if (!this.photoMap) this.photoMap = {};
+this.photoMap[`photo-${photoNum}`] = fullMd;
+
+// ⬇️ ADD THIS LINE (right here, before updatePreviewAndSave)
+await VaultDB.set('__photo_map', this.photoMap);
+
+await this.updatePreviewAndSave(); // <-- existing
+event.target.value = '';
+
+
     
   } catch (err) {
     console.error(err);
