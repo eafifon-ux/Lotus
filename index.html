@@ -3985,10 +3985,9 @@ async exportAllNotes() {
 
     // Add each note to the zip file with proper folder structure
     for (const note of notes) {
-  if (note.startsWith('__')) continue;  // ← ADD THIS LINE
-  try {
-    const content = await VaultDB.get(note);
-    // … rest of your existing code
+      if (note.startsWith('__')) continue;  // skip internal keys
+      try {
+        const content = await VaultDB.get(note);
 
         if (!content) {
           devWarn('Note ' + note + ' has no content, skipping');
@@ -4018,6 +4017,12 @@ async exportAllNotes() {
       } catch (err) {
         devError('Error exporting note ' + note + ':', err);
       }
+    }
+
+    // ── NEW: Export the photo map ──
+    if (this.photoMap && Object.keys(this.photoMap).length > 0) {
+      zip.file('_photos.json', JSON.stringify(this.photoMap, null, 2));
+      devLog('📸 Added _photos.json with', Object.keys(this.photoMap).length, 'photos');
     }
 
     // Generate the zip file
@@ -4068,6 +4073,7 @@ async exportAllNotes() {
     }
   }
 }
+
 
 // Fixed import method - properly handles folder structure
 async importAllNotes() {
