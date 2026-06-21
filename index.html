@@ -4318,24 +4318,33 @@ async updateCacheForSingleNote(noteName) {
 }
 
 async cleanupPhotoMap() {
-  if (this._importing) return; // ← SKIP DURING IMPORT
+  if (this._importing) return;
   if (!this.photoMap) return;
 
-  const existingPhotos = new Set();
-  const regex = /!\[photo-(\d+)\]/g;
-  let match;
-  while ((match = regex.exec(this.editor.value)) !== null) {
-    existingPhotos.add(`photo-${match[1]}`);
-  }
-
-  for (const key of Object.keys(this.photoMap)) {
-    if (!existingPhotos.has(key)) {
-      delete this.photoMap[key];
+  // Gather all photo references from EVERY note
+  const allRefs = new Set();
+  const allNotes = await VaultDB.list();
+  for (const name of allNotes) {
+    if (name.startsWith('__')) continue;
+    const content = await VaultDB.get(name);
+    if (content) {
+      const regex = /!\[photo-(\d+)\]/g;
+      let m;
+      while ((m = regex.exec(content)) !== null) {
+        allRefs.add(`photo-${m[1]}`);
+      }
     }
   }
 
+  // Remove only photos that appear in NO note
+  for (const key of Object.keys(this.photoMap)) {
+    if (!allRefs.has(key)) {
+      delete this.photoMap[key];
+    }
+  }
   await VaultDB.set('__photo_map', this.photoMap);
 }
+
 
 
 
