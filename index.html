@@ -2063,11 +2063,11 @@ html = this.processHighlights(html);
 html = this.processSubSuperScript(html);
 
 // === PHOTO PLACEHOLDER RESTORATION ===
-if (this.photoMap) {
-  html = html.replace(/!\[photo-(\d+)\]/g, (match, num) => {
-    return this.photoMap[`photo-${num}`] || match;
-  });
-}
+html = html.replace(/!\[photo-(\d+)\]/g, (match, num) => {
+  // Look for the full version in the raw text
+  const fullMatch = raw.match(new RegExp(`!\\[photo-${num}\\]\\(data:image/jpeg;base64,[^)]+\\)`));
+  return fullMatch ? fullMatch[0] : match;
+});
 // =====================================
 
 // Convert markdown tasks to HTML before parsing with proper markdown support
@@ -4462,14 +4462,13 @@ async handlePhotoUpload(event) {
     const dataUrl = await this.compressImage(file, 1024, 0.65);
     const base64 = dataUrl.split(',')[1];
     
-    // Find next available photo number
+    // Auto number the photo
     let photoNum = 1;
-    if (this.photoMap) {
-      while (this.photoMap[`photo-${photoNum}`]) photoNum++;
-    }
+    let existing = this.editor.value.match(/!\[photo-(\d+)\]/g) || [];
+    while (existing.some(e => e.includes(`photo-${photoNum}`))) photoNum++;
     
     const shortLabel = `![photo-${photoNum}]`;
-    const fullMd = `![photo](data:image/jpeg;base64,${base64})`;
+    const fullMd = `![photo-\( {photoNum}](data:image/jpeg;base64, \){base64})`;
     
     const cursor = this.editor.selectionStart;
     this.editor.value =
@@ -4478,9 +4477,6 @@ async handlePhotoUpload(event) {
       this.editor.value.substring(this.editor.selectionEnd);
     
     this.editor.selectionStart = this.editor.selectionEnd = cursor + shortLabel.length;
-    
-    if (!this.photoMap) this.photoMap = {};
-    this.photoMap[`photo-${photoNum}`] = fullMd;
     
     await this.updatePreviewAndSave();
     event.target.value = '';
