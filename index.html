@@ -3985,8 +3985,11 @@ async exportAllNotes() {
 
     // Add each note to the zip file with proper folder structure
     for (const note of notes) {
-      try {
-        const content = await VaultDB.get(note);
+  if (note.startsWith('__')) continue;  // ← ADD THIS LINE
+  try {
+    const content = await VaultDB.get(note);
+    // … rest of your existing code
+
         if (!content) {
           devWarn('Note ' + note + ' has no content, skipping');
           continue;
