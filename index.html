@@ -1139,6 +1139,8 @@ async init() {
   // Restore photo map
 const saved = await VaultDB.get('__photo_map');
 if (saved) this.photoMap = saved;
+if (!this.photoMap) this.photoMap = {};
+
 
   
   // Initialize UI events
@@ -2070,12 +2072,16 @@ let html = this.renderWikilinks(raw);
 html = this.processHighlights(html);
 html = this.processSubSuperScript(html);
 
-// === PHOTO PLACEHOLDER RESTORATION ===
+// ── ADD THIS BLOCK ──
 if (this.photoMap) {
   html = html.replace(/!\[photo-(\d+)\]/g, (match, num) => {
     return this.photoMap[`photo-${num}`] || match;
   });
 }
+// ── END OF ADDED BLOCK ──
+
+html = marked.parse(html);   // ← now 'marked' sees the full image syntax
+
 // =====================================
 
 // Convert markdown tasks + handle common edge cases
