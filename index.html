@@ -2058,7 +2058,7 @@ html += `
   try {
     
     const raw = this.editor.value;
-    
+    await this.cleanupPhotoMap();
 
     this.noteCache[this.currentNote] = raw;
     
@@ -2078,13 +2078,13 @@ if (this.photoMap) {
 }
 // =====================================
 
-// Convert markdown tasks to HTML before parsing with proper markdown support
+// Convert markdown tasks + handle common edge cases
 html = html.replace(
-  /^- \[([ xX])\] (.*)$/gm,
-  (match, checkbox, content) => {
-    // Process the content with inline markdown first
+  /^(\s*)- \[([ xX])\] (.*)$/gm,
+  (match, indent, checkbox, content) => {
     const processedContent = marked.parseInline(content.trim());
-    return `<li class="task-item"><input type="checkbox" \( {checkbox === 'x' ? 'checked' : ''}/> \){processedContent}</li>`;
+    const checked = checkbox.toLowerCase() === 'x' ? 'checked' : '';
+    return `${indent}<li class="task-item"><input type="checkbox" ${checked} /> ${processedContent}</li>`;
   }
 );
 // ── Simple tracker code: {{Tracker_N}} or {{Tracker_N_YYYY-MM-DD}} ──
