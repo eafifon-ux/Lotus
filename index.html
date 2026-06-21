@@ -4090,36 +4090,73 @@ async importAllNotes() {
       const zip = new JSZip();
       const result = await zip.loadAsync(file);
 
-      // Clear existing notes first
-      const existingNotes = await VaultDB.list();
-      for (const note of existingNotes) {
-        await VaultDB.remove(note);
-      }
+     // Before clearing, save old photo map
+const oldPhotoMap = this.photoMap ? { ...this.photoMap } : null;
+
+// Clear existing notes (skip internal keys)
+const existingNotes = await VaultDB.list();
+for (const note of existingNotes) {
+  if (note.startsWith('__')) continue; // Don't delete internal keys
+  await VaultDB.remove(note);
+}
+
 
       // Import each file with proper folder handling
-      for (const filename in result.files) {
-        if (result.files[filename].dir) continue;
+      // Import each file
+for (const filename in result.files) {
+  if (result.files[filename].dir) continue;
 
-        const content = await result.files[filename].async('text');
-        const noteName = filename.replace('.md', '');
+  // ── 1. Skip internal IndexedDB keys (prefixed with __) ──
+  const nameWithoutMd = filename.replace(/\.md$/i, '');
+  if (nameWithoutMd.startsWith('__')) continue;
 
-        // Handle folder structure during import
-        if (filename.includes('/')) {
-          // This is a note inside a folder
-          const parts = filename.split('/');
-          if (parts.length === 2) {
-            const folderName = parts[0];
-            const actualNoteName = parts[1].replace('.md', '');
-
-            // Reconstruct the proper folder structure
-            const fullNoteName = `${folderName}/${actualNoteName}`;
-            await VaultDB.set(fullNoteName, content);
-          }
-        } else {
-          // Regular note
-          await VaultDB.set(noteName, content);
-        }
+  // ── 2. Handle _photos.json: restore the photo map ──
+  if (filename === '_photos.json') {
+    try {
+      const jsonData = await result.files[filename].async('text');
+      const parsed = JSON.parse(jsonData);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        this.photoMap = parsed;
+        await VaultDB.set('__photo_map', this.photoMap);
+        devLog('✅ Photo map restored from import');
+      } else {
+        devWarn('⚠️ _photos.json invalid format, skipped');
       }
+    } catch (e) {
+      devWarn('⚠️ Could not parse _photos.json:', e);
+    }
+    continue; // Don't treat as a note
+  }
+
+  // ── 3. Skip any non‑markdown files (e.g., .json, .txt) ──
+  if (!filename.endsWith('.md')) continue;
+
+  // ── 4. Normal note import ──
+  const content = await result.files[filename].async('text');
+  const noteName = nameWithoutMd; // already removed .md
+
+  // Handle folder structure during import
+  if (filename.includes('/')) {
+    const parts = filename.split('/');
+    if (parts.length === 2) {
+      const folderName = parts[0];
+      const actualNoteName = parts[1].replace('.md', '');
+      const fullNoteName = `${folderName}/${actualNoteName}`;
+      await VaultDB.set(fullNoteName, content);
+    }
+  } else {
+    // Regular note in root
+    await VaultDB.set(noteName, content);
+  }
+}
+
+// If import didn't provide a new photo map, restore the old one
+if (!this.photoMap && oldPhotoMap) {
+  this.photoMap = oldPhotoMap;
+  await VaultDB.set('__photo_map', oldPhotoMap);
+  devLog('✅ Photo map restored from previous vault');
+}
+
 
       alert('✅ Import complete! Refreshing notes...');
       await this.switchToNote('Home');
