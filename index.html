@@ -2178,6 +2178,17 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
     // Update preview
     this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
     
+    // === HABIT TRACKER AUTO-RENDER FIX ===
+if (typeof renderAllTrackers === 'function') {
+  setTimeout(() => {
+    try {
+      renderAllTrackers();
+    } catch (e) {
+      console.warn('Habit tracker render error:', e);
+    }
+  }, 50);
+}
+    
     // Apply behaviors
     this.addCopyButtons();
     this.makeCheckboxesInteractive();
