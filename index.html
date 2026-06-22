@@ -4001,6 +4001,10 @@ async exportAllNotes() {
         devError('Error exporting note ' + note + ':', err);
       }
     }
+    
+    if (this.photoMap && Object.keys(this.photoMap).length > 0) {
+  zip.file('_photos.json', JSON.stringify(this.photoMap, null, 2));
+}
 
     // Generate the zip file
     devLog('Generating zip file...');
@@ -4081,6 +4085,15 @@ async importAllNotes() {
       // Import each file with proper folder handling
       for (const filename in result.files) {
         if (result.files[filename].dir) continue;
+
+if (filename === '_photos.json') {
+  try {
+    const jsonData = await result.files[filename].async('text');
+    this.photoMap = JSON.parse(jsonData);
+    await VaultDB.set('__photo_map', this.photoMap);
+  } catch (e) {}
+  continue;
+}
 
         const content = await result.files[filename].async('text');
         const noteName = filename.replace('.md', '');
