@@ -5399,46 +5399,66 @@ const HabitTracker = {
     container.style.gridTemplateColumns = `repeat(${columns},1fr)`;
     container.innerHTML = '';
 
-    for (let i = 0; i < maxDots; i++) {
-      const state = states[i] || 0;
-      const dot = document.createElement('div');
-      dot.style.cssText = `width:${dotSize}px;height:${dotSize}px;border-radius:50%;border:3px solid #999;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.15s;margin:0 auto;`;
+    // Before loop: compute startWeekday
+const dayColors = ['#2ecc71','#3498db','#9b59b6','#e67e22','#8B4513','#e91e63','#2c3e50'];
+let startWeekday = 0;
+if (startDate) {
+  const d = new Date(startDate);
+  startWeekday = d.getDay();
+}
 
-      if (state === 1) {
-        dot.style.background = '#ef4444';
-        dot.style.borderColor = '#b91c1c';
-      } else if (state === 2) {
-        dot.style.background = '#9e9e9e';
-        dot.style.borderColor = '#757575';
-      } else {
-        dot.style.background = startDate ? '#111' : '#f1f5f9';
-        dot.style.borderColor = startDate ? '#333' : '#999';
-      }
+for (let i = 0; i < maxDots; i++) {
+  const state = states[i] || 0;
+  const dot = document.createElement('div');
+  dot.style.cssText = `width:${dotSize}px;height:${dotSize}px;border-radius:50%;border:3px solid #999;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.15s;margin:0 auto;`;
 
-      dot.onclick = () => {
-        states[i] = (state + 1) % 3;
-        localStorage.setItem(statesKey, JSON.stringify(states));
-        this.render(uid);
-      };
+  if (state === 1) {
+    dot.style.background = '#ef4444';
+    dot.style.borderColor = '#b91c1c';
+  } else if (state === 2) {
+    dot.style.background = '#9e9e9e';
+    dot.style.borderColor = '#757575';
+  } else {
+    dot.style.background = startDate ? '#111' : '#f1f5f9';
+    dot.style.borderColor = startDate ? '#333' : '#999';
+  }
 
-      container.appendChild(dot);
-    }
+  // Every 7th dot with white gap + colored ring
+  if (i % 7 === 0) {
+    const ringColor = dayColors[startWeekday];
+    dot.style.borderColor = 'white';
+    dot.style.borderWidth = '5px';
+    dot.style.boxShadow = `0 0 0 3px ${ringColor}`;
+  }
+
+  dot.onclick = () => {
+    states[i] = (state + 1) % 3;
+    localStorage.setItem(statesKey, JSON.stringify(states));
+    this.render(uid);
+  };
+
+  container.appendChild(dot);
+}
+
+
     
-    if (totalDots === 31 && columns === 10) {
-  // Column-major: fill down each column, 3 per column for first 9 cols, 4 for last col
+  if (totalDots === 31 && columns === 10) {
   container.style.gridTemplateRows = 'repeat(4, 1fr)';
-
+  container.style.justifyContent = 'center'; // ← this helps center the whole group
+  container.style.alignContent = 'center';
+  
   const dots = container.querySelectorAll('div');
+  
   dots.forEach((dot, i) => {
     let col, row;
     if (i < 27) {
-      // first 27 dots: fill 3 per column for columns 1–9
+      // Keep your original 9 columns × 3 rows
       col = Math.floor(i / 3) + 1;
       row = (i % 3) + 1;
     } else {
-      // last 4 dots: column 10
+      // Last 4 dots stay in column 10
       col = 10;
-      row = (i - 27) + 1; // 1..4
+      row = (i - 27) + 1;
     }
     dot.style.gridColumn = col;
     dot.style.gridRow = row;
