@@ -3996,6 +3996,7 @@ initExportImport() {
 }
 
 // Fixed export method - properly handles folder structure
+// Fixed export method
 async exportAllNotes() {
   devLog('Export function called');
   
@@ -4012,10 +4013,8 @@ async exportAllNotes() {
     let notes = await VaultDB.list();
     devLog('Notes found:', notes.length);
     
-    // Filter out internal keys (this fixes the __photo_map error)
-    const validNotes = notes.filter(n =>
-      n && !n.startsWith('__')
-    );
+    // Filter out internal keys
+    const validNotes = notes.filter(n => n && !n.startsWith('__'));
     
     const zip = new JSZip();
     
@@ -4036,13 +4035,13 @@ async exportAllNotes() {
           filePath = `${note}.md`;
         }
         
-        zip.file(filePath, String(content)); // Ensure it's a string
+        zip.file(filePath, String(content));
       } catch (err) {
         devError('Error exporting note ' + note + ':', err);
       }
     }
     
-    // Photos are handled separately as JSON
+    // Photos
     if (this.photoMap && Object.keys(this.photoMap).length > 0) {
       zip.file('_photos.json', JSON.stringify(this.photoMap, null, 2));
     }
@@ -4064,7 +4063,7 @@ async exportAllNotes() {
     
     exportBtn.textContent = originalText;
     exportBtn.disabled = false;
-    devLog('Export complete!');
+    devLog('Export complete! Size:', content.size, 'bytes');
     
   } catch (err) {
     devError('Export failed:', err);
