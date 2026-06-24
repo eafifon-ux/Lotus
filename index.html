@@ -765,7 +765,10 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <div class="sidebar-item" id="create-folder-btn">📁 New Folder</div>
     <div class="sidebar-item">⚙ System</div>
     <div class="sidebar-item" data-action="export-all">📤 Export All</div>
-    <div class="sidebar-item" data-action="import-all">📥 Import All</div>
+<div class="sidebar-item" data-action="import-all">📥 Import All</div>
+
+<!-- NEW: Photo Manager -->
+<div class="sidebar-item" id="photo-manager-btn">📷 Photo Manager</div>
   </div>
 </div>
 
@@ -789,9 +792,13 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="checkbox">☑</button>
 <button id="deeplink-button">🚀 ▼</button>
     <button data-action="link">🔗</button>
-    <button data-action="wikilink">📄</button>
-    <!-- Add to Toolbar -->
+   <button data-action="wikilink">📄</button>
+<!-- Add to Toolbar -->
 <button data-action="folder">📁</button>
+
+<!-- NEW: Photo button -->
+<button id="photo-btn" title="Add Photo">📷</button>
+<input type="file" id="photo-input" accept="image/*" style="display:none">
   </div>
 </div>
 
@@ -1081,6 +1088,7 @@ this.debouncedReindex = null; // will be set in init
     this.noteCache = {};
     this.backlinksMap = {};
     this.cachedIndex = null;   // ← ADD THIS LINE
+    this.photoMap = {};
     this.init();
   }
   
@@ -1293,6 +1301,19 @@ this.preview.addEventListener('click', async (e) => {
       setTimeout(tryScroll, 300);
     }
   }
+});
+
+// === PHOTO UPLOAD LISTENERS ===
+const photoInput = document.getElementById('photo-input');
+photoInput.addEventListener('change', (e) => this.handlePhotoUpload(e));
+
+const photoBtn = document.getElementById('photo-btn');
+photoBtn.addEventListener('click', () => document.getElementById('photo-input').click());
+
+// Photo Manager
+document.getElementById('photo-manager-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  this.showPhotoManager();
 });
 
   }
@@ -4366,6 +4387,114 @@ simpleUpdateTableCell(cell, newValue) {
   }
 }
 
+// ===== PHOTO HANDLING =====
+async handlePhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Photo too large (max 5MB).');
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const dataUrl = await this.compressImage(file, 1024, 0.65);
+    const base64 = dataUrl.split(',')[1];
+
+    let photoNum = 1;
+    while (this.photoMap[`photo-${photoNum}`]) photoNum++;
+
+    const shortLabel = `![photo-${photoNum}]`;
+    const fullMd = `![photo](data:image/jpeg;base64,${base64})`;
+
+    const cursor = this.editor.selectionStart;
+    this.editor.value = this.editor.value.substring(0, cursor) +
+      shortLabel +
+      this.editor.value.substring(this.editor.selectionEnd);
+
+    this.editor.selectionStart = this.editor.selectionEnd = cursor + shortLabel.length;
+
+    if (!this.photoMap) this.photoMap = {};
+    this.photoMap[`photo-${photoNum}`] = fullMd;
+
+    await VaultDB.set('__photo_map', this.photoMap);
+    await this.updatePreviewAndSave();
+    event.target.value = '';
+    alert(`✅ Photo ${photoNum} attached!`);
+  } catch (err) {
+    console.error(err);
+    alert('Failed to process photo');
+  }
+}
+
+compressImage(file, maxDimension, quality = 0.65) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDimension) {
+        height *= maxDimension / width; width = maxDimension;
+      } else if (height > maxDimension) {
+        width *= maxDimension / height; height = maxDimension;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ===== PHOTO MANAGER =====
+async showPhotoManager() {
+  if (!this.photoMap || Object.keys(this.photoMap).length === 0) {
+    alert("No photos attached yet.");
+    return;
+  }
+  
+  let message = "📷 Attached Photos:\n\n";
+  Object.keys(this.photoMap).sort().forEach(key => {
+    message += `${key}\n`;
+  });
+  
+  message += "\nEnter the photo number to delete (e.g. 3):";
+  
+  const input = prompt(message);
+  if (input === null) return; // cancelled
+  
+  const num = parseInt(input.trim());
+  if (isNaN(num)) {
+    alert("Invalid number");
+    return;
+  }
+  
+  const key = `photo-${num}`;
+  
+  if (this.photoMap[key]) {
+    if (confirm(`Delete ${key}? This cannot be undone.`)) {
+      delete this.photoMap[key];
+      
+      await VaultDB.set('__photo_map', this.photoMap);
+      
+      // Clean up reference in current note
+      if (this.editor.value.includes(`![photo-${num}]`)) {
+        this.editor.value = this.editor.value.replace(
+          new RegExp(`!\\[photo-${num}\\]`, 'g'),
+          `[Deleted Photo ${num}]`
+        );
+      }
+      
+      this.updatePreviewAndSave();
+      alert(`✅ ${key} deleted.`);
+    }
+  } else {
+    alert("Photo number not found.");
+  }
+}
 
 } // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
 
