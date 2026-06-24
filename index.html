@@ -1093,6 +1093,11 @@ this.debouncedReindex = null; // will be set in init
   // ===== Section 3.2.1 - Initialize database and load first note =====
 async init() {
   await VaultDB.open();
+  // ←←← ADD THESE LINES RIGHT HERE
+  await this.loadPhotoMap();
+devLog('PhotoMap loaded on startup with', Object.keys(this.photoMap).length, 'photos');
+  
+
   
   // Initialize UI events
   this.initEditorEvents();
@@ -1119,15 +1124,17 @@ this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
     devLog('📶 Online mode restored');
   });
   
-  // Load initial note
-  let content = await VaultDB.get(this.currentNote);
-  if (!content) {
-    content = this.editor.value;
-    await VaultDB.set(this.currentNote, content);
-  }
-  
-  this.editor.value = content;
-  this.noteCache[this.currentNote] = content;
+// Load initial note
+let content = await VaultDB.get(this.currentNote);
+if (!content) {
+  content = this.editor.value;
+  await VaultDB.set(this.currentNote, content);
+}
+// ★ THIS LINE HIDES THE RAW BASE64
+content = this.collapsePhotosForEdit(content);
+this.editor.value = content;
+
+
   this.pushHistory(true);
   await this.updatePreviewAndSave();
   await this.buildNoteIndex();
@@ -4499,18 +4506,16 @@ showToast(msg) {
   setTimeout(() => t.remove(), 1600);
 }
 
-// Expand short tags to full base64 before saving
 expandPhotosForSave(text) {
-  if (!this.photoMap) return text;
+  if (!this.photoMap || !text) return text;
   
   return text.replace(/!\[photo (\d+)\]/g, (match, num) => {
     const base64 = this.photoMap[num];
-    if (base64) {
-      return `![photo \( {num}](data:image/jpeg;base64, \){base64})`;
-    }
-    return match;
+    return base64 ? `![photo ${num}](data:image/jpeg;base64,${base64})` : match;
   });
 }
+
+
 
 // Collapse full base64 back to short tags when loading into editor
 collapsePhotosForEdit(text) {
