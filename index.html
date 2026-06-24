@@ -668,22 +668,6 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 }
 
 
-/* Photos: Full width, clean look */
-#preview img {
-  max-width: 100%;
-  width: 100%;               /* Force full width */
-  height: auto;
-  border-radius: 8px;
-  margin: 16px 0;
-  display: block;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-/* Extra safety for embedded data URLs */
-#preview img[src^="data:image"] {
-  max-height: 620px;         /* prevents extremely tall images from dominating */
-}
-
 </style>
 </head>
 <body>
@@ -781,9 +765,8 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <div class="sidebar-item" id="create-folder-btn">📁 New Folder</div>
     <div class="sidebar-item">⚙ System</div>
     <div class="sidebar-item" data-action="export-all">📤 Export All</div>
-<div class="sidebar-item" data-action="import-all">📥 Import All</div>
-
-<!-- NEW: Photo Manager -->
+    <div class="sidebar-item" data-action="import-all">📥 Import All</div>
+    <!-- Photo Manager -->
 <div class="sidebar-item" id="photo-manager-btn">📷 Photo Manager</div>
   </div>
 </div>
@@ -808,11 +791,10 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="checkbox">☑</button>
 <button id="deeplink-button">🚀 ▼</button>
     <button data-action="link">🔗</button>
-   <button data-action="wikilink">📄</button>
-<!-- Add to Toolbar -->
+    <button data-action="wikilink">📄</button>
 <button data-action="folder">📁</button>
 
-<!-- NEW: Photo button -->
+<!-- Photo Button -->
 <button id="photo-btn" title="Add Photo">📷</button>
 <input type="file" id="photo-input" accept="image/*" style="display:none">
   </div>
@@ -1104,7 +1086,7 @@ this.debouncedReindex = null; // will be set in init
     this.noteCache = {};
     this.backlinksMap = {};
     this.cachedIndex = null;   // ← ADD THIS LINE
-    this.photoMap = {};
+    this.photoMap = {};   // ← Add this
     this.init();
   }
   
@@ -1333,69 +1315,6 @@ document.getElementById('photo-manager-btn').addEventListener('click', (e) => {
 });
 
   }
-  
-  // ===== PHOTO HANDLING - HARD EMBEDDED (no JSON map) =====
-async handlePhotoUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  
-  if (file.size > 8 * 1024 * 1024) { // bumped limit a bit
-    alert('Photo too large (max 8MB).');
-    event.target.value = '';
-    return;
-  }
-  
-  try {
-    const dataUrl = await this.compressImage(file, 1200, 0.75); // better quality/size balance
-    const base64 = dataUrl.split(',')[1];
-    
-    // Direct hard embed markdown
-    const photoMd = `![Photo](data:image/jpeg;base64,${base64})`;
-    
-    const cursor = this.editor.selectionStart;
-    this.editor.value = this.editor.value.substring(0, cursor) +
-      photoMd +
-      this.editor.value.substring(this.editor.selectionEnd);
-    
-    this.editor.selectionStart = this.editor.selectionEnd = cursor + photoMd.length;
-    
-    await this.updatePreviewAndSave();
-    event.target.value = '';
-    
-    // Optional toast
-    const toast = document.createElement('div');
-    toast.textContent = '✅ Photo embedded!';
-    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:white;padding:10px 20px;border-radius:8px;z-index:10000;';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 1800);
-    
-  } catch (err) {
-    console.error(err);
-    alert('Failed to process photo');
-  }
-}
-
-compressImage(file, maxDimension, quality = 0.75) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > maxDimension || height > maxDimension) {
-        const ratio = Math.min(maxDimension / width, maxDimension / height);
-        width *= ratio;
-        height *= ratio;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
-}
   
   initToolbarEvents() {
     const toolbar = document.getElementById('toolbar');
@@ -2104,13 +2023,6 @@ let html = this.renderWikilinks(raw);
 html = this.processHighlights(html);
 html = this.processSubSuperScript(html);
 
-// PHOTO REPLACEMENT - Add this
-if (this.photoMap) {
-  html = html.replace(/!\[photo-(\d+)\]/g, (match, num) => {
-    return this.photoMap[`photo-${num}`] || match;
-  });
-}
-
 // Convert markdown tasks to HTML before parsing with proper markdown support
 html = html.replace(
   /^- \[([ xX])\] (.*)$/gm,
@@ -2199,12 +2111,18 @@ html = tempDiv.innerHTML;
 // Ensure task lists have the proper class
 html = html.replace(/<ul>/g, '<ul class="task-list">');
 
+html = this.processGPCStamps(html);
 
+// === PHOTO RENDERING - Short ![photo N] → real image ===
+if (this.photoMap) {
+  html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
+    const url = this.photoMap[`photo-${num}`];
+    return url ? `<img src="${url}" style="max-width:100%;border-radius:8px;margin:12px 0;display:block;" alt="Photo ${num}">` : match;
+  });
+}
 
-    html = this.processGPCStamps(html);
-    
-    // Update preview
-    this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
+// Update preview
+this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
     
     // Apply behaviors
     this.addCopyButtons();
@@ -3986,53 +3904,113 @@ initExportImport() {
 // Fixed export method - properly handles folder structure
 async exportAllNotes() {
   devLog('Export function called');
+  
   try {
+    // Show loading indicator
     const exportBtn = document.querySelector('[data-action="export-all"]');
     const originalText = exportBtn.textContent;
     exportBtn.textContent = '⏳ Exporting...';
     exportBtn.disabled = true;
     
+    // Ensure JSZip is loaded
+    if (typeof JSZip === 'undefined') {
+      devError('JSZip is undefined!');
+      throw new Error('JSZip library not loaded. Check if the script tag is loading.');
+    }
+    
+    const notes = await VaultDB.list();
+    devLog('Notes found:', notes.length, notes);
+    
+    if (notes.length === 0) {
+      alert('No notes to export!');
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      return;
+    }
+    
     const zip = new JSZip();
-    const allKeys = await VaultDB.list();
-    const validNotes = allKeys.filter(n => n && !n.startsWith('__'));
-    
-    // Export all notes
-    for (const note of validNotes) {
-      const content = await VaultDB.get(note) || '';
-      let filePath = note.includes('/') ? `\( {note}.md` : ` \){note}.md`;
-      zip.file(filePath, content);
+    devLog('Zip instance created');
+
+    // Add each note to the zip file with proper folder structure
+    for (const note of notes) {
+      try {
+        const content = await VaultDB.get(note);
+        if (!content) {
+          devWarn('Note ' + note + ' has no content, skipping');
+          continue;
+        }
+        
+        // Handle folder structure properly
+        let filePath;
+        if (note.includes('/')) {
+          // This is a note inside a folder - maintain the folder structure
+          const parts = note.split('/');
+          const folderName = parts[0];
+          const noteFileName = parts[1];
+          
+          // Create folder if it doesn't exist
+          if (!zip.folder(folderName)) {
+            zip.folder(folderName);
+          }
+          filePath = folderName + '/' + noteFileName + '.md';
+        } else {
+          // Regular note in root
+          filePath = note + '.md';
+        }
+        
+        devLog('Adding note to zip: ' + filePath);
+        zip.file(filePath, content);
+      } catch (err) {
+        devError('Error exporting note ' + note + ':', err);
+      }
     }
-    
-    // Extract and save all embedded base64 images as real files
-    const imageMatches = [];
-    for (const note of validNotes) {
-      const content = await VaultDB.get(note) || '';
-      const matches = [...content.matchAll(/!\[.*?\]\(data:image\/(jpeg|png|gif);base64,([A-Za-z0-9+/=]+)\)/g)];
-      imageMatches.push(...matches);
-    }
-    
-    imageMatches.forEach((match, index) => {
-      const base64 = match[2];
-      const ext = match[1] || 'jpg';
-      zip.file(`images/photo-\( {index + 1}. \){ext}`, base64, { base64: true });
-    });
-    
+
+    // Generate the zip file
+    devLog('Generating zip file...');
     const content = await zip.generateAsync({ type: "blob" });
-    const filename = `Lotus-Vault-${new Date().toISOString().slice(0,10)}.zip`;
+    devLog('Zip generated, size:', content.size, 'bytes');
     
+    if (content.size === 0) {
+      alert('Export failed: Generated zip file is empty!');
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      return;
+    }
+    
+    // Create download link
+    const today = new Date();
+    const dateString = today.toISOString().slice(0, 10);
+    const filename = 'CaptureNotes-' + dateString + '.zip';
     const url = URL.createObjectURL(content);
+    
     const a = document.createElement('a');
+    a.style.display = 'none';
     a.href = url;
     a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
     
-    exportBtn.textContent = originalText;
-    exportBtn.disabled = false;
-    devLog('✅ Full hardcover export done');
+    document.body.appendChild(a);
+    devLog('Triggering download...');
+    a.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+      devLog('Export complete! File should download as:', filename);
+    }, 100);
+      
   } catch (err) {
     devError('Export failed:', err);
-    alert('Export failed: ' + err.message);
+    alert('Export failed: ' + (err.message || 'Unknown error'));
+    
+    // Reset button text
+    const exportBtn = document.querySelector('[data-action="export-all"]');
+    if (exportBtn) {
+      exportBtn.textContent = '📤 Export All';
+      exportBtn.disabled = false;
+    }
   }
 }
 
@@ -4413,113 +4391,56 @@ simpleUpdateTableCell(cell, newValue) {
   }
 }
 
-// ===== PHOTO HANDLING =====
+// ===== CLEAN PHOTO SYSTEM - Short ![photo 1] in editor =====
 async handlePhotoUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  if (file.size > 5 * 1024 * 1024) {
-    alert('Photo too large (max 5MB).');
-    event.target.value = '';
-    return;
-  }
-
   try {
-    const dataUrl = await this.compressImage(file, 1024, 0.65);
-    const base64 = dataUrl.split(',')[1];
+    const dataUrl = await this.compressImage(file, 1100, 0.75);
+    
+    let num = 1;
+    while (this.editor.value.includes(`![photo ${num}]`)) num++;
 
-    let photoNum = 1;
-    while (this.photoMap[`photo-${photoNum}`]) photoNum++;
-
-    const shortLabel = `![photo-${photoNum}]`;
-    const fullMd = `![photo](data:image/jpeg;base64,${base64})`;
+    const shortMd = `![photo ${num}]`;
 
     const cursor = this.editor.selectionStart;
-    this.editor.value = this.editor.value.substring(0, cursor) +
-      shortLabel +
-      this.editor.value.substring(this.editor.selectionEnd);
-
-    this.editor.selectionStart = this.editor.selectionEnd = cursor + shortLabel.length;
+    this.editor.value = this.editor.value.substring(0, cursor) + shortMd + this.editor.value.substring(this.editor.selectionEnd);
 
     if (!this.photoMap) this.photoMap = {};
-    this.photoMap[`photo-${photoNum}`] = fullMd;
+    this.photoMap[`photo-${num}`] = dataUrl;
 
-    await VaultDB.set('__photo_map', this.photoMap);
+    this.editor.selectionStart = this.editor.selectionEnd = cursor + shortMd.length;
     await this.updatePreviewAndSave();
     event.target.value = '';
-    alert(`✅ Photo ${photoNum} attached!`);
-  } catch (err) {
-    console.error(err);
-    alert('Failed to process photo');
+    this.showToast(`✅ Photo ${num} added`);
+  } catch (e) {
+    alert("Photo failed");
   }
 }
 
-compressImage(file, maxDimension, quality = 0.65) {
+compressImage(file, maxW = 1100, q = 0.75) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      let { width, height } = img;
-      if (width > height && width > maxDimension) {
-        height *= maxDimension / width; width = maxDimension;
-      } else if (height > maxDimension) {
-        width *= maxDimension / height; height = maxDimension;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = h * maxW / w; w = maxW; }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', q));
     };
-    img.onerror = reject;
     img.src = URL.createObjectURL(file);
+    img.onerror = reject;
   });
 }
 
-// ===== PHOTO MANAGER =====
-async showPhotoManager() {
-  if (!this.photoMap || Object.keys(this.photoMap).length === 0) {
-    alert("No photos attached yet.");
-    return;
-  }
-  
-  let message = "📷 Attached Photos:\n\n";
-  Object.keys(this.photoMap).sort().forEach(key => {
-    message += `${key}\n`;
-  });
-  
-  message += "\nEnter the photo number to delete (e.g. 3):";
-  
-  const input = prompt(message);
-  if (input === null) return; // cancelled
-  
-  const num = parseInt(input.trim());
-  if (isNaN(num)) {
-    alert("Invalid number");
-    return;
-  }
-  
-  const key = `photo-${num}`;
-  
-  if (this.photoMap[key]) {
-    if (confirm(`Delete ${key}? This cannot be undone.`)) {
-      delete this.photoMap[key];
-      
-      await VaultDB.set('__photo_map', this.photoMap);
-      
-      // Clean up reference in current note
-      if (this.editor.value.includes(`![photo-${num}]`)) {
-        this.editor.value = this.editor.value.replace(
-          new RegExp(`!\\[photo-${num}\\]`, 'g'),
-          `[Deleted Photo ${num}]`
-        );
-      }
-      
-      this.updatePreviewAndSave();
-      alert(`✅ ${key} deleted.`);
-    }
-  } else {
-    alert("Photo number not found.");
-  }
+showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1f1f1f;color:#0f0;padding:10px 18px;border-radius:6px;z-index:9999;';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 1600);
 }
 
 } // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
