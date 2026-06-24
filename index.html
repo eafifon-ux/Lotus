@@ -4092,7 +4092,7 @@ async importAllNotes() {
         if (filename.includes('/')) {
           const parts = filename.split('/');
           if (parts.length === 2) {
-            noteName = `\( {parts[0]}/ \){parts[1].replace('.md','')}`;
+            noteName = `${parts[0]}/${parts[1].replace('.md','')}`;
           }
         }
         
