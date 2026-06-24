@@ -1190,39 +1190,41 @@ redo() {
 }
 
 async switchToNote(noteName) {
-    if (!noteName || noteName === this.currentNote) return;
-    
-    // FAST PATH: Check cache first
-let content = this.noteCache[noteName];
-
-if (!content) {
-  // Cache miss - load from storage
-  content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
-  this.noteCache[noteName] = content;
-}
-
-content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
-
-// Collapse full base64 → short clean tags for editor
-content = this.collapsePhotosForEdit(content);
-    
-    // Save current note (deferred for performance)
-    setTimeout(async () => {
-      if (this.currentNote) {
-        const currentContent = this.editor.value;
-        await VaultDB.set(this.currentNote, currentContent);
-        this.noteCache[this.currentNote] = currentContent;
-      }
-    }, 0);
-    
-    // INSTANT UI update
-    this.currentNote = noteName;
-    this.editor.value = content;
-    
-    // Push history and update preview
-    this.pushHistory();
-    this.updatePreviewAndSave();
-    this.updateActiveNoteUI();
+  if (!noteName || noteName === this.currentNote) return;
+  
+  // FAST PATH: Check cache first
+  let content = this.noteCache[noteName];
+  
+  if (!content) {
+    // Cache miss - load from storage
+    content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+    this.noteCache[noteName] = content;
+  }
+  
+  // Ensure photoMap is loaded BEFORE collapsing
+  if (Object.keys(this.photoMap).length === 0) {
+    await this.loadPhotoMap();
+  }
+  
+  // Collapse full base64 → short clean tags
+  content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
+  
+  // Save current note (deferred)
+  setTimeout(async () => {
+    if (this.currentNote) {
+      const currentContent = this.editor.value;
+      await VaultDB.set(this.currentNote, currentContent);
+      this.noteCache[this.currentNote] = currentContent;
+    }
+  }, 0);
+  
+  // INSTANT UI update
+  this.currentNote = noteName;
+  this.editor.value = content;
+  
+  this.pushHistory();
+  await this.updatePreviewAndSave(); // ← Make sure we await this
+  this.updateActiveNoteUI();
 }
 // ── Lightweight note counter (only runs when sidebar is opened) ──
 async updateNoteCount() {
@@ -2120,19 +2122,18 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
 
 html = this.processGPCStamps(html);
 
-// === PHOTO RENDERING - Short tag → full base64 image ===
+// === PHOTO RENDERING ===
 html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
-  const base64 = this.photoMap && this.photoMap[num] ? this.photoMap[num] : null;
-  
+  const base64 = this.photoMap?.[num];
   if (base64) {
     return `<img src="data:image/jpeg;base64,${base64}" 
                 style="max-width:100%; border-radius:8px; margin:12px 0; display:block; box-shadow:0 2px 8px rgba(0,0,0,0.1);" 
                 alt="Photo ${num}">`;
   }
-  return match; // keep original tag if no base64 found
+  return match;
 });
 
-// Also handle full base64 markdown images (safety net)
+// Safety net for full base64
 html = html.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (match, num, base64) => {
   return `<img src="data:image/jpeg;base64,${base64}" 
               style="max-width:100%; border-radius:8px; margin:12px 0; display:block; box-shadow:0 2px 8px rgba(0,0,0,0.1);" 
@@ -4501,14 +4502,20 @@ showToast(msg) {
 // Expand short tags to full base64 before saving
 expandPhotosForSave(text) {
   if (!this.photoMap) return text;
+  
   return text.replace(/!\[photo (\d+)\]/g, (match, num) => {
     const base64 = this.photoMap[num];
-    return base64 ? `![photo \( {num}](data:image/jpeg;base64, \){base64})` : match;
+    if (base64) {
+      return `![photo \( {num}](data:image/jpeg;base64, \){base64})`;
+    }
+    return match;
   });
 }
 
 // Collapse full base64 back to short tags when loading into editor
 collapsePhotosForEdit(text) {
+  if (!text) return text;
+  
   return text.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (match, num, base64) => {
     if (!this.photoMap) this.photoMap = {};
     this.photoMap[num] = base64;
