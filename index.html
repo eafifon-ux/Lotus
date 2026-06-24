@@ -1124,6 +1124,7 @@ class EditorCore {
     this.currentNote = "Home";
     this.history = {}; // History per note
 this.currentHistoryIndex = {};
+this.photoMap = {};
 this.debouncedReindex = null; // will be set in init
 
     this.noteCache = {};
@@ -1136,7 +1137,9 @@ this.debouncedReindex = null; // will be set in init
 async init() {
   await VaultDB.open();
   
-
+  // Restore photo map
+const saved = await VaultDB.get('__photo_map');
+if (saved) this.photoMap = saved;
   
   // Initialize UI events
   this.initEditorEvents();
@@ -3993,40 +3996,62 @@ initExportImport() {
 }
 
 // Fixed export method - properly handles folder structure
-// Fixed export method
 async exportAllNotes() {
   devLog('Export function called');
   
   try {
     const exportBtn = document.querySelector('[data-action="export-all"]');
-    const originalText = exportBtn ? exportBtn.textContent : '📤 Export All';
-    if (exportBtn) {
-      exportBtn.textContent = '⏳ Exporting...';
-      exportBtn.disabled = true;
+    const originalText = exportBtn.textContent;
+    exportBtn.textContent = '⏳ Exporting...';
+    exportBtn.disabled = true;
+    
+    if (typeof JSZip === 'undefined') {
+      throw new Error('JSZip not loaded');
     }
     
-    if (typeof JSZip === 'undefined') throw new Error('JSZip not loaded');
+    let notes = await VaultDB.list();
+    devLog('Notes found:', notes.length);
     
-    const notes = await VaultDB.list();
-    const validNotes = notes.filter(n => n && !n.startsWith('__'));
+    // Filter out internal keys (this fixes the __photo_map error)
+    const validNotes = notes.filter(n =>
+      n && !n.startsWith('__')
+    );
     
     const zip = new JSZip();
     
-    let exportedCount = 0;
     for (const note of validNotes) {
-      const content = await VaultDB.get(note);
-      if (content == null) continue;
-      
-      const filePath = note.includes('/') ? `\( {note}.md` : ` \){note}.md`;
-      zip.file(filePath, String(content));
-      exportedCount++;
+      try {
+        const content = await VaultDB.get(note);
+        if (content == null) continue;
+        
+        let filePath;
+        if (note.includes('/')) {
+          const parts = note.split('/');
+          const folderName = parts[0];
+          const noteFileName = parts[1];
+          
+          if (!zip.folder(folderName)) zip.folder(folderName);
+          filePath = `\( {folderName}/ \){noteFileName}.md`;
+        } else {
+          filePath = `${note}.md`;
+        }
+        
+        zip.file(filePath, String(content)); // Ensure it's a string
+      } catch (err) {
+        devError('Error exporting note ' + note + ':', err);
+      }
     }
     
-    // Skip photo map completely
+    // Photos are handled separately as JSON
+    if (this.photoMap && Object.keys(this.photoMap).length > 0) {
+      zip.file('_photos.json', JSON.stringify(this.photoMap, null, 2));
+    }
+    
     const content = await zip.generateAsync({ type: "blob" });
     
-    const dateString = new Date().toISOString().slice(0, 10);
-    const filename = `Lotus-Notes-${dateString}.zip`;
+    const today = new Date();
+    const dateString = today.toISOString().slice(0, 10);
+    const filename = `CaptureNotes-${dateString}.zip`;
     
     const url = URL.createObjectURL(content);
     const a = document.createElement('a');
@@ -4037,16 +4062,13 @@ async exportAllNotes() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    if (exportBtn) {
-      exportBtn.textContent = originalText;
-      exportBtn.disabled = false;
-    }
-    
-    alert(`✅ Exported ${exportedCount} notes successfully!`);
+    exportBtn.textContent = originalText;
+    exportBtn.disabled = false;
+    devLog('Export complete!');
     
   } catch (err) {
-    console.error('Export failed:', err);
-    alert('Export failed: ' + (err.message || 'Check console for details'));
+    devError('Export failed:', err);
+    alert('Export failed: ' + (err.message || 'Unknown error'));
     
     const exportBtn = document.querySelector('[data-action="export-all"]');
     if (exportBtn) {
