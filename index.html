@@ -3997,86 +3997,50 @@ initExportImport() {
 
 // Fixed export method - properly handles folder structure
 async exportAllNotes() {
-  devLog('Export function called');
-  
+  const exportBtn = document.querySelector('[data-action="export-all"]');
+  exportBtn.textContent = '⏳ Prep…';
+  exportBtn.disabled = true;
+
   try {
-    const exportBtn = document.querySelector('[data-action="export-all"]');
-    const originalText = exportBtn.textContent;
-    exportBtn.textContent = '⏳ Exporting...';
-    exportBtn.disabled = true;
-    
-    if (typeof JSZip === 'undefined') {
-      throw new Error('JSZip not loaded');
-    }
-    
-    let notes = await VaultDB.list();
-    devLog('Notes found:', notes.length);
-    
-    // Filter out internal keys (this fixes the __photo_map error)
-    const validNotes = notes.filter(n =>
-      n && !n.startsWith('__')
-    );
-    
-    const zip = new JSZip();
-    
-    for (const note of validNotes) {
-      try {
-        const content = await VaultDB.get(note);
-        if (content == null) continue;
-        
-        let filePath;
-        if (note.includes('/')) {
-          const parts = note.split('/');
-          const folderName = parts[0];
-          const noteFileName = parts[1];
-          
-          if (!zip.folder(folderName)) zip.folder(folderName);
-          filePath = `\( {folderName}/ \){noteFileName}.md`;
-        } else {
-          filePath = `${note}.md`;
-        }
-        
-        zip.file(filePath, String(content)); // Ensure it's a string
-      } catch (err) {
-        devError('Error exporting note ' + note + ':', err);
+    const notes = (await VaultDB.list()).filter(n => n && !n.startsWith('__'));
+    let combined = '';
+
+    // Build a giant Markdown file with headings per note
+    for (const name of notes) {
+      const content = await VaultDB.get(name);
+      if (content) {
+        combined += `\n\n# ${name}\n\n${content}\n\n---\n`;
       }
     }
-    
-    // Photos are handled separately as JSON
+
+    // Also include photos as textual references only (no base64)
     if (this.photoMap && Object.keys(this.photoMap).length > 0) {
-      zip.file('_photos.json', JSON.stringify(this.photoMap, null, 2));
+      combined += `\n\n## Attached Photos\n`;
+      for (const key of Object.keys(this.photoMap)) {
+        combined += `- ${key} (photo data omitted for file size)\n`;
+      }
     }
-    
-    const content = await zip.generateAsync({ type: "blob" });
-    
-    const today = new Date();
-    const dateString = today.toISOString().slice(0, 10);
-    const filename = `CaptureNotes-${dateString}.zip`;
-    
-    const url = URL.createObjectURL(content);
+
+    const blob = new Blob([combined], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = 'VaultExport.md';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    exportBtn.textContent = originalText;
+
+    exportBtn.textContent = '📤 Export All';
     exportBtn.disabled = false;
-    devLog('Export complete!');
-    
   } catch (err) {
-    devError('Export failed:', err);
+    console.error('Export failed:', err);
     alert('Export failed: ' + (err.message || 'Unknown error'));
-    
-    const exportBtn = document.querySelector('[data-action="export-all"]');
-    if (exportBtn) {
-      exportBtn.textContent = '📤 Export All';
-      exportBtn.disabled = false;
-    }
+    exportBtn.textContent = '📤 Export All';
+    exportBtn.disabled = false;
   }
 }
+
 
 // Fixed import method - properly handles folder structure
 async importAllNotes() {
