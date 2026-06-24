@@ -1912,6 +1912,8 @@ showRecentNotes() {
 async renderSearchResults(query) {
   if (!this.cachedIndex) {
     await this.buildNoteIndex();
+    await this.loadPhotoMap(); // ← ADD THIS LINE
+devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
   }
   
   const resultsContainer = document.getElementById('recent-list');
@@ -2135,11 +2137,12 @@ this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
 this.enableTableInlineEdit();
 
     
-    // Save after delay
-    clearTimeout(this.saveTimeout);
+// Save after delay
+clearTimeout(this.saveTimeout);
 this.saveTimeout = setTimeout(async () => {
   await VaultDB.set(this.currentNote, raw);
-  await this.updateCacheForSingleNote(this.currentNote); // ← ADD THIS LINE
+  await this.updateCacheForSingleNote(this.currentNote);
+  await this.savePhotoMap(); // ← Photos now saved
   if (this.debouncedReindex) this.debouncedReindex();
 }, 500);
     
@@ -4064,7 +4067,9 @@ async importAllNotes() {
           // Regular note
           await VaultDB.set(noteName, content);
         }
-      }
+}
+
+      await this.loadPhotoMap();   // ← Step 3: Restore photos after import
 
       alert('✅ Import complete! Refreshing notes...');
       await this.switchToNote('Home');
@@ -4503,6 +4508,27 @@ showPhotoManager() {
       }
     });
   });
+}
+
+// ===== PERSIST PHOTOS WITH NOTES (Export/Import) =====
+async savePhotoMap() {
+  try {
+    await VaultDB.set('__photoMap__', JSON.stringify(this.photoMap || {}));
+  } catch (e) {
+    devError('Failed to save photoMap', e);
+  }
+}
+
+async loadPhotoMap() {
+  try {
+    const saved = await VaultDB.get('__photoMap__');
+    if (saved) {
+      this.photoMap = JSON.parse(saved);
+    }
+  } catch (e) {
+    devError('Failed to load photoMap', e);
+    this.photoMap = {};
+  }
 }
 
 } // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
