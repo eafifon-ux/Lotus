@@ -1201,6 +1201,8 @@ if (!content) {
   this.noteCache[noteName] = content;
 }
 
+content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
+
 // Collapse full base64 → short clean tags for editor
 content = this.collapsePhotosForEdit(content);
     
@@ -4025,69 +4027,85 @@ async importAllNotes() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.zip';
-
+  
   input.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    if (!confirm('⚠️ WARNING: This will replace ALL existing notes. Continue?')) return;
-
+    
+    if (!confirm('⚠️ This will replace ALL notes. Continue?')) return;
+    
+    const importBtn = document.querySelector('[data-action="import-all"]');
+    const originalText = importBtn.textContent;
+    importBtn.textContent = '⏳ Importing...';
+    
     try {
-      // Show loading indicator
-      const importBtn = document.querySelector('[data-action="import-all"]');
-      const originalText = importBtn.textContent;
-      importBtn.textContent = '⏳ Importing...';
-
       const zip = new JSZip();
       const result = await zip.loadAsync(file);
-
-      // Clear existing notes first
-      const existingNotes = await VaultDB.list();
-      for (const note of existingNotes) {
-        await VaultDB.remove(note);
-      }
-
-      // Import each file with proper folder handling
+      
+      // Clear everything first
+      const existing = await VaultDB.list();
+      for (const n of existing) await VaultDB.remove(n);
+      
+      this.photoMap = {}; // reset in memory
+      
+      let importedNotes = 0;
+      let photoMapFound = false;
+      
       for (const filename in result.files) {
         if (result.files[filename].dir) continue;
-
+        
         const content = await result.files[filename].async('text');
-        const noteName = filename.replace('.md', '');
-
-        // Handle folder structure during import
+        let noteName = filename.replace(/\.md$/i, '');
+        
+        if (noteName === '__photoMap__') {
+          try {
+            this.photoMap = JSON.parse(content);
+            await VaultDB.set('__photoMap__', content);
+            photoMapFound = true;
+            devLog('✅ Restored photoMap from ZIP');
+          } catch (pErr) {
+            devError('PhotoMap parse failed', pErr);
+          }
+          continue;
+        }
+        
+        // Handle folders
         if (filename.includes('/')) {
-          // This is a note inside a folder
           const parts = filename.split('/');
           if (parts.length === 2) {
-            const folderName = parts[0];
-            const actualNoteName = parts[1].replace('.md', '');
-
-            // Reconstruct the proper folder structure
-            const fullNoteName = `${folderName}/${actualNoteName}`;
-            await VaultDB.set(fullNoteName, content);
+            noteName = `\( {parts[0]}/ \){parts[1].replace('.md','')}`;
           }
-        } else {
-          // Regular note
-          await VaultDB.set(noteName, content);
         }
-}
-
-        // ← Step 3: Restore photos after import
-
-      alert('✅ Import complete! Refreshing notes...');
+        
+        // IMPORTANT: Collapse photos right after import
+        const collapsed = this.collapsePhotosForEdit(content);
+        await VaultDB.set(noteName, collapsed);
+        this.noteCache[noteName] = collapsed;
+        importedNotes++;
+      }
+      
+      await window.editorCore.loadPhotoMap();
+      
+      if (!photoMapFound && Object.keys(this.photoMap).length === 0) {
+        devLog('No __photoMap__ in ZIP — will rebuild from notes if needed');
+      }
+      
+      await this.savePhotoMap();
+      
+      alert(`✅ Import complete! ${importedNotes} notes + photos restored.`);
+      
       await this.switchToNote('Home');
       await this.loadRecentNotes();
-
+      if (this.debouncedReindex) this.debouncedReindex();
+      
     } catch (err) {
       devError('Import failed:', err);
       alert('❌ Import failed: ' + err.message);
     } finally {
-      // Reset button text
-      const importBtn = document.querySelector('[data-action="import-all"]');
       importBtn.textContent = originalText || '📥 Import All';
     }
   };
-
+  
   input.click();
 }
 
