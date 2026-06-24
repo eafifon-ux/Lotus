@@ -3923,58 +3923,45 @@ initExportImport() {
 // Fixed export method - properly handles folder structure
 async exportAllNotes() {
   devLog('Export function called');
-  
   try {
     const exportBtn = document.querySelector('[data-action="export-all"]');
     const originalText = exportBtn.textContent;
     exportBtn.textContent = '⏳ Exporting...';
     exportBtn.disabled = true;
     
-    if (typeof JSZip === 'undefined') {
-      throw new Error('JSZip not loaded');
-    }
+    if (typeof JSZip === 'undefined') throw new Error('JSZip not loaded');
     
-    const notes = await VaultDB.list();
-    devLog('Notes found:', notes.length);
+    const allKeys = await VaultDB.list();
+    const validNotes = allKeys.filter(n => n && !n.startsWith('__'));
     
-    // CRITICAL FILTER - exclude internal keys like __photo_map
-    const validNotes = notes.filter(n => n && !n.startsWith('__'));
+    devLog('Valid notes to export:', validNotes.length);
     
     const zip = new JSZip();
     
     for (const note of validNotes) {
-      try {
-        const content = await VaultDB.get(note);
-        if (content == null) continue;
-        
-        let filePath;
-        if (note.includes('/')) {
-          const parts = note.split('/');
-          const folderName = parts[0];
-          const noteFileName = parts[1];
-          
-          if (!zip.folder(folderName)) zip.folder(folderName);
-          filePath = `\( {folderName}/ \){noteFileName}.md`;
-        } else {
-          filePath = `${note}.md`;
-        }
-        
-        zip.file(filePath, String(content));
-      } catch (err) {
-        devError('Error exporting note ' + note + ':', err);
+      const content = await VaultDB.get(note);
+      if (!content) continue;
+      
+      let filePath;
+      if (note.includes('/')) {
+        const parts = note.split('/');
+        const folderName = parts[0];
+        const noteFileName = parts[1];
+        if (!zip.folder(folderName)) zip.folder(folderName);
+        filePath = `\( {folderName}/ \){noteFileName}.md`;
+      } else {
+        filePath = `${note}.md`;
       }
+      
+      zip.file(filePath, String(content));
     }
     
-    // Export photos separately
     if (this.photoMap && Object.keys(this.photoMap).length > 0) {
       zip.file('_photos.json', JSON.stringify(this.photoMap, null, 2));
     }
     
     const content = await zip.generateAsync({ type: "blob" });
-    
-    const today = new Date();
-    const dateString = today.toISOString().slice(0, 10);
-    const filename = `CaptureNotes-${dateString}.zip`;
+    const filename = `CaptureNotes-${new Date().toISOString().slice(0,10)}.zip`;
     
     const url = URL.createObjectURL(content);
     const a = document.createElement('a');
@@ -3987,20 +3974,14 @@ async exportAllNotes() {
     
     exportBtn.textContent = originalText;
     exportBtn.disabled = false;
-    devLog('✅ Export complete! Size:', content.size, 'bytes');
-    
+    devLog('✅ Export successful, size:', content.size);
   } catch (err) {
     devError('Export failed:', err);
     alert('Export failed: ' + (err.message || 'Unknown error'));
-    
-    const exportBtn = document.querySelector('[data-action="export-all"]');
-    if (exportBtn) {
-      exportBtn.textContent = '📤 Export All';
-      exportBtn.disabled = false;
-    }
+    const btn = document.querySelector('[data-action="export-all"]');
+    if (btn) btn.textContent = '📤 Export All';
   }
 }
-
 // Fixed import method - properly handles folder structure
 async importAllNotes() {
   const input = document.createElement('input');
