@@ -2122,10 +2122,21 @@ html = this.processGPCStamps(html);
 
 // === PHOTO RENDERING - Short tag → full base64 image ===
 html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
-  const base64 = this.photoMap ? this.photoMap[num] : null;
-  return base64 ?
-    `<img src="data:image/jpeg;base64,${base64}" style="max-width:100%;border-radius:8px;margin:12px 0;display:block;" alt="Photo ${num}">` :
-    match;
+  const base64 = this.photoMap && this.photoMap[num] ? this.photoMap[num] : null;
+  
+  if (base64) {
+    return `<img src="data:image/jpeg;base64,${base64}" 
+                style="max-width:100%; border-radius:8px; margin:12px 0; display:block; box-shadow:0 2px 8px rgba(0,0,0,0.1);" 
+                alt="Photo ${num}">`;
+  }
+  return match; // keep original tag if no base64 found
+});
+
+// Also handle full base64 markdown images (safety net)
+html = html.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (match, num, base64) => {
+  return `<img src="data:image/jpeg;base64,${base64}" 
+              style="max-width:100%; border-radius:8px; margin:12px 0; display:block; box-shadow:0 2px 8px rgba(0,0,0,0.1);" 
+              alt="Photo ${num}">`;
 });
 
 // Update preview
