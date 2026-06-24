@@ -1604,7 +1604,8 @@ if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
 }
 
 // Add this method inside the EditorCore class
-showPhotoManager() {
+// ===== PHOTO MANAGER =====
+async showPhotoManager() {
   if (!this.photoMap || Object.keys(this.photoMap).length === 0) {
     alert("No photos attached yet.");
     return;
@@ -1618,7 +1619,7 @@ showPhotoManager() {
   message += "\nEnter the photo number to delete (e.g. 3):";
   
   const input = prompt(message);
-  if (input === null) return; // user cancelled
+  if (input === null) return; // cancelled
   
   const num = parseInt(input.trim());
   if (isNaN(num)) {
@@ -1631,11 +1632,15 @@ showPhotoManager() {
   if (this.photoMap[key]) {
     if (confirm(`Delete ${key}? This cannot be undone.`)) {
       delete this.photoMap[key];
-      VaultDB.set('__photo_map', this.photoMap);
       
-      // Optional: clean up references in current note
+      await VaultDB.set('__photo_map', this.photoMap); // ← Fixed
+      
+      // Clean up reference in current note if present
       if (this.editor.value.includes(`![photo-${num}]`)) {
-        this.editor.value = this.editor.value.replace(new RegExp(`!\\[photo-${num}\\]`, 'g'), `[Deleted Photo ${num}]`);
+        this.editor.value = this.editor.value.replace(
+          new RegExp(`!\\[photo-${num}\\]`, 'g'),
+          `[Deleted Photo ${num}]`
+        );
       }
       
       this.updatePreviewAndSave();
