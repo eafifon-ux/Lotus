@@ -668,6 +668,22 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 }
 
 
+/* Photos: Full width, clean look */
+#preview img {
+  max-width: 100%;
+  width: 100%;               /* Force full width */
+  height: auto;
+  border-radius: 8px;
+  margin: 16px 0;
+  display: block;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Extra safety for embedded data URLs */
+#preview img[src^="data:image"] {
+  max-height: 620px;         /* prevents extremely tall images from dominating */
+}
+
 </style>
 </head>
 <body>
@@ -2024,6 +2040,13 @@ html += `
 let html = this.renderWikilinks(raw);
 html = this.processHighlights(html);
 html = this.processSubSuperScript(html);
+
+// PHOTO REPLACEMENT - Add this
+if (this.photoMap) {
+  html = html.replace(/!\[photo-(\d+)\]/g, (match, num) => {
+    return this.photoMap[`photo-${num}`] || match;
+  });
+}
 
 // Convert markdown tasks to HTML before parsing with proper markdown support
 html = html.replace(
@@ -3902,106 +3925,74 @@ async exportAllNotes() {
   devLog('Export function called');
   
   try {
-    // Show loading indicator
     const exportBtn = document.querySelector('[data-action="export-all"]');
     const originalText = exportBtn.textContent;
     exportBtn.textContent = '⏳ Exporting...';
     exportBtn.disabled = true;
     
-    // Ensure JSZip is loaded
     if (typeof JSZip === 'undefined') {
-      devError('JSZip is undefined!');
-      throw new Error('JSZip library not loaded. Check if the script tag is loading.');
+      throw new Error('JSZip not loaded');
     }
     
     const notes = await VaultDB.list();
-    devLog('Notes found:', notes.length, notes);
+    devLog('Notes found:', notes.length);
     
-    if (notes.length === 0) {
-      alert('No notes to export!');
-      exportBtn.textContent = originalText;
-      exportBtn.disabled = false;
-      return;
-    }
+    // CRITICAL FILTER - exclude internal keys like __photo_map
+    const validNotes = notes.filter(n => n && !n.startsWith('__'));
     
     const zip = new JSZip();
-    devLog('Zip instance created');
-
-    // Add each note to the zip file with proper folder structure
-    for (const note of notes) {
+    
+    for (const note of validNotes) {
       try {
         const content = await VaultDB.get(note);
-        if (!content) {
-          devWarn('Note ' + note + ' has no content, skipping');
-          continue;
-        }
+        if (content == null) continue;
         
-        // Handle folder structure properly
         let filePath;
         if (note.includes('/')) {
-          // This is a note inside a folder - maintain the folder structure
           const parts = note.split('/');
           const folderName = parts[0];
           const noteFileName = parts[1];
           
-          // Create folder if it doesn't exist
-          if (!zip.folder(folderName)) {
-            zip.folder(folderName);
-          }
-          filePath = folderName + '/' + noteFileName + '.md';
+          if (!zip.folder(folderName)) zip.folder(folderName);
+          filePath = `\( {folderName}/ \){noteFileName}.md`;
         } else {
-          // Regular note in root
-          filePath = note + '.md';
+          filePath = `${note}.md`;
         }
         
-        devLog('Adding note to zip: ' + filePath);
-        zip.file(filePath, content);
+        zip.file(filePath, String(content));
       } catch (err) {
         devError('Error exporting note ' + note + ':', err);
       }
     }
-
-    // Generate the zip file
-    devLog('Generating zip file...');
-    const content = await zip.generateAsync({ type: "blob" });
-    devLog('Zip generated, size:', content.size, 'bytes');
     
-    if (content.size === 0) {
-      alert('Export failed: Generated zip file is empty!');
-      exportBtn.textContent = originalText;
-      exportBtn.disabled = false;
-      return;
+    // Export photos separately
+    if (this.photoMap && Object.keys(this.photoMap).length > 0) {
+      zip.file('_photos.json', JSON.stringify(this.photoMap, null, 2));
     }
     
-    // Create download link
+    const content = await zip.generateAsync({ type: "blob" });
+    
     const today = new Date();
     const dateString = today.toISOString().slice(0, 10);
-    const filename = 'CaptureNotes-' + dateString + '.zip';
-    const url = URL.createObjectURL(content);
+    const filename = `CaptureNotes-${dateString}.zip`;
     
+    const url = URL.createObjectURL(content);
     const a = document.createElement('a');
-    a.style.display = 'none';
     a.href = url;
     a.download = filename;
-    
     document.body.appendChild(a);
-    devLog('Triggering download...');
     a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      exportBtn.textContent = originalText;
-      exportBtn.disabled = false;
-      devLog('Export complete! File should download as:', filename);
-    }, 100);
-      
+    exportBtn.textContent = originalText;
+    exportBtn.disabled = false;
+    devLog('✅ Export complete! Size:', content.size, 'bytes');
+    
   } catch (err) {
     devError('Export failed:', err);
     alert('Export failed: ' + (err.message || 'Unknown error'));
     
-    // Reset button text
     const exportBtn = document.querySelector('[data-action="export-all"]');
     if (exportBtn) {
       exportBtn.textContent = '📤 Export All';
