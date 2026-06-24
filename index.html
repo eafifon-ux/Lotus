@@ -1086,7 +1086,6 @@ this.debouncedReindex = null; // will be set in init
     this.noteCache = {};
     this.backlinksMap = {};
     this.cachedIndex = null;   // ← ADD THIS LINE
-    this.photoMap = {};   // ← Add this
     this.init();
   }
   
@@ -1193,13 +1192,16 @@ async switchToNote(noteName) {
     if (!noteName || noteName === this.currentNote) return;
     
     // FAST PATH: Check cache first
-    let content = this.noteCache[noteName];
-    
-    if (!content) {
-      // Cache miss - load from storage
-      content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
-      this.noteCache[noteName] = content;
-    }
+let content = this.noteCache[noteName];
+
+if (!content) {
+  // Cache miss - load from storage
+  content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+  this.noteCache[noteName] = content;
+}
+
+// Collapse full base64 → short clean tags for editor
+content = this.collapsePhotosForEdit(content);
     
     // Save current note (deferred for performance)
     setTimeout(async () => {
@@ -2115,13 +2117,13 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
 
 html = this.processGPCStamps(html);
 
-// === PHOTO RENDERING - Short ![photo N] → real image ===
-if (this.photoMap) {
-  html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
-    const url = this.photoMap[`photo-${num}`];
-    return url ? `<img src="${url}" style="max-width:100%;border-radius:8px;margin:12px 0;display:block;" alt="Photo ${num}">` : match;
-  });
-}
+// === PHOTO RENDERING - Short tag → full base64 image ===
+html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
+  const base64 = this.photoMap ? this.photoMap[num] : null;
+  return base64 ?
+    `<img src="data:image/jpeg;base64,${base64}" style="max-width:100%;border-radius:8px;margin:12px 0;display:block;" alt="Photo ${num}">` :
+    match;
+});
 
 // Update preview
 this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
@@ -2140,9 +2142,9 @@ this.enableTableInlineEdit();
 // Save after delay
 clearTimeout(this.saveTimeout);
 this.saveTimeout = setTimeout(async () => {
-  await VaultDB.set(this.currentNote, raw);
+  const contentToSave = this.expandPhotosForSave(raw);
+  await VaultDB.set(this.currentNote, contentToSave);
   await this.updateCacheForSingleNote(this.currentNote);
-  await this.savePhotoMap(); // ← Photos now saved
   if (this.debouncedReindex) this.debouncedReindex();
 }, 500);
     
@@ -4396,47 +4398,65 @@ simpleUpdateTableCell(cell, newValue) {
   }
 }
 
-// ===== CLEAN PHOTO SYSTEM - Short ![photo 1] in editor =====
+// ===== FULL BASE64 BUT INVISIBLE IN EDITOR =====
 async handlePhotoUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
-
+  
+  if (file.size > 10 * 1024 * 1024) {
+    alert('Photo too large (max 10MB).');
+    event.target.value = '';
+    return;
+  }
+  
   try {
-    const dataUrl = await this.compressImage(file, 1100, 0.75);
+    const dataUrl = await this.compressImage(file, 1200, 0.78);
     
     let num = 1;
     while (this.editor.value.includes(`![photo ${num}]`)) num++;
-
+    
     const shortMd = `![photo ${num}]`;
-
+    
     const cursor = this.editor.selectionStart;
-    this.editor.value = this.editor.value.substring(0, cursor) + shortMd + this.editor.value.substring(this.editor.selectionEnd);
-
-    if (!this.photoMap) this.photoMap = {};
-    this.photoMap[`photo-${num}`] = dataUrl;
-
+    this.editor.value = this.editor.value.substring(0, cursor) +
+      shortMd +
+      this.editor.value.substring(this.editor.selectionEnd);
+    
     this.editor.selectionStart = this.editor.selectionEnd = cursor + shortMd.length;
+    
+    // Store mapping temporarily (will be expanded on save)
+    if (!this.photoMap) this.photoMap = {};
+    this.photoMap[num] = dataUrl.split(',')[1]; // just the base64 part
+    
     await this.updatePreviewAndSave();
     event.target.value = '';
-    this.showToast(`✅ Photo ${num} added`);
-  } catch (e) {
-    alert("Photo failed");
+    this.showToast(`✅ Photo ${num} embedded`);
+    
+  } catch (err) {
+    console.error(err);
+    alert('Failed to process photo');
   }
 }
 
-compressImage(file, maxW = 1100, q = 0.75) {
+compressImage(file, maxDimension = 1200, quality = 0.78) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      let w = img.width, h = img.height;
-      if (w > maxW) { h = h * maxW / w; w = maxW; }
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(c.toDataURL('image/jpeg', q));
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width *= ratio;
+        height *= ratio;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
     };
-    img.src = URL.createObjectURL(file);
     img.onerror = reject;
+    img.src = URL.createObjectURL(file);
   });
 }
 
@@ -4446,6 +4466,24 @@ showToast(msg) {
   t.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1f1f1f;color:#0f0;padding:10px 18px;border-radius:6px;z-index:9999;';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 1600);
+}
+
+// Expand short tags to full base64 before saving
+expandPhotosForSave(text) {
+  if (!this.photoMap) return text;
+  return text.replace(/!\[photo (\d+)\]/g, (match, num) => {
+    const base64 = this.photoMap[num];
+    return base64 ? `![photo \( {num}](data:image/jpeg;base64, \){base64})` : match;
+  });
+}
+
+// Collapse full base64 back to short tags when loading into editor
+collapsePhotosForEdit(text) {
+  return text.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (match, num, base64) => {
+    if (!this.photoMap) this.photoMap = {};
+    this.photoMap[num] = base64;
+    return `![photo ${num}]`;
+  });
 }
 
 // ===== PHOTO MANAGER =====
