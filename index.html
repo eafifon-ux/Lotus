@@ -1124,7 +1124,6 @@ class EditorCore {
     this.currentNote = "Home";
     this.history = {}; // History per note
 this.currentHistoryIndex = {};
-this.photoMap = {};
 this.debouncedReindex = null; // will be set in init
 
     this.noteCache = {};
@@ -1137,9 +1136,7 @@ this.debouncedReindex = null; // will be set in init
 async init() {
   await VaultDB.open();
   
-  // Restore photo map
-const saved = await VaultDB.get('__photo_map');
-if (saved) this.photoMap = saved;
+
   
   // Initialize UI events
   this.initEditorEvents();
@@ -4015,15 +4012,17 @@ async exportAllNotes() {
     
     const zip = new JSZip();
     
+    let exportedCount = 0;
     for (const note of validNotes) {
       const content = await VaultDB.get(note);
       if (content == null) continue;
       
       const filePath = note.includes('/') ? `\( {note}.md` : ` \){note}.md`;
       zip.file(filePath, String(content));
+      exportedCount++;
     }
     
-    // No photo map / _photos.json anymore
+    // Skip photo map completely
     const content = await zip.generateAsync({ type: "blob" });
     
     const dateString = new Date().toISOString().slice(0, 10);
@@ -4043,11 +4042,11 @@ async exportAllNotes() {
       exportBtn.disabled = false;
     }
     
-    alert(`✅ Exported ${validNotes.length} notes!`);
+    alert(`✅ Exported ${exportedCount} notes successfully!`);
     
   } catch (err) {
     console.error('Export failed:', err);
-    alert('Export failed: ' + (err.message || 'Unknown error'));
+    alert('Export failed: ' + (err.message || 'Check console for details'));
     
     const exportBtn = document.querySelector('[data-action="export-all"]');
     if (exportBtn) {
