@@ -4443,6 +4443,68 @@ showToast(msg) {
   setTimeout(() => t.remove(), 1600);
 }
 
+// ===== PHOTO MANAGER =====
+showPhotoManager() {
+  if (!this.photoMap || Object.keys(this.photoMap).length === 0) {
+    alert("No photos yet.\n\nClick the 📷 button in the toolbar to add some.");
+    return;
+  }
+  
+  let html = '<h3 style="margin:0 0 15px 0;">📷 Your Photos</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">';
+  
+  Object.keys(this.photoMap).forEach(key => {
+    const num = key.replace('photo-', '');
+    html += `
+      <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;background:#fff;text-align:center;position:relative;">
+        <img src="${this.photoMap[key]}" style="width:100%;height:160px;object-fit:cover;display:block;">
+        <div style="padding:8px 6px;font-size:13px;">
+          Photo ${num}
+          <button data-key="${key}" class="delete-photo-btn" 
+            style="margin-left:10px;color:#c00;background:none;border:none;font-size:18px;cursor:pointer;">🗑</button>
+        </div>
+      </div>`;
+  });
+  
+  html += '</div>';
+  
+  const modal = document.createElement('div');
+  modal.id = 'photo-modal';
+  modal.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75);
+    z-index:999999; display:flex; align-items:center; justify-content:center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="background:#fff; max-width:92%; max-height:90%; overflow:auto; border-radius:12px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+      ${html}
+      <div style="text-align:center;margin-top:20px;">
+        <button id="close-photo-modal" 
+          style="padding:12px 28px; background:#333; color:white; border:none; border-radius:8px; font-size:16px; cursor:pointer;">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Close button
+  document.getElementById('close-photo-modal').onclick = () => modal.remove();
+  
+  // Delete buttons
+  modal.querySelectorAll('.delete-photo-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      if (confirm(`Delete Photo ${key.replace('photo-', '')}?`)) {
+        delete this.photoMap[key];
+        modal.remove(); // close modal
+        this.showPhotoManager(); // reopen updated list
+        this.updatePreviewAndSave();
+      }
+    });
+  });
+}
+
 } // <-- THIS IS THE MISSING BRACE THAT CLOSES THE EditorCore CLASS
 
 
