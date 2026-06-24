@@ -807,6 +807,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <div class="sidebar-item">⚙ System</div>
     <div class="sidebar-item" data-action="export-all">📤 Export All</div>
     <div class="sidebar-item" data-action="import-all">📥 Import All</div>
+    <div class="sidebar-item" id="photo-manager-btn">📷 Photo Manager</div>
   </div>
 </div>
 
@@ -1452,6 +1453,11 @@ initEditorEvents() {
     alert("Couldn't create folder: " + err.message);
   }
 });
+
+document.getElementById('photo-manager-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  this.showPhotoManager();
+});
   
  // Replace the current back button handler with this:
 document.getElementById('back-btn').addEventListener('click', async (e) => {
@@ -1595,6 +1601,49 @@ if (this.debouncedReindex) this.debouncedReindex(); // refresh search index
         devError('Delete failed:', err);
         alert('Delete failed');
     }
+}
+
+// Add this method inside the EditorCore class
+showPhotoManager() {
+  if (!this.photoMap || Object.keys(this.photoMap).length === 0) {
+    alert("No photos attached yet.");
+    return;
+  }
+  
+  let message = "📷 Attached Photos:\n\n";
+  Object.keys(this.photoMap).sort().forEach(key => {
+    message += `${key}\n`;
+  });
+  
+  message += "\nEnter the photo number to delete (e.g. 3):";
+  
+  const input = prompt(message);
+  if (input === null) return; // user cancelled
+  
+  const num = parseInt(input.trim());
+  if (isNaN(num)) {
+    alert("Invalid number");
+    return;
+  }
+  
+  const key = `photo-${num}`;
+  
+  if (this.photoMap[key]) {
+    if (confirm(`Delete ${key}? This cannot be undone.`)) {
+      delete this.photoMap[key];
+      VaultDB.set('__photo_map', this.photoMap);
+      
+      // Optional: clean up references in current note
+      if (this.editor.value.includes(`![photo-${num}]`)) {
+        this.editor.value = this.editor.value.replace(new RegExp(`!\\[photo-${num}\\]`, 'g'), `[Deleted Photo ${num}]`);
+      }
+      
+      this.updatePreviewAndSave();
+      alert(`✅ ${key} deleted.`);
+    }
+  } else {
+    alert("Photo number not found.");
+  }
 }
 
 async renameNote(oldName) {
