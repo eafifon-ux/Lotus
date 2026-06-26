@@ -1203,6 +1203,8 @@ redo() {
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
+  await this.loadPhotoMap();
+  
   // FORCE photoMap reload - this is the key fix
   await this.loadPhotoMap();
   
@@ -2128,7 +2130,7 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
 
 html = this.processGPCStamps(html);
 
-// === PHOTO RENDERING ===
+// === PHOTO RENDERING - more robust ===
 html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
   const base64 = this.photoMap?.[num];
   if (base64) {
@@ -2136,6 +2138,7 @@ html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
                 style="max-width:100%; border-radius:8px; margin:12px 0; display:block; box-shadow:0 2px 8px rgba(0,0,0,0.1);" 
                 alt="Photo ${num}">`;
   }
+  devLog(`Photo ${num} missing from map`);
   return match;
 });
 
