@@ -1201,38 +1201,30 @@ redo() {
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
-  // FAST PATH: Check cache first
-  let content = this.noteCache[noteName];
+  devLog('Switching to:', noteName);
   
+  // Force reload photos every time (critical for NFC/deep links)
+  await this.loadPhotoMap();
+  devLog('Photos loaded:', Object.keys(this.photoMap || {}).length);
+  
+  let content = this.noteCache[noteName];
   if (!content) {
-    // Cache miss - load from storage
     content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
     this.noteCache[noteName] = content;
   }
   
-  // Ensure photoMap is loaded BEFORE collapsing
-  if (Object.keys(this.photoMap).length === 0) {
-    await this.loadPhotoMap();
+  content = this.collapsePhotosForEdit(content);
+  
+  // Save current note
+  if (this.currentNote) {
+    await VaultDB.set(this.currentNote, this.expandPhotosForSave(this.editor.value));
   }
   
-  // Collapse full base64 → short clean tags
-  content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
-  
-  // Save current note (deferred)
-  setTimeout(async () => {
-    if (this.currentNote) {
-      const currentContent = this.editor.value;
-      await VaultDB.set(this.currentNote, currentContent);
-      this.noteCache[this.currentNote] = currentContent;
-    }
-  }, 0);
-  
-  // INSTANT UI update
   this.currentNote = noteName;
   this.editor.value = content;
   
   this.pushHistory();
-  await this.updatePreviewAndSave(); // ← Make sure we await this
+  await this.updatePreviewAndSave();
   this.updateActiveNoteUI();
 }
 // ── Lightweight note counter (only runs when sidebar is opened) ──
@@ -3177,6 +3169,11 @@ handleToolbarClick(e) {
   if (action === 'undo') return this.undo();
   if (action === 'redo') return this.redo();
   if (action === 'checkbox') return this.toggleCheckbox();
+  
+  if (action === 'nfc') {
+  this.generateNFCDeepLink();
+  return;
+}
   if (action === 'quote') {
   const cursor = this.editor.selectionStart;
   const textBefore = this.editor.value.substring(0, cursor);
@@ -3336,20 +3333,16 @@ handleDropdownClick(type, e) {
   }
   
   // DEEPLINK SPECIAL: Only insert markdown (paste [Text](url) at cursor)
-  if (type === 'deeplink') {
-    const link = e.target.closest('a.deeplink-btn');
-    if (link) {
-      e.preventDefault(); // Stop normal link behavior
-      const url = link.href;
-      const text = link.textContent.trim(); // FIXED: Just trim—preserves internal spaces (e.g., "🍏 WhatsApp")
-      
-      // JUST PASTE THE MARKDOWN LINK AT CURSOR
-      const markdown = `[${text}](${url})`;
-      this.insertAtCursor(markdown);
-      
-      devLog(`✅ Inserted: [${text}](${url})`); // Optional log
-    }
+if (type === 'deeplink') {
+  const link = e.target.closest('a.deeplink-btn');
+  if (link) {
+    e.preventDefault();
+    const url = link.href;
+    const text = link.textContent.trim();
+    const markdown = `[\( {text}]( \){url})`;
+    this.insertAtCursor(markdown);
   }
+}
   
   // Close dropdown after any action
   e.currentTarget.classList.remove('open');
