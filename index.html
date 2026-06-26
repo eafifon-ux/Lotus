@@ -791,6 +791,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="checkbox">☑</button>
 <button id="deeplink-button">🚀 ▼</button>
     <button data-action="link">🔗</button>
+<button data-action="nfc" title="NFC Deep Link">⛓️</button>
     <button data-action="wikilink">📄</button>
 <button data-action="folder">📁</button>
 
@@ -1138,6 +1139,7 @@ this.editor.value = content;
   this.pushHistory(true);
   await this.updatePreviewAndSave();
   await this.buildNoteIndex();
+await this.handleDeepLink(); // ← Add this
   devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
   await this.updateNoteCount();
 }
@@ -3263,6 +3265,56 @@ replaceSelection(text) {
   this.editor.value = this.editor.value.substring(0, start) + text + this.editor.value.substring(end);
   this.editor.selectionStart = this.editor.selectionEnd = start + text.length;
   this.updatePreviewAndSave();
+}
+
+// ===== NFC DEEP LINK GENERATOR =====
+generateNFCDeepLink() {
+  const currentNote = this.currentNote || 'Home';
+  const encodedNote = encodeURIComponent(currentNote);
+  const deepLink = window.location.origin + window.location.pathname + "?note=" + encodedNote;
+  
+  navigator.clipboard.writeText(deepLink).then(() => {
+    alert(`✅ NFC Deep Link Copied!\n\nNote: "\( {currentNote}"\n\nURL:\n \){deepLink}`);
+  }).catch(() => {
+    prompt('Copy this manually:', deepLink);
+  });
+}
+
+// ===== DEEP LINK HANDLER (for when NFC is scanned) =====
+async handleDeepLink() {
+  const urlParams = new URLSearchParams(window.location.search);
+  let targetNote = urlParams.get('note')?.trim();
+  if (!targetNote) return;
+  
+  targetNote = decodeURIComponent(targetNote);
+  devLog('Deep link opened:', targetNote);
+  
+  await this.loadPhotoMap(); // Critical for photos
+  await this.switchToNote(targetNote);
+}
+
+// Improved switchToNote (replace your existing one)
+async switchToNote(noteName) {
+  if (!noteName || noteName === this.currentNote) return;
+  
+  await this.loadPhotoMap(); // Force photo load
+  
+  let content = this.noteCache[noteName] || await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+  this.noteCache[noteName] = content;
+  
+  content = this.collapsePhotosForEdit(content);
+  
+  // Save current before switching
+  if (this.currentNote) {
+    await VaultDB.set(this.currentNote, this.expandPhotosForSave(this.editor.value));
+  }
+  
+  this.currentNote = noteName;
+  this.editor.value = content;
+  
+  this.pushHistory();
+  await this.updatePreviewAndSave();
+  this.updateActiveNoteUI();
 }
 
 handleDropdownClick(type, e) {
