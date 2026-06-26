@@ -3280,32 +3280,32 @@ generateNFCDeepLink() {
 }
 
 // ===== DEEP LINK HANDLER (for when NFC is scanned) =====
+// ===== DEEP LINK HANDLER =====
 async handleDeepLink() {
   const urlParams = new URLSearchParams(window.location.search);
   let targetNote = urlParams.get('note')?.trim();
+  
   if (!targetNote) return;
   
   targetNote = decodeURIComponent(targetNote);
-  devLog('Deep link detected:', targetNote);
+  devLog('Deep link detected - forcing load of:', targetNote);
   
-  // Force clean state
   await this.loadPhotoMap();
   
-  // Small delay to let IndexedDB settle
+  // Force switch
   setTimeout(async () => {
     await this.switchToNote(targetNote);
-  }, 100);
+  }, 200);
 }
 
 // Improved switchToNote (replace your existing one)
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
-  devLog('Switching to note (clean):', noteName);
+  devLog('switchToNote called with:', noteName);
   
   await this.loadPhotoMap();
   
-  // Always load fresh from VaultDB
   let content = await VaultDB.get(noteName);
   if (!content) {
     content = `# ${noteName}\n\n`;
@@ -3313,10 +3313,8 @@ async switchToNote(noteName) {
   
   content = this.collapsePhotosForEdit(content);
   
-  // Save current note safely
   if (this.currentNote && this.currentNote !== noteName) {
-    const currentContent = this.editor.value;
-    await VaultDB.set(this.currentNote, this.expandPhotosForSave(currentContent));
+    await VaultDB.set(this.currentNote, this.expandPhotosForSave(this.editor.value));
   }
   
   this.currentNote = noteName;
