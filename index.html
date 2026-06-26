@@ -791,9 +791,6 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="checkbox">☑</button>
 <button id="deeplink-button">🚀 ▼</button>
     <button data-action="link">🔗</button>
-    <!-- Inside #floating-deeplink-dropdown -->
-   <button data-action="nfc" title="Generate NFC Deep Link">⛓️</button>
-   <!-- Inside #floating-deeplink-dropdown -->
     <button data-action="wikilink">📄</button>
 <button data-action="folder">📁</button>
 
@@ -1141,7 +1138,6 @@ this.editor.value = content;
   this.pushHistory(true);
   await this.updatePreviewAndSave();
   await this.buildNoteIndex();
-  await this.handleDeepLink();   // ← Add this line
   devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
   await this.updateNoteCount();
 }
@@ -1202,33 +1198,41 @@ redo() {
 
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
-
-  // Save current note first as before
-  if (this.currentNote && this.currentNote !== noteName) {
-    const currentContent = this.editor.value;
-    const expanded = this.expandPhotosForSave(currentContent);
-    await VaultDB.set(this.currentNote, expanded);
-    this.noteCache[this.currentNote] = expanded;
+  
+  // FAST PATH: Check cache first
+  let content = this.noteCache[noteName];
+  
+  if (!content) {
+    // Cache miss - load from storage
+    content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+    this.noteCache[noteName] = content;
   }
-
-  // FORCE reload photo map before loading the new note
-  await this.loadPhotoMap();
-
-  // Clear cache for this note to force fresh retrieval
-  delete this.noteCache[noteName];
-
-  let content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
-  this.noteCache[noteName] = content;
-
-  content = this.collapsePhotosForEdit(content);
+  
+  // Ensure photoMap is loaded BEFORE collapsing
+  if (Object.keys(this.photoMap).length === 0) {
+    await this.loadPhotoMap();
+  }
+  
+  // Collapse full base64 → short clean tags
+  content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
+  
+  // Save current note (deferred)
+  setTimeout(async () => {
+    if (this.currentNote) {
+      const currentContent = this.editor.value;
+      await VaultDB.set(this.currentNote, currentContent);
+      this.noteCache[this.currentNote] = currentContent;
+    }
+  }, 0);
+  
+  // INSTANT UI update
   this.currentNote = noteName;
   this.editor.value = content;
-
+  
   this.pushHistory();
-  await this.updatePreviewAndSave();
+  await this.updatePreviewAndSave(); // ← Make sure we await this
   this.updateActiveNoteUI();
 }
-
 // ── Lightweight note counter (only runs when sidebar is opened) ──
 async updateNoteCount() {
   try {
@@ -1920,12 +1924,11 @@ showRecentNotes() {
 }
 
 async renderSearchResults(query) {
-    if (!this.cachedIndex) {
-      await this.buildNoteIndex();
-    }
-    await this.loadPhotoMap(); // Always ensure photos are loaded
-    
-    devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
+  if (!this.cachedIndex) {
+    await this.buildNoteIndex();
+    await this.loadPhotoMap(); // ← ADD THIS LINE
+devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
+  }
   
   const resultsContainer = document.getElementById('recent-list');
   resultsContainer.innerHTML = ''; // clear previous content
@@ -2126,18 +2129,16 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
 
 html = this.processGPCStamps(html);
 
-/// === PHOTO RENDERING ===
-html = html.replace(/!\[photo[\s-]?(\d+)\]/g, (match, num) => {
-    // If NFC mode, don't render the photo
-   
-    const base64 = this.photoMap?.[num];
-    if (base64) {
-        return `<img src="data:image/jpeg;base64,${base64}" ...>`;
-    }
-    devLog(`Photo ${num} missing from map`);
-    return match; // fallback
+// === PHOTO RENDERING ===
+html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
+  const base64 = this.photoMap?.[num];
+  if (base64) {
+    return `<img src="data:image/jpeg;base64,${base64}" 
+                style="max-width:100%; border-radius:8px; margin:12px 0; display:block; box-shadow:0 2px 8px rgba(0,0,0,0.1);" 
+                alt="Photo ${num}">`;
+  }
+  return match;
 });
-
 
 // Safety net for full base64
 html = html.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (match, num, base64) => {
@@ -2147,13 +2148,7 @@ html = html.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (mat
 });
 
 // Update preview
-// Update preview
 this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
-
-// ✅ Reset NFC mode here (Step 3)
-if (this.nfcMode) {
-    this.nfcMode = false;
-}
     
     // Apply behaviors
     this.addCopyButtons();
@@ -3173,40 +3168,40 @@ applyRTL() {
 handleToolbarClick(e) {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
-  
+
   const action = btn.dataset.action;
-  
+
   // Handle undo/redo
   if (action === 'undo') return this.undo();
   if (action === 'redo') return this.redo();
   if (action === 'checkbox') return this.toggleCheckbox();
-  
   if (action === 'quote') {
-    const cursor = this.editor.selectionStart;
-    const textBefore = this.editor.value.substring(0, cursor);
-    const lineStart = textBefore.lastIndexOf('\n') + 1;
-    this.formatLineAsQuote(lineStart);
-    return;
-  }
+  const cursor = this.editor.selectionStart;
+  const textBefore = this.editor.value.substring(0, cursor);
+  const lineStart = textBefore.lastIndexOf('\n') + 1;
+  this.formatLineAsQuote(lineStart);
+  return;
+}
   if (action === 'code') return this.wrapSelection('```\n', '\n```');
-  
-  // === NFC DEEP LINK (updated) ===
-  if (action === 'nfc') {
-    this.generateNFCDeepLink();
-    return;
-  }
-  
-  if (action === 'link') return this.insertLink(); // keep normal link if you want
+  if (action === 'link') return this.insertLink();
   if (action === 'wikilink') return this.insertWikilink();
-  if (action === 'folder') return this.insertFolderLink();
+if (action === 'folder') return this.insertFolderLink();
+
+  if (action === 'ul') return this.insertBullet();
+  if (action === 'ol') return this.insertNumberedList();
+  if (action === 'highlight') return this.wrapSelection('==', '==');
   
-  // Handle formatting (bold, italic, etc.)
+
+  
+  
+  
+  // Handle formatting
   const formats = {
     'bold': ['**', '**'],
-    'italic': ['*', '*'],
+    'italic': ['*', '*'], 
     'underline': ['<u>', '</u>'],
     'strike': ['~~', '~~'],
-    'sub': ['\~', '\~'],
+    'sub': ['~', '~'],
     'sup': ['^', '^']
   };
   
@@ -3256,19 +3251,6 @@ insertFolderLink() {
   
   const wikilink = `[[📁 Boomerang/${selectedText}::${selectedText}]]`;
   this.replaceSelection(wikilink);
-}
-
-// ===== NFC DEEP LINK GENERATOR =====
-generateNFCDeepLink() {
-  const currentNote = this.currentNote || 'Home';
-  const encodedNote = encodeURIComponent(currentNote);
-  const deepLink = window.location.origin + window.location.pathname + "?note=" + encodedNote;
-  
-  navigator.clipboard.writeText(deepLink).then(() => {
-    alert("✅ NFC Deep Link Copied!\n\nNote: \"" + currentNote + "\"\n\nURL ready for NFC tag:\n" + deepLink);
-  }).catch(() => {
-    prompt('Copy this link manually:', deepLink);
-  });
 }
 
 getSelectedText() {
@@ -4609,48 +4591,10 @@ async loadPhotoMap() {
     const saved = await VaultDB.get('__photoMap__');
     if (saved) {
       this.photoMap = JSON.parse(saved);
-      devLog('✅ PhotoMap loaded:', Object.keys(this.photoMap).length, 'photos');
-    } else {
-      this.photoMap = {};
-      devLog('PhotoMap empty — no saved photos');
     }
   } catch (e) {
     devError('Failed to load photoMap', e);
     this.photoMap = {};
-  }
-}
-
-// ===== DEEP LINK SUPPORT (NFC / Shortcuts) =====
-async handleDeepLink() {
-    const urlParams = new URLSearchParams(window.location.search);
-    let targetNote = urlParams.get('note')?.trim();
-    if (!targetNote) return;
-    
-    // ✅ Set NFC mode flag
-    this.nfcMode = true;
-    
-    // Reload photo map (if needed)
-    await this.loadPhotoMap();
-    
-    await this.switchToNote(targetNote);
-  
-  targetNote = decodeURIComponent(targetNote);
-  devLog('Deep link detected:', targetNote);
-  
-  await this.loadPhotoMap(); // ← Extra safety
-  await this.switchToNote(targetNote);
-  
-  const anchor = urlParams.get('anchor');
-  if (anchor) {
-    setTimeout(() => {
-      const targetEl = this.preview.querySelector(`#${anchor}`) ||
-        this.preview.querySelector(`[id*="${anchor}"]`);
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        targetEl.style.backgroundColor = '#fffacd';
-        setTimeout(() => targetEl.style.backgroundColor = '', 2000);
-      }
-    }, 600);
   }
 }
 
