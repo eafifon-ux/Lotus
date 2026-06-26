@@ -1202,39 +1202,33 @@ redo() {
 
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
-  
-  devLog('Switching to note via deep link or click:', noteName);
-  
-  // FORCE reload photo map EVERY time we switch notes
-  await this.loadPhotoMap();
-  devLog('PhotoMap loaded in switchToNote — count:', Object.keys(this.photoMap).length);
-  
-  // FAST PATH: Check cache first
-  let content = this.noteCache[noteName];
-  
-  if (!content) {
-    content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
-    this.noteCache[noteName] = content;
-  }
-  
-  // Collapse for editor
-  content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
-  
-  // Save current note before switching
+
+  // Save current note first as before
   if (this.currentNote && this.currentNote !== noteName) {
     const currentContent = this.editor.value;
     const expanded = this.expandPhotosForSave(currentContent);
     await VaultDB.set(this.currentNote, expanded);
     this.noteCache[this.currentNote] = expanded;
   }
-  
+
+  // FORCE reload photo map before loading the new note
+  await this.loadPhotoMap();
+
+  // Clear cache for this note to force fresh retrieval
+  delete this.noteCache[noteName];
+
+  let content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
+  this.noteCache[noteName] = content;
+
+  content = this.collapsePhotosForEdit(content);
   this.currentNote = noteName;
   this.editor.value = content;
-  
+
   this.pushHistory();
-  await this.updatePreviewAndSave(); // This must run AFTER photoMap is loaded
+  await this.updatePreviewAndSave();
   this.updateActiveNoteUI();
 }
+
 // ── Lightweight note counter (only runs when sidebar is opened) ──
 async updateNoteCount() {
   try {
@@ -4621,10 +4615,14 @@ async loadPhotoMap() {
 
 // ===== DEEP LINK SUPPORT (NFC / Shortcuts) =====
 async handleDeepLink() {
-  const urlParams = new URLSearchParams(window.location.search);
-  let targetNote = urlParams.get('note')?.trim();
-  
-  if (!targetNote) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    let targetNote = urlParams.get('note')?.trim();
+    if (!targetNote) return;
+    
+    // Reload photo map once more before switching
+    await this.loadPhotoMap();
+    
+    await this.switchToNote(targetNote);
   
   targetNote = decodeURIComponent(targetNote);
   devLog('Deep link detected:', targetNote);
