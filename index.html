@@ -1207,34 +1207,29 @@ async switchToNote(noteName) {
   let content = this.noteCache[noteName];
   
   if (!content) {
-    // Cache miss - load from storage
     content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
     this.noteCache[noteName] = content;
   }
   
-  // Ensure photoMap is loaded BEFORE collapsing
-  if (Object.keys(this.photoMap).length === 0) {
-    await this.loadPhotoMap();
-  }
+  // FORCE reload photoMap every time we switch notes via deep link / NFC
+  await this.loadPhotoMap();
   
   // Collapse full base64 → short clean tags
   content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
   
-  // Save current note (deferred)
-  setTimeout(async () => {
-    if (this.currentNote) {
-      const currentContent = this.editor.value;
-      await VaultDB.set(this.currentNote, currentContent);
-      this.noteCache[this.currentNote] = currentContent;
-    }
-  }, 0);
+  // Save current note
+  if (this.currentNote) {
+    const currentContent = this.editor.value;
+    await VaultDB.set(this.currentNote, currentContent);
+    this.noteCache[this.currentNote] = currentContent;
+  }
   
-  // INSTANT UI update
+  // Switch note
   this.currentNote = noteName;
   this.editor.value = content;
   
   this.pushHistory();
-  await this.updatePreviewAndSave(); // ← Make sure we await this
+  await this.updatePreviewAndSave();
   this.updateActiveNoteUI();
 }
 // ── Lightweight note counter (only runs when sidebar is opened) ──
