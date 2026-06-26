@@ -1203,6 +1203,9 @@ redo() {
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
+  // Always reload photoMap when switching notes (especially via deep link)
+  await this.loadPhotoMap();
+  
   // FAST PATH: Check cache first
   let content = this.noteCache[noteName];
   
@@ -1211,20 +1214,17 @@ async switchToNote(noteName) {
     this.noteCache[noteName] = content;
   }
   
-  // FORCE reload photoMap every time we switch notes via deep link / NFC
-  await this.loadPhotoMap();
-  
-  // Collapse full base64 → short clean tags
+  // Collapse photos for editor
   content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
   
-  // Save current note
+  // Save current note before switching
   if (this.currentNote) {
     const currentContent = this.editor.value;
-    await VaultDB.set(this.currentNote, currentContent);
+    await VaultDB.set(this.currentNote, this.expandPhotosForSave(currentContent));
     this.noteCache[this.currentNote] = currentContent;
   }
   
-  // Switch note
+  // Switch
   this.currentNote = noteName;
   this.editor.value = content;
   
