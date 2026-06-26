@@ -3288,28 +3288,32 @@ async handleDeepLink() {
   targetNote = decodeURIComponent(targetNote);
   devLog('Deep link detected:', targetNote);
   
+  // Force clean state
   await this.loadPhotoMap();
-  await this.switchToNote(targetNote);
+  
+  // Small delay to let IndexedDB settle
+  setTimeout(async () => {
+    await this.switchToNote(targetNote);
+  }, 100);
 }
 
 // Improved switchToNote (replace your existing one)
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
-  devLog('Switching to note (clean load):', noteName);
+  devLog('Switching to note (clean):', noteName);
   
-  // Force fresh load from storage (bypass any bad cache)
   await this.loadPhotoMap();
   
+  // Always load fresh from VaultDB
   let content = await VaultDB.get(noteName);
   if (!content) {
     content = `# ${noteName}\n\n`;
   }
   
-  // Always collapse for editor (this fixes the photo-1 vs photo 1 issue)
   content = this.collapsePhotosForEdit(content);
   
-  // Save current note properly before switching
+  // Save current note safely
   if (this.currentNote && this.currentNote !== noteName) {
     const currentContent = this.editor.value;
     await VaultDB.set(this.currentNote, this.expandPhotosForSave(currentContent));
@@ -3318,7 +3322,7 @@ async switchToNote(noteName) {
   this.currentNote = noteName;
   this.editor.value = content;
   
-  this.pushHistory(true); // force history push
+  this.pushHistory(true);
   await this.updatePreviewAndSave();
   this.updateActiveNoteUI();
 }
