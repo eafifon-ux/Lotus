@@ -3273,9 +3273,9 @@ generateNFCDeepLink() {
   const deepLink = window.location.origin + window.location.pathname + "?note=" + encodedNote;
   
   navigator.clipboard.writeText(deepLink).then(() => {
-    alert(`✅ NFC Deep Link Copied!\n\nNote: "\( {currentNote}"\n\nURL:\n \){deepLink}`);
+    alert("✅ NFC Deep Link Copied!\n\nNote: \"" + currentNote + "\"\n\nURL:\n" + deepLink);
   }).catch(() => {
-    prompt('Copy this manually:', deepLink);
+    prompt('Copy this link manually:', deepLink);
   });
 }
 
