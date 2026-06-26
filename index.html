@@ -1203,7 +1203,7 @@ redo() {
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
-  // Always reload photoMap when switching notes (especially via deep link)
+  // FORCE photoMap reload - this is the key fix
   await this.loadPhotoMap();
   
   // FAST PATH: Check cache first
@@ -1214,22 +1214,21 @@ async switchToNote(noteName) {
     this.noteCache[noteName] = content;
   }
   
-  // Collapse photos for editor
+  // Collapse photos
   content = this.collapsePhotosForEdit(content || `# ${noteName}\n\n`);
   
-  // Save current note before switching
+  // Save current note
   if (this.currentNote) {
     const currentContent = this.editor.value;
     await VaultDB.set(this.currentNote, this.expandPhotosForSave(currentContent));
     this.noteCache[this.currentNote] = currentContent;
   }
   
-  // Switch
   this.currentNote = noteName;
   this.editor.value = content;
   
   this.pushHistory();
-  await this.updatePreviewAndSave();
+  await this.updatePreviewAndSave(); // This will now see the photos
   this.updateActiveNoteUI();
 }
 // ── Lightweight note counter (only runs when sidebar is opened) ──
@@ -1923,11 +1922,12 @@ showRecentNotes() {
 }
 
 async renderSearchResults(query) {
-  if (!this.cachedIndex) {
-    await this.buildNoteIndex();
-    await this.loadPhotoMap(); // ← ADD THIS LINE
-devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
-  }
+    if (!this.cachedIndex) {
+      await this.buildNoteIndex();
+    }
+    await this.loadPhotoMap(); // Always ensure photos are loaded
+    
+    devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
   
   const resultsContainer = document.getElementById('recent-list');
   resultsContainer.innerHTML = ''; // clear previous content
