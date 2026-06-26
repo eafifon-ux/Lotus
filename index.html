@@ -2127,12 +2127,9 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
 html = this.processGPCStamps(html);
 
 /// === PHOTO RENDERING ===
-html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
+html = html.replace(/!\[photo[\s-]?(\d+)\]/g, (match, num) => {
     // If NFC mode, don't render the photo
-    if (this.nfcMode) {
-        // Show a simple placeholder (or nothing)
-        return `<span style="color:#888; font-style:italic;">[Photo ${num} – not loaded in NFC mode]</span>`;
-    }
+   
     const base64 = this.photoMap?.[num];
     if (base64) {
         return `<img src="data:image/jpeg;base64,${base64}" ...>`;
