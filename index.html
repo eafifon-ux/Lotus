@@ -1201,30 +1201,32 @@ redo() {
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
-  devLog('Switching to:', noteName);
+  devLog('Switching to note:', noteName);
   
-  // Force reload photos every time (critical for NFC/deep links)
+  // 1. Force photo map load
   await this.loadPhotoMap();
-  devLog('Photos loaded:', Object.keys(this.photoMap || {}).length);
   
-  let content = this.noteCache[noteName];
+  // 2. Load fresh content from storage (bypass cache for deep link)
+  let content = await VaultDB.get(noteName);
   if (!content) {
-    content = await VaultDB.get(noteName) || `# ${noteName}\n\n`;
-    this.noteCache[noteName] = content;
+    content = `# ${noteName}\n\n`;
   }
   
+  // 3. Collapse photos for editor
   content = this.collapsePhotosForEdit(content);
   
-  // Save current note
-  if (this.currentNote) {
-    await VaultDB.set(this.currentNote, this.expandPhotosForSave(this.editor.value));
+  // 4. Save current note before switching
+  if (this.currentNote && this.currentNote !== noteName) {
+    const currentContent = this.editor.value;
+    await VaultDB.set(this.currentNote, this.expandPhotosForSave(currentContent));
   }
   
+  // 5. Switch
   this.currentNote = noteName;
   this.editor.value = content;
   
   this.pushHistory();
-  await this.updatePreviewAndSave();
+  await this.updatePreviewAndSave(); // This should fix text + photos
   this.updateActiveNoteUI();
 }
 // ── Lightweight note counter (only runs when sidebar is opened) ──
@@ -3284,9 +3286,9 @@ async handleDeepLink() {
   if (!targetNote) return;
   
   targetNote = decodeURIComponent(targetNote);
-  devLog('Deep link opened:', targetNote);
+  devLog('Deep link detected:', targetNote);
   
-  await this.loadPhotoMap(); // Critical for photos
+  await this.loadPhotoMap();
   await this.switchToNote(targetNote);
 }
 
