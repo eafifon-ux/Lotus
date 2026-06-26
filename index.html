@@ -2126,17 +2126,21 @@ html = html.replace(/<ul>/g, '<ul class="task-list">');
 
 html = this.processGPCStamps(html);
 
-// === PHOTO RENDERING - more robust ===
+/// === PHOTO RENDERING ===
 html = html.replace(/!\[photo (\d+)\]/g, (match, num) => {
-  const base64 = this.photoMap?.[num];
-  if (base64) {
-    return `<img src="data:image/jpeg;base64,${base64}" 
-                style="max-width:100%; border-radius:8px; margin:12px 0; display:block; box-shadow:0 2px 8px rgba(0,0,0,0.1);" 
-                alt="Photo ${num}">`;
-  }
-  devLog(`Photo ${num} missing from map`);
-  return match;
+    // If NFC mode, don't render the photo
+    if (this.nfcMode) {
+        // Show a simple placeholder (or nothing)
+        return `<span style="color:#888; font-style:italic;">[Photo ${num} – not loaded in NFC mode]</span>`;
+    }
+    const base64 = this.photoMap?.[num];
+    if (base64) {
+        return `<img src="data:image/jpeg;base64,${base64}" ...>`;
+    }
+    devLog(`Photo ${num} missing from map`);
+    return match; // fallback
 });
+
 
 // Safety net for full base64
 html = html.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (match, num, base64) => {
@@ -2146,7 +2150,13 @@ html = html.replace(/!\[photo (\d+)\]\(data:image\/jpeg;base64,([^)]+)\)/g, (mat
 });
 
 // Update preview
+// Update preview
 this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
+
+// ✅ Reset NFC mode here (Step 3)
+if (this.nfcMode) {
+    this.nfcMode = false;
+}
     
     // Apply behaviors
     this.addCopyButtons();
@@ -4619,7 +4629,10 @@ async handleDeepLink() {
     let targetNote = urlParams.get('note')?.trim();
     if (!targetNote) return;
     
-    // Reload photo map once more before switching
+    // ✅ Set NFC mode flag
+    this.nfcMode = true;
+    
+    // Reload photo map (if needed)
     await this.loadPhotoMap();
     
     await this.switchToNote(targetNote);
