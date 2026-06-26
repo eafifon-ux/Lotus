@@ -4603,6 +4603,10 @@ async loadPhotoMap() {
     const saved = await VaultDB.get('__photoMap__');
     if (saved) {
       this.photoMap = JSON.parse(saved);
+      devLog('✅ PhotoMap loaded:', Object.keys(this.photoMap).length, 'photos');
+    } else {
+      this.photoMap = {};
+      devLog('PhotoMap empty — no saved photos');
     }
   } catch (e) {
     devError('Failed to load photoMap', e);
