@@ -3296,22 +3296,29 @@ async handleDeepLink() {
 async switchToNote(noteName) {
   if (!noteName || noteName === this.currentNote) return;
   
-  await this.loadPhotoMap(); // Force photo load
+  devLog('Switching to note (clean load):', noteName);
   
-  let content = this.noteCache[noteName] || await VaultDB.get(noteName) || `# ${noteName}\n\n`;
-  this.noteCache[noteName] = content;
+  // Force fresh load from storage (bypass any bad cache)
+  await this.loadPhotoMap();
   
+  let content = await VaultDB.get(noteName);
+  if (!content) {
+    content = `# ${noteName}\n\n`;
+  }
+  
+  // Always collapse for editor (this fixes the photo-1 vs photo 1 issue)
   content = this.collapsePhotosForEdit(content);
   
-  // Save current before switching
-  if (this.currentNote) {
-    await VaultDB.set(this.currentNote, this.expandPhotosForSave(this.editor.value));
+  // Save current note properly before switching
+  if (this.currentNote && this.currentNote !== noteName) {
+    const currentContent = this.editor.value;
+    await VaultDB.set(this.currentNote, this.expandPhotosForSave(currentContent));
   }
   
   this.currentNote = noteName;
   this.editor.value = content;
   
-  this.pushHistory();
+  this.pushHistory(true); // force history push
   await this.updatePreviewAndSave();
   this.updateActiveNoteUI();
 }
