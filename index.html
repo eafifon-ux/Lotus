@@ -791,6 +791,9 @@ Then read: [[📁 Boomerang/Manual|Manual]]
     <button data-action="checkbox">☑</button>
 <button id="deeplink-button">🚀 ▼</button>
     <button data-action="link">🔗</button>
+    <!-- Inside #floating-deeplink-dropdown -->
+   <button data-action="nfc" title="Generate NFC Deep Link">⛓️</button>
+   <!-- Inside #floating-deeplink-dropdown -->
     <button data-action="wikilink">📄</button>
 <button data-action="folder">📁</button>
 
@@ -1138,6 +1141,7 @@ this.editor.value = content;
   this.pushHistory(true);
   await this.updatePreviewAndSave();
   await this.buildNoteIndex();
+  await this.handleDeepLink();   // ← Add this line
   devLog('App ready — search cache built with', this.cachedIndex?.length || 0, 'notes');
   await this.updateNoteCount();
 }
@@ -3168,40 +3172,40 @@ applyRTL() {
 handleToolbarClick(e) {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
-
+  
   const action = btn.dataset.action;
-
+  
   // Handle undo/redo
   if (action === 'undo') return this.undo();
   if (action === 'redo') return this.redo();
   if (action === 'checkbox') return this.toggleCheckbox();
+  
   if (action === 'quote') {
-  const cursor = this.editor.selectionStart;
-  const textBefore = this.editor.value.substring(0, cursor);
-  const lineStart = textBefore.lastIndexOf('\n') + 1;
-  this.formatLineAsQuote(lineStart);
-  return;
-}
+    const cursor = this.editor.selectionStart;
+    const textBefore = this.editor.value.substring(0, cursor);
+    const lineStart = textBefore.lastIndexOf('\n') + 1;
+    this.formatLineAsQuote(lineStart);
+    return;
+  }
   if (action === 'code') return this.wrapSelection('```\n', '\n```');
-  if (action === 'link') return this.insertLink();
+  
+  // === NFC DEEP LINK (updated) ===
+  if (action === 'nfc') {
+    this.generateNFCDeepLink();
+    return;
+  }
+  
+  if (action === 'link') return this.insertLink(); // keep normal link if you want
   if (action === 'wikilink') return this.insertWikilink();
-if (action === 'folder') return this.insertFolderLink();
-
-  if (action === 'ul') return this.insertBullet();
-  if (action === 'ol') return this.insertNumberedList();
-  if (action === 'highlight') return this.wrapSelection('==', '==');
+  if (action === 'folder') return this.insertFolderLink();
   
-
-  
-  
-  
-  // Handle formatting
+  // Handle formatting (bold, italic, etc.)
   const formats = {
     'bold': ['**', '**'],
-    'italic': ['*', '*'], 
+    'italic': ['*', '*'],
     'underline': ['<u>', '</u>'],
     'strike': ['~~', '~~'],
-    'sub': ['~', '~'],
+    'sub': ['\~', '\~'],
     'sup': ['^', '^']
   };
   
@@ -3251,6 +3255,19 @@ insertFolderLink() {
   
   const wikilink = `[[📁 Boomerang/${selectedText}::${selectedText}]]`;
   this.replaceSelection(wikilink);
+}
+
+// ===== NFC DEEP LINK GENERATOR =====
+generateNFCDeepLink() {
+  const currentNote = this.currentNote || 'Home';
+  const encodedNote = encodeURIComponent(currentNote);
+  const deepLink = window.location.origin + window.location.pathname + "?note=" + encodedNote;
+  
+  navigator.clipboard.writeText(deepLink).then(() => {
+    alert("✅ NFC Deep Link Copied!\n\nNote: \"" + currentNote + "\"\n\nURL ready for NFC tag:\n" + deepLink);
+  }).catch(() => {
+    prompt('Copy this link manually:', deepLink);
+  });
 }
 
 getSelectedText() {
@@ -4595,6 +4612,36 @@ async loadPhotoMap() {
   } catch (e) {
     devError('Failed to load photoMap', e);
     this.photoMap = {};
+  }
+}
+
+// ===== DEEP LINK SUPPORT (NFC / Shortcuts) =====
+async handleDeepLink() {
+  const urlParams = new URLSearchParams(window.location.search);
+  let targetNote = urlParams.get('note')?.trim();
+  
+  if (!targetNote) return;
+  
+  targetNote = decodeURIComponent(targetNote);
+  
+  devLog('Deep link detected:', targetNote);
+  
+  const anchor = urlParams.get('anchor');
+  
+  if (targetNote) {
+    await this.switchToNote(targetNote);
+    
+    if (anchor) {
+      setTimeout(() => {
+        const targetEl = this.preview.querySelector(`#${anchor}`) || 
+                        this.preview.querySelector(`[id*="${anchor}"]`);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetEl.style.backgroundColor = '#fffacd';
+          setTimeout(() => targetEl.style.backgroundColor = '', 2000);
+        }
+      }, 400);
+    }
   }
 }
 
