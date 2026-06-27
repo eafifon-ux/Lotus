@@ -667,6 +667,157 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   line-height: 1;      /* Tight vertical fit */
 }
 
+/* ==========================
+   SOROBAN - ZEN TEMPLE STYLE
+   ========================== */
+
+.soroban {
+  background: linear-gradient(#f8f4ea, #efe8d8);
+  border: 3px solid #4a3a2c;
+  border-radius: 16px;
+  padding: 22px 16px;
+  margin: 18px 0;
+  box-shadow:
+    inset 0 1px 2px rgba(255,255,255,.5),
+    0 10px 25px rgba(0,0,0,.12);
+  max-width: 100%;
+}
+
+.soroban-header {
+  text-align: center;
+  color: #54453a;
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: .08em;
+  margin-bottom: 18px;
+}
+
+.soroban-grid {
+  position: relative;
+  display: flex;
+  gap: 15px;
+  overflow-x: auto;
+  padding: 32px 18px 20px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #44352b, #322720);
+}
+
+.soroban-grid::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 110%;           /* extra wide */
+  top: 72px;
+  height: 6px;
+  background: linear-gradient(180deg, #7a6148, #5f4937);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.18), 0 1px 3px rgba(0,0,0,.35);
+  z-index: 1;
+}
+
+/* Rod */
+.soroban-rod {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 198px;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  padding-top: 26px;
+}
+
+/* Vertical rod */
+.soroban-rod::before {
+  content: "";
+  position: absolute;
+  width: 3px;
+  top: 0;
+  bottom: 0;
+  background: #85715d;
+  z-index: 0;
+}
+
+/* Earth beads */
+.soroban-bead {
+  position: relative;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #8b847d, #59544f 75%);
+  border: 2px solid #403a35;
+  box-shadow:
+    inset 0 1px 3px rgba(255,255,255,.15),
+    0 3px 6px rgba(0,0,0,.35);
+  transition: transform .18s ease, box-shadow .18s ease;
+  cursor: pointer;
+  margin-top: -8px;
+}
+
+/* Top earth bead lifted to touch / almost touch the bar */
+.soroban-bead:first-of-type:not(.heaven) {
+  margin-top: -40px;     /* ← stronger lift */
+}
+
+/* Heaven bead */
+.soroban-bead.heaven {
+  position: absolute;
+  top: -20px;
+  width: 38px;
+  height: 38px;
+  background: radial-gradient(circle at 35% 30%, #a89c82, #77684d 80%);
+  border-color: #5e513d;
+  z-index: 3;
+  transition: top 0.28s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Heaven active */
+.soroban-bead.heaven.active {
+  top: 51px;
+}
+
+/* Interactions */
+.soroban-bead:hover {
+  box-shadow:
+    inset 0 1px 3px rgba(255, 255, 255, .18),
+    0 6px 12px rgba(0, 0, 0, .35);
+}
+
+.soroban-bead:not(.heaven):active {
+  transform: scale(.95);
+}
+
+.soroban-bead.heaven:active {
+  filter: brightness(.85);
+  box-shadow:
+    inset 0 1px 3px rgba(255,255,255,.18),
+    0 2px 4px rgba(0,0,0,.35);
+}
+
+.soroban-total {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 1.4rem;
+  color: #56483d;
+  font-weight: 500;
+  letter-spacing: .05em;
+}
+
+/* Highlight the Ones column (rightmost rod) by default */
+.soroban-grid .soroban-rod:last-child {
+  position: relative;
+}
+
+.soroban-grid .soroban-rod:last-child::after {
+  position: absolute;
+  bottom: -28px;
+  font-size: 18px;
+  color: #e91e63;
+  font-weight: bold;
+}
+
+
 
 </style>
 </head>
@@ -815,6 +966,8 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-action="add-habit-5x6">🔴 5×6 (30 dots)</button>
   <button data-action="add-habit-7x4">🔵 7×4 (28 dots)</button>
   <button data-action="add-habit-10x3">🟣 10×3 (31 dots)</button>
+<button data-action="add-soroban">🧮 Soroban (7 rods)</button> <!-- ← ADD THIS -->
+<button data-action="add-all">+ All</button>
   <button data-action="add-all">+ All</button>
   <button data-action="subtract">− Subtract</button>
   <button data-action="start-date">📅 Start Date</button>
@@ -2058,6 +2211,8 @@ html = html.replace(
 
     if (startDate) {
       localStorage.setItem(startKey, startDate);
+      
+      
     }
 
     const columns = layout === '7x4' ? 7 : 5;
@@ -2086,6 +2241,21 @@ html = html.replace(
   }
 );
 
+// ==================== SOROBAN PARSER ====================
+html = html.replace(/\{\{Soroban:(\d+)(?:::(.+?))?\}\}/g, (match, rodsStr, label) => {
+  const rods = 5; // ← always 7 rods, ignore whatever was typed
+  // …
+
+  const uid = 's' + uidFromTrackerMatch(match);
+  const labelHtml = label ? `<div class="soroban-header">${label}</div>` : '';
+  
+  return '<div class="soroban" data-uid="' + uid + '" data-rods="' + rods + '">' +
+    labelHtml +
+    '<div class="soroban-grid"></div>' +
+    '<div class="soroban-total">Total: <strong>0</strong></div>' +
+    '<button onclick="Soroban.clear(\'' + uid + '\')" style="margin-top:8px;padding:6px 12px;font-size:0.9em;">Reset 🧮</button>' +
+    '</div>';
+});
 
 html = marked.parse(html);
 
@@ -2149,12 +2319,15 @@ this.preview.innerHTML = html + this.renderBacklinks(this.currentNote);
     // Apply behaviors
     this.addCopyButtons();
     this.makeCheckboxesInteractive();
-    this.makeTasksDraggable();
-    this.wrapHeadingsForCollapse();
-    this.applyRTL();
-    this.recalcTables();
-    // Enable inline table editing
+this.makeTasksDraggable();
+this.wrapHeadingsForCollapse();
+this.applyRTL();
+this.recalcTables();
 this.enableTableInlineEdit();
+
+// ADD THESE TWO LINES
+renderAllTrackers();
+renderAllSorobans();
 
     
 // Save after delay
@@ -3831,57 +4004,59 @@ case 'add-habit-10x3': {
   } else {
     baseDots = 30;
   }
-
+  
   const dateVal = prompt('Start date (YYYY-MM-DD) or leave blank:');
   const trimmedDate = dateVal ? dateVal.trim() : '';
-
+  
   // Build the core tag without label
-  const coreTag = trimmedDate
-    ? `{{Tracker_${baseDots}_${trimmedDate}}}`
-    : `{{Tracker_${baseDots}}}`;
-
+  const coreTag = trimmedDate ?
+    `{{Tracker_\( {baseDots}_ \){trimmedDate}}}` :
+    `{{Tracker_${baseDots}}}`;
+  
   // Check if an identical core tag already exists in the editor
   const escaped = coreTag.replace(/([$.?*|{}()\[\]\\])/g, '\\$1');
   const existing = this.editor.value.match(new RegExp(escaped, 'g'));
-
+  
   let finalTag;
   if (existing && existing.length > 0) {
     // Auto‑assign next letter
     const nextLetter = String.fromCharCode(65 + existing.length);
     const label = prompt(
-      `A "${coreTag}" already exists. Enter a label (or press Enter for "${nextLetter}"):`,
+      `A "\( {coreTag}" already exists. Enter a label (or press Enter for " \){nextLetter}"):`,
       nextLetter
     ) || nextLetter;
-    finalTag = trimmedDate
-      ? `{{Tracker_${baseDots}_${trimmedDate}::${label.trim()}}}`
-      : `{{Tracker_${baseDots}::${label.trim()}}}`;
+    finalTag = trimmedDate ?
+      `{{Tracker_\( {baseDots}_ \){trimmedDate}::${label.trim()}}}` :
+      `{{Tracker_\( {baseDots}:: \){label.trim()}}}`;
   } else {
     // No duplicate – no label needed
     finalTag = coreTag;
   }
-
+  
   this.insertAtCursor(finalTag);
   break;
 }
 
+// AFTER (always 7 rods, no prompt)
+case 'add-soroban': {
+  this.insertAtCursor('{{Soroban:7}}');
+  break;
+}
 
 
+case 'add-all':
+HabitTracker.addAll();
+setTimeout(renderAllTrackers, 100);
+break;
 
-
-
-    case 'add-all':
-      HabitTracker.addAll();
-      setTimeout(renderAllTrackers, 100);
-      break;
-
-    case 'subtract':
-      HabitTracker.subtractAll();
-      setTimeout(renderAllTrackers, 100);
-      break;
+case 'subtract':
+HabitTracker.subtractAll();
+setTimeout(renderAllTrackers, 100);
+break;
 
 case 'start-date':
-  this.showDatePickerModal();
-  break;
+this.showDatePickerModal();
+break;
 
 
 
@@ -5596,9 +5771,169 @@ for (let i = 0; i < maxDots; i++) {
     input.insertAdjacentHTML('afterend', template);
     input.remove();
     renderAllTrackers();
+renderAllSorobans(); // ← ADD THIS LINE
+    
   }
 };
 
+// Add near the top of the Soroban object or globally
+let lastBeadTap = 0;          // ← ADD THIS (replace or keep alongside sorobanBeadInteraction)
+// (If you already have `let sorobanBeadInteraction = false;` you can remove it to keep things clean)
+
+
+// ==================== SOROBAN ABACUS (fixed place value) ====================
+const Soroban = {
+  render(uid) {
+    const container = document.querySelector(`.soroban[data-uid="${uid}"]`);
+    if (!container) return;
+    
+    const grid = container.querySelector('.soroban-grid');
+    const totalEl = container.querySelector('.soroban-total strong');
+    const rods = parseInt(container.dataset.rods) || 7;
+    
+    grid.innerHTML = '';
+    
+    for (let r = 0; r < rods; r++) {
+      const rod = document.createElement('div');
+      rod.className = 'soroban-rod';
+      rod.dataset.rod = r;
+      
+      const heaven = document.createElement('div');
+      heaven.className = 'soroban-bead heaven';
+      heaven.dataset.value = 5;
+      heaven.onclick = () => this.toggleBead(heaven, rod, uid);
+      
+      const earthContainer = document.createElement('div');
+      earthContainer.style.display = 'flex';
+      earthContainer.style.flexDirection = 'column';
+      earthContainer.style.gap = '6px';
+      
+      for (let i = 0; i < 4; i++) {
+        const bead = document.createElement('div');
+        bead.className = 'soroban-bead';
+        bead.dataset.value = 1;
+        bead.onclick = () => this.toggleBead(bead, rod, uid);
+        earthContainer.appendChild(bead);
+      }
+      
+      rod.append(heaven, earthContainer);
+      grid.appendChild(rod);
+      this.loadRodState(rod, uid);
+
+    }
+    
+    grid.querySelectorAll('.soroban-rod').forEach(rod => {
+
+    });
+
+    this.updateTotal(container);
+  },
+  
+  toggleBead(bead, rod, uid) {
+  lastBeadTap = Date.now(); // ← ADD THIS (prevent auto-scroll after tap)
+  
+  const wasActive = bead.dataset.active === 'true'; // previous state
+  bead.dataset.active = !wasActive; // toggle clicked bead
+  
+  const isHeaven = bead.classList.contains('heaven');
+  const OFFSET = 24;
+  
+  if (isHeaven) {
+    const offset = wasActive ? '' : `translateY(${OFFSET}px)`;
+    bead.style.transform = offset;
+    
+    if (!wasActive) { // heaven turned ON → reset all earth
+      const earthBeads = rod.querySelectorAll('.soroban-bead:not(.heaven)');
+      earthBeads.forEach(b => {
+        b.dataset.active = 'false';
+        b.style.transform = '';
+      });
+    }
+  } else {
+    // ---- EARTH BEAD ----
+    const allEarth = [...rod.querySelectorAll('.soroban-bead:not(.heaven)')];
+    const clickIndex = allEarth.indexOf(bead);
+    
+    if (!wasActive) {
+      // Activating: cascade from top (index 0) to clicked bead
+      allEarth.slice(0, clickIndex + 1).forEach(b => {
+        b.dataset.active = 'true';
+        b.style.transform = `translateY(${-OFFSET}px)`; // move up
+      });
+    } else {
+      // Deactivating: cascade from clicked bead to bottom (last index)
+      allEarth.slice(clickIndex).forEach(b => {
+        b.dataset.active = 'false';
+        b.style.transform = ''; // move back down
+      });
+    }
+  }
+  
+  this.updateTotal(rod.closest('.soroban'));
+  this.saveState(uid);
+},
+
+
+  
+  updateTotal(container) {
+  let total = 0;
+  const rods = Array.from(container.querySelectorAll('.soroban-rod'));
+  
+  // Rightmost rod = units (10^0), next = tens (10^1), etc.
+  rods.reverse().forEach((rod, index) => {
+    const placeValue = Math.pow(10, index);
+    
+    const heaven = rod.querySelector('.heaven');
+    if (heaven && heaven.dataset.active === 'true') {
+      total += 5 * placeValue;
+    }
+    
+    const activeEarth = rod.querySelectorAll('.soroban-bead:not(.heaven)[data-active="true"]').length;
+    total += activeEarth * placeValue;
+  });
+  
+  const totalEl = container.querySelector('.soroban-total strong');
+  if (totalEl) totalEl.textContent = total;
+},
+  
+  saveState(uid) {
+    const container = document.querySelector(`.soroban[data-uid="${uid}"]`);
+    if (!container) return;
+    const states = [];
+    container.querySelectorAll('.soroban-rod').forEach(rod => {
+      const rodState = [];
+      rod.querySelectorAll('.soroban-bead').forEach(bead => {
+        rodState.push(bead.dataset.active === 'true' ? 1 : 0);
+      });
+      states.push(rodState);
+    });
+    localStorage.setItem(`soroban-${uid}-states`, JSON.stringify(states));
+  },
+  
+  loadRodState(rod, uid) {
+  const states = JSON.parse(localStorage.getItem(`soroban-${uid}-states`) || '[]');
+  const rodIndex = parseInt(rod.dataset.rod);
+  if (!states[rodIndex]) return;
+  
+  const beads = rod.querySelectorAll('.soroban-bead');
+  states[rodIndex].forEach((active, i) => {
+    if (active) {
+      beads[i].dataset.active = 'true';
+      const isHeaven = beads[i].classList.contains('heaven');
+      const offset = isHeaven ? 24 : -24;
+      beads[i].style.transform = `translateY(${offset}px)`;
+    }
+  });
+},
+
+  
+  clear(uid) {
+  localStorage.removeItem(`soroban-${uid}-states`);
+  this.render(uid);
+}
+  }
+
+// Render functions (unchanged)
 function renderAllTrackers() {
   document.querySelectorAll('.habit-tracker').forEach(el => {
     const uid = el.dataset.uid;
@@ -5606,11 +5941,80 @@ function renderAllTrackers() {
   });
 }
 
-// Initialization
-setTimeout(renderAllTrackers, 800);
-document.getElementById('mode-toggle')?.addEventListener('click', () => setTimeout(renderAllTrackers, 400));
-document.getElementById('preview')?.addEventListener('click', () => setTimeout(renderAllTrackers, 100));
+function renderAllSorobans() {
+  document.querySelectorAll('.soroban').forEach(el => {
+    const uid = el.dataset.uid;
+    if (!uid) return;
+    
+    Soroban.render(uid);
+    
+    setTimeout(() => {
+      const grid = el.querySelector('.soroban-grid');
+      if (!grid) return;
+      
+      const rods = Array.from(grid.querySelectorAll('.soroban-rod'));
+      if (rods.length < 5) return;
+      
+      let t;
+      let isSnapping = false;
+      
+      // Snap only to column 3 (index 2)
+      function snapToThird() {
+        const rod = rods[2]; // ← Column 3
+        if (!rod) return;
+        
+        const target = rod.offsetLeft + rod.offsetWidth / 2 - grid.clientWidth / 2;
+        
+        isSnapping = true;
+        grid.scrollTo({
+          left: Math.max(0, Math.min(target, grid.scrollWidth - grid.clientWidth)),
+          behavior: 'smooth'
+        });
+        
+        setTimeout(() => { isSnapping = false; }, 400);
+      }
+      
+      function resolveSnap() {
+        if (isSnapping) return;
+        const maxScroll = grid.scrollWidth - grid.clientWidth;
+        if (maxScroll <= 0) return;
+        
+        // Snap back to column 3 if user scrolls too far away
+        if (grid.scrollLeft < grid.clientWidth * 0.65 ||
+          grid.scrollLeft > grid.clientWidth * 1.4) {
+          snapToThird();
+        }
+      }
+      
+      grid.addEventListener('scroll', () => {
+        if (isSnapping || Date.now() - lastBeadTap < 2200) return;
+        clearTimeout(t);
+        t = setTimeout(resolveSnap, 250);
+      }, { passive: true });
+      
+      // Start on column 3
+      snapToThird();
+      
+    }, 120);
+  });
+}
 
+
+// Initialization
+setTimeout(() => {
+  renderAllTrackers();
+  renderAllSorobans();
+}, 800);
+
+document.getElementById('mode-toggle')?.addEventListener('click', () => setTimeout(() => {
+  renderAllTrackers();
+  renderAllSorobans();
+}, 400));
+
+document.getElementById('preview')?.addEventListener('click', () => setTimeout(() => {
+  renderAllTrackers();
+  renderAllSorobans();
+}, 100));
 
 
 
