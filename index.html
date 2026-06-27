@@ -966,7 +966,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-action="add-habit-5x6">🔴 5×6 (30 dots)</button>
   <button data-action="add-habit-7x4">🔵 7×4 (28 dots)</button>
   <button data-action="add-habit-10x3">🟣 10×3 (31 dots)</button>
-<button data-action="add-soroban">🧮 Soroban (7 rods)</button> <!-- ← ADD THIS -->
+<button data-action="add-soroban">🧮 Soroban (5 rods)</button> <!-- ← ADD THIS -->
 <button data-action="add-all">+ All</button>
   <button data-action="add-all">+ All</button>
   <button data-action="subtract">− Subtract</button>
@@ -4039,7 +4039,7 @@ case 'add-habit-10x3': {
 
 // AFTER (always 7 rods, no prompt)
 case 'add-soroban': {
-  this.insertAtCursor('{{Soroban:7}}');
+  this.insertAtCursor('{{Soroban:5}}');
   break;
 }
 
