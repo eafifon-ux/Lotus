@@ -6061,14 +6061,20 @@ const SimpleCalculator = {
     }
 
     if (!this.states.has(uid)) {
-      this.states.set(uid, { current: '0', previous: '', operator: null, shouldReset: false });
+      this.states.set(uid, { 
+        current: '0', 
+        previous: '', 
+        operator: null, 
+        expression: '', 
+        shouldReset: false 
+      });
     }
 
     const state = this.states.get(uid);
 
     container.innerHTML = `
   <div class="calculator" data-uid="${uid}" style="max-width:320px; margin:0 auto; padding:8px; background:#1c1c1c; border-radius:12px;">
-    <div class="calculator-display" style="background:#222; color:#fff; font-size:2.5em; text-align:right; padding:10px 16px; border-radius:8px; margin-bottom:8px;">${state.current}</div>
+    <div class="calculator-display" style="background:#222; color:#fff; font-size:2.5em; text-align:right; padding:10px 16px; border-radius:8px; margin-bottom:8px; min-height:1.4em;">${state.expression || state.current}</div>
     <div class="calculator-grid" style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">
       <button class="clear" data-action="clear" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#a5a5a5; color:#000;">C</button>
       <button data-action="delete" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#333; color:#fff;">⌫</button>
@@ -6090,7 +6096,6 @@ const SimpleCalculator = {
       <button data-action="3" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">3</button>
       <button class="operator" data-action="+" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#f09a36; color:#fff;">+</button>
 
-      <!-- Bottom row - Soroban button moved in front of 0 -->
       <button onclick="window.editorCore?.toggleWidget('${uid}', 'soroban')" 
         style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff; display:flex; align-items:center; justify-content:center;">
         🧮
@@ -6102,7 +6107,6 @@ const SimpleCalculator = {
   </div>
 `;
 
-
     this.attachListeners(container.querySelector('.calculator'), uid);
   },
 
@@ -6110,7 +6114,9 @@ const SimpleCalculator = {
     const display = calc.querySelector('.calculator-display');
     const state = this.states.get(uid);
 
-    const update = () => { display.textContent = state.current; };
+    const update = () => {
+      display.textContent = state.expression || state.current;
+    };
 
     calc.addEventListener('click', e => {
       const btn = e.target.closest('button');
@@ -6120,6 +6126,7 @@ const SimpleCalculator = {
       if (!isNaN(action) || action === '.') {
         if (state.shouldReset) {
           state.current = '';
+          state.expression = '';
           state.shouldReset = false;
         }
         state.current = (state.current === '0' && action !== '.') ? action : state.current + action;
@@ -6130,11 +6137,14 @@ const SimpleCalculator = {
         }
         state.previous = state.current;
         state.operator = action;
+        state.expression = `${state.previous} ${this.getSymbol(action)}`;
         state.shouldReset = true;
       } 
       else if (action === '=') {
         if (state.operator) {
-          state.current = this.calculate(state.previous, state.current, state.operator);
+          const result = this.calculate(state.previous, state.current, state.operator);
+          state.expression = `${state.previous} ${this.getSymbol(state.operator)} ${state.current} = ${result}`;
+          state.current = result;
           state.operator = null;
           state.shouldReset = true;
         }
@@ -6143,9 +6153,15 @@ const SimpleCalculator = {
         state.current = '0';
         state.previous = '';
         state.operator = null;
+        state.expression = '';
       } 
       else if (action === 'delete') {
-        state.current = state.current.length > 1 ? state.current.slice(0, -1) : '0';
+        if (state.expression) {
+          // If showing expression, just clear it and go back to current number
+          state.expression = '';
+        } else {
+          state.current = state.current.length > 1 ? state.current.slice(0, -1) : '0';
+        }
       } 
       else if (action === 'percent') {
         this.handlePercent(state);
@@ -6156,8 +6172,11 @@ const SimpleCalculator = {
     });
   },
 
+  getSymbol(op) {
+    return op === '*' ? '×' : op === '/' ? '÷' : op;
+  },
+
   handlePercent(state) {
-    // Standard behaviour: percentage of previous number when operator exists
     if (state.operator) {
       const percentOfPrev = (parseFloat(state.current) / 100) * parseFloat(state.previous);
       state.current = this.calculate(state.previous, percentOfPrev, state.operator);
