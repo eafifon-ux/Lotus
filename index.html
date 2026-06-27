@@ -5953,49 +5953,29 @@ function renderAllSorobans() {
       if (!grid) return;
       
       const rods = Array.from(grid.querySelectorAll('.soroban-rod'));
-      if (rods.length < 5) return;
+      if (rods.length !== 5) return;
       
-      let t;
-      let isSnapping = false;
+      // Lock horizontally on column 3
+      const rod = rods[2];
+      const target = rod.offsetLeft + (rod.offsetWidth / 2) - (grid.clientWidth / 2);
+      grid.scrollLeft = Math.max(0, Math.min(target, grid.scrollWidth - grid.clientWidth));
       
-      // Snap only to column 3 (index 2)
-      function snapToThird() {
-        const rod = rods[2]; // ← Column 3
-        if (!rod) return;
-        
-        const target = rod.offsetLeft + rod.offsetWidth / 2 - grid.clientWidth / 2;
-        
-        isSnapping = true;
-        grid.scrollTo({
-          left: Math.max(0, Math.min(target, grid.scrollWidth - grid.clientWidth)),
-          behavior: 'smooth'
+      // Force lock - no movement allowed
+      grid.style.overflow = 'hidden';
+      
+      grid.addEventListener('scroll', (e) => {
+        e.preventDefault();
+        grid.scrollLeft = target;
+      }, { passive: false });
+      
+      // Extra lock after any bead click
+      grid.querySelectorAll('.soroban-bead').forEach(bead => {
+        bead.addEventListener('click', () => {
+          setTimeout(() => grid.scrollLeft = target, 20);
         });
-        
-        setTimeout(() => { isSnapping = false; }, 400);
-      }
+      });
       
-      function resolveSnap() {
-        if (isSnapping) return;
-        const maxScroll = grid.scrollWidth - grid.clientWidth;
-        if (maxScroll <= 0) return;
-        
-        // Snap back to column 3 if user scrolls too far away
-        if (grid.scrollLeft < grid.clientWidth * 0.65 ||
-          grid.scrollLeft > grid.clientWidth * 1.4) {
-          snapToThird();
-        }
-      }
-      
-      grid.addEventListener('scroll', () => {
-        if (isSnapping || Date.now() - lastBeadTap < 2200) return;
-        clearTimeout(t);
-        t = setTimeout(resolveSnap, 250);
-      }, { passive: true });
-      
-      // Start on column 3
-      snapToThird();
-      
-    }, 120);
+    }, 180);
   });
 }
 
