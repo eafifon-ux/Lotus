@@ -817,7 +817,57 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   font-weight: bold;
 }
 
+/* ==================== CALCULATOR ==================== */
+.calculator {
+  background: #1e1e1e;
+  border-radius: 12px;
+  padding: 14px;
+  margin: 20px 0;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  max-width: 340px;
+  user-select: none;
+}
 
+.calculator-display {
+  background: #000;
+  color: #0f0;
+  font-size: 2rem;
+  padding: 14px 12px;
+  text-align: right;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  min-height: 1.4em;
+  overflow: hidden;
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
+.calculator-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+}
+
+.calculator button {
+  padding: 18px 8px;
+  font-size: 1.25rem;
+  border: none;
+  border-radius: 10px;
+  background: #2d2d2d;
+  color: white;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.calculator button:active {
+  transform: scale(0.95);
+  background: #444;
+}
+
+.calculator button.operator { background: #ff9500; }
+.calculator button.equals { background: #4caf50; }
+.calculator button.clear { background: #f44336; }
+.calculator button.zero { grid-column: span 2; }
 
 </style>
 </head>
@@ -967,6 +1017,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-action="add-habit-7x4">🔵 7×4 (28 dots)</button>
   <button data-action="add-habit-10x3">🟣 10×3 (31 dots)</button>
 <button data-action="add-soroban">🧮 Soroban (5 rods)</button> <!-- ← ADD THIS -->
+<button data-action="add-calculator">🧮 Calculator</button>
 <button data-action="add-all">+ All</button>
   <button data-action="add-all">+ All</button>
   <button data-action="subtract">− Subtract</button>
@@ -1525,22 +1576,22 @@ document.getElementById('photo-manager-btn').addEventListener('click', (e) => {
     }
   });
   
-  // FIXED: Document click only closes if NOT clicking inside a dropdown
-  document.addEventListener('click', (e) => {
-    const isClickInsideDropdown = e.target.closest('.floating-dropdown');
-    const isClickOnToolbar = e.target.closest('#toolbar');
-    
-    if (!isClickInsideDropdown && !isClickOnToolbar) {
-      devLog('🔧 Document clicked OUTSIDE - closing all dropdowns');
-      this.closeAllDropdowns();
-    } else {
-      devLog('🔧 Click inside dropdown/toolbar - ignoring close');
-    }
-  });
+// FIXED: Document click only closes if NOT clicking inside a dropdown, toolbar, or calculator
+document.addEventListener('click', (e) => {
+  const isClickInsideDropdown = e.target.closest('.floating-dropdown');
+  const isClickOnToolbar = e.target.closest('#toolbar');
+  const isClickOnCalculator = e.target.closest('.calculator, .calc-container');
   
-  devLog('🔧 initDropdownEvents() complete!');
+  devLog(`📍 Document click — dropdown: ${!!isClickInsideDropdown}, toolbar: ${!!isClickOnToolbar}, calculator: ${!!isClickOnCalculator}`);
+  
+  if (!isClickInsideDropdown && !isClickOnToolbar && !isClickOnCalculator) {
+    devLog('🔒 Document clicked OUTSIDE — closing all dropdowns');
+    this.closeAllDropdowns();
+  } else {
+    devLog('✅ Click inside protected area — ignoring close');
+  }
+});
 }
-
   
   initSidebarEvents() {
   const sidebarToggle = document.getElementById('sidebar-toggle');
@@ -1652,10 +1703,16 @@ document.getElementById('recent-list').addEventListener('click', async (e) => {
   }
   
   closeAllDropdowns() {
-    document.querySelectorAll('.floating-dropdown').forEach(dd => {
-      dd.classList.remove('open');
-    });
+  const openCount = document.querySelectorAll('.floating-dropdown.open').length;
+  
+  document.querySelectorAll('.floating-dropdown').forEach(dd => {
+    dd.classList.remove('open');
+  });
+  
+  if (openCount > 0) {
+    devLog(`🔒 Closed ${openCount} dropdown(s)`);
   }
+}
   
   // Add these methods to the EditorCore class
 
@@ -2243,9 +2300,7 @@ html = html.replace(
 
 // ==================== SOROBAN PARSER ====================
 html = html.replace(/\{\{Soroban:(\d+)(?:::(.+?))?\}\}/g, (match, rodsStr, label) => {
-  const rods = 5; // ← always 7 rods, ignore whatever was typed
-  // …
-
+  const rods = 5; // always 5 rods
   const uid = 's' + uidFromTrackerMatch(match);
   const labelHtml = label ? `<div class="soroban-header">${label}</div>` : '';
   
@@ -2253,8 +2308,13 @@ html = html.replace(/\{\{Soroban:(\d+)(?:::(.+?))?\}\}/g, (match, rodsStr, label
     labelHtml +
     '<div class="soroban-grid"></div>' +
     '<div class="soroban-total">Total: <strong>0</strong></div>' +
-    '<button onclick="Soroban.clear(\'' + uid + '\')" style="margin-top:8px;padding:6px 12px;font-size:0.9em;">Reset 🧮</button>' +
     '</div>';
+});
+
+// After the Soroban replace block, add:
+html = html.replace(/\{\{Calculator\}\}/g, () => {
+  const uid = 'calc-' + Math.random().toString(36).substr(2, 8);
+  return `<div class="calc-container" data-uid="${uid}"></div>`;
 });
 
 html = marked.parse(html);
@@ -2325,9 +2385,9 @@ this.applyRTL();
 this.recalcTables();
 this.enableTableInlineEdit();
 
-// ADD THESE TWO LINES
 renderAllTrackers();
 renderAllSorobans();
+renderAllCalculators(); // ← ADD THIS
 
     
 // Save after delay
@@ -4043,6 +4103,10 @@ case 'add-soroban': {
   break;
 }
 
+case 'add-calculator':
+  this.insertAtCursor('{{Calculator}}');
+  break;
+
 
 case 'add-all':
 HabitTracker.addAll();
@@ -4061,9 +4125,38 @@ break;
 
 
   }
+  
 }
 
-
+// ===== WIDGET TOGGLE (Calculator ↔ Soroban) =====
+toggleWidget(uid, targetType) {
+  const editorText = this.editor.value;
+  
+  if (targetType === 'soroban') {
+    // Calculator → Soroban
+    const newText = editorText.replace(
+      new RegExp(`\\{\\{Calculator\\}\\}(?![^\\n]*?data-uid="${uid}")`, 'g'),
+      '{{Soroban:5}}'
+    );
+    this.editor.value = newText;
+    
+  } else if (targetType === 'calculator') {
+    // Soroban → Calculator
+    const newText = editorText.replace(
+      new RegExp(`\\{\\{Soroban:\\d+\\}\\}(?![^\\n]*?data-uid="${uid}")`, 'g'),
+      '{{Calculator}}'
+    );
+    this.editor.value = newText;
+  }
+  
+  this.updatePreviewAndSave();
+  
+  // Re-render the appropriate widget
+  setTimeout(() => {
+    if (targetType === 'soroban') renderAllSorobans();
+    else renderAllCalculators();
+  }, 100);
+}
 
 
 showDatePickerModal() {
@@ -5784,50 +5877,73 @@ let lastBeadTap = 0;          // ← ADD THIS (replace or keep alongside soroban
 // ==================== SOROBAN ABACUS (fixed place value) ====================
 const Soroban = {
   render(uid) {
-    const container = document.querySelector(`.soroban[data-uid="${uid}"]`);
-    if (!container) return;
+  const container = document.querySelector(`.soroban[data-uid="${uid}"]`);
+  if (!container) return;
+  
+  const grid = container.querySelector('.soroban-grid');
+  const rods = parseInt(container.dataset.rods) || 5;
+  
+  grid.innerHTML = '';
+  
+  for (let r = 0; r < rods; r++) {
+    const rod = document.createElement('div');
+    rod.className = 'soroban-rod';
+    rod.dataset.rod = r;
     
-    const grid = container.querySelector('.soroban-grid');
-    const totalEl = container.querySelector('.soroban-total strong');
-    const rods = parseInt(container.dataset.rods) || 7;
+    const heaven = document.createElement('div');
+    heaven.className = 'soroban-bead heaven';
+    heaven.dataset.value = 5;
+    heaven.onclick = () => this.toggleBead(heaven, rod, uid);
     
-    grid.innerHTML = '';
+    const earthContainer = document.createElement('div');
+    earthContainer.style.display = 'flex';
+    earthContainer.style.flexDirection = 'column';
+    earthContainer.style.gap = '6px';
     
-    for (let r = 0; r < rods; r++) {
-      const rod = document.createElement('div');
-      rod.className = 'soroban-rod';
-      rod.dataset.rod = r;
-      
-      const heaven = document.createElement('div');
-      heaven.className = 'soroban-bead heaven';
-      heaven.dataset.value = 5;
-      heaven.onclick = () => this.toggleBead(heaven, rod, uid);
-      
-      const earthContainer = document.createElement('div');
-      earthContainer.style.display = 'flex';
-      earthContainer.style.flexDirection = 'column';
-      earthContainer.style.gap = '6px';
-      
-      for (let i = 0; i < 4; i++) {
-        const bead = document.createElement('div');
-        bead.className = 'soroban-bead';
-        bead.dataset.value = 1;
-        bead.onclick = () => this.toggleBead(bead, rod, uid);
-        earthContainer.appendChild(bead);
-      }
-      
-      rod.append(heaven, earthContainer);
-      grid.appendChild(rod);
-      this.loadRodState(rod, uid);
-
+    for (let i = 0; i < 4; i++) {
+      const bead = document.createElement('div');
+      bead.className = 'soroban-bead';
+      bead.dataset.value = 1;
+      bead.onclick = () => this.toggleBead(bead, rod, uid);
+      earthContainer.appendChild(bead);
     }
     
-    grid.querySelectorAll('.soroban-rod').forEach(rod => {
-
-    });
-
-    this.updateTotal(container);
-  },
+    rod.append(heaven, earthContainer);
+    grid.appendChild(rod);
+    this.loadRodState(rod, uid);
+  }
+  
+  this.updateTotal(container);
+  
+  // === CLEAN ZEN FOOTER (Reset + Calculator side by side) ===
+  let footer = container.querySelector('.soroban-footer');
+  if (!footer) {
+    footer = document.createElement('div');
+    footer.className = 'soroban-footer';
+    footer.style.cssText = `
+      display: flex; 
+      gap: 12px; 
+      justify-content: center; 
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px solid #d2b48c;
+    `;
+    container.appendChild(footer);
+  }
+  
+  footer.innerHTML = `
+  <button onclick="window.editorCore?.toggleWidget('${uid}', 'calculator')" 
+    style="padding:9px 18px; font-size:0.95em; background:#2c2c2c; color:#aaffaa; border:2px solid #555; border-radius:8px; cursor:pointer; flex:1; max-width:160px;">
+    🧮 Calc
+  </button>
+  
+  <button onclick="Soroban.clear('${uid}')" 
+    style="padding:9px 18px; font-size:0.95em; background:#f8f4ea; color:#54453a; border:2px solid #8b7d6b; border-radius:8px; cursor:pointer; flex:1; max-width:160px;">
+    Reset 🧮
+  </button>
+`;
+},
+  
   
   toggleBead(bead, rod, uid) {
   lastBeadTap = Date.now(); // ← ADD THIS (prevent auto-scroll after tap)
@@ -5932,8 +6048,142 @@ const Soroban = {
   this.render(uid);
 }
   }
+  
+// ==================== SIMPLE CALCULATOR (FINAL – FIXED) ====================
+const SimpleCalculator = {
+  states: new Map(),
 
-// Render functions (unchanged)
+  render(container) {
+    let uid = container.dataset.uid;
+    if (!uid) {
+      uid = 'calc-' + Math.random().toString(36).slice(2);
+      container.dataset.uid = uid;
+    }
+
+    if (!this.states.has(uid)) {
+      this.states.set(uid, { current: '0', previous: '', operator: null, shouldReset: false });
+    }
+
+    const state = this.states.get(uid);
+
+    container.innerHTML = `
+  <div class="calculator" data-uid="${uid}" style="max-width:320px; margin:0 auto; padding:8px; background:#1c1c1c; border-radius:12px;">
+    <div class="calculator-display" style="background:#222; color:#fff; font-size:2.5em; text-align:right; padding:10px 16px; border-radius:8px; margin-bottom:8px;">${state.current}</div>
+    <div class="calculator-grid" style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">
+      <button class="clear" data-action="clear" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#a5a5a5; color:#000;">C</button>
+      <button data-action="delete" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#333; color:#fff;">⌫</button>
+      <button data-action="percent" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#333; color:#fff;">%</button>
+      <button class="operator" data-action="/" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#f09a36; color:#fff;">÷</button>
+
+      <button data-action="7" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">7</button>
+      <button data-action="8" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">8</button>
+      <button data-action="9" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">9</button>
+      <button class="operator" data-action="*" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#f09a36; color:#fff;">×</button>
+
+      <button data-action="4" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">4</button>
+      <button data-action="5" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">5</button>
+      <button data-action="6" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">6</button>
+      <button class="operator" data-action="-" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#f09a36; color:#fff;">−</button>
+
+      <button data-action="1" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">1</button>
+      <button data-action="2" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">2</button>
+      <button data-action="3" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">3</button>
+      <button class="operator" data-action="+" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#f09a36; color:#fff;">+</button>
+
+      <!-- Bottom row - Soroban button moved in front of 0 -->
+      <button onclick="window.editorCore?.toggleWidget('${uid}', 'soroban')" 
+        style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff; display:flex; align-items:center; justify-content:center;">
+        🧮
+      </button>
+      <button data-action="0" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">0</button>
+      <button data-action="." style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#505050; color:#fff;">.</button>
+      <button class="equals" data-action="=" style="padding:12px; font-size:1.2em; border:none; border-radius:8px; background:#f09a36; color:#fff;">=</button>
+    </div>
+  </div>
+`;
+
+
+    this.attachListeners(container.querySelector('.calculator'), uid);
+  },
+
+  attachListeners(calc, uid) {
+    const display = calc.querySelector('.calculator-display');
+    const state = this.states.get(uid);
+
+    const update = () => { display.textContent = state.current; };
+
+    calc.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const action = btn.dataset.action;
+
+      if (!isNaN(action) || action === '.') {
+        if (state.shouldReset) {
+          state.current = '';
+          state.shouldReset = false;
+        }
+        state.current = (state.current === '0' && action !== '.') ? action : state.current + action;
+      } 
+      else if (['+', '-', '*', '/'].includes(action)) {
+        if (state.operator && !state.shouldReset) {
+          state.current = this.calculate(state.previous, state.current, state.operator);
+        }
+        state.previous = state.current;
+        state.operator = action;
+        state.shouldReset = true;
+      } 
+      else if (action === '=') {
+        if (state.operator) {
+          state.current = this.calculate(state.previous, state.current, state.operator);
+          state.operator = null;
+          state.shouldReset = true;
+        }
+      } 
+      else if (action === 'clear') {
+        state.current = '0';
+        state.previous = '';
+        state.operator = null;
+      } 
+      else if (action === 'delete') {
+        state.current = state.current.length > 1 ? state.current.slice(0, -1) : '0';
+      } 
+      else if (action === 'percent') {
+        this.handlePercent(state);
+        state.shouldReset = true;
+      }
+
+      update();
+    });
+  },
+
+  handlePercent(state) {
+    // Standard behaviour: percentage of previous number when operator exists
+    if (state.operator) {
+      const percentOfPrev = (parseFloat(state.current) / 100) * parseFloat(state.previous);
+      state.current = this.calculate(state.previous, percentOfPrev, state.operator);
+      state.operator = null;
+    } else {
+      state.current = (parseFloat(state.current) / 100).toString();
+    }
+  },
+
+  calculate(prevStr, currentStr, op) {
+    const prev = parseFloat(prevStr) || 0;
+    const curr = parseFloat(currentStr) || 0;
+    let result = 0;
+    switch (op) {
+      case '+': result = prev + curr; break;
+      case '-': result = prev - curr; break;
+      case '*': result = prev * curr; break;
+      case '/': result = curr !== 0 ? prev / curr : 0; break;
+    }
+    return parseFloat(result.toFixed(8)).toString();
+  }
+};
+
+
+
+// ==================== RENDER ALL WIDGETS ====================
 function renderAllTrackers() {
   document.querySelectorAll('.habit-tracker').forEach(el => {
     const uid = el.dataset.uid;
@@ -5979,21 +6229,31 @@ function renderAllSorobans() {
   });
 }
 
+// NEW: Render Calculators
+function renderAllCalculators() {
+  document.querySelectorAll('.calc-container').forEach(container => {
+    SimpleCalculator.render(container);
+  });
+}
+
+// Combined refresh (best practice)
+function refreshAllWidgets() {
+  renderAllTrackers();
+  renderAllSorobans();
+  renderAllCalculators();
+}
 
 // Initialization
 setTimeout(() => {
-  renderAllTrackers();
-  renderAllSorobans();
+  refreshAllWidgets();
 }, 800);
 
 document.getElementById('mode-toggle')?.addEventListener('click', () => setTimeout(() => {
-  renderAllTrackers();
-  renderAllSorobans();
+  refreshAllWidgets();
 }, 400));
 
 document.getElementById('preview')?.addEventListener('click', () => setTimeout(() => {
-  renderAllTrackers();
-  renderAllSorobans();
+  refreshAllWidgets();
 }, 100));
 
 
