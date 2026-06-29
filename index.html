@@ -5946,42 +5946,35 @@ const Soroban = {
   
   
   toggleBead(bead, rod, uid) {
-  lastBeadTap = Date.now(); // ← ADD THIS (prevent auto-scroll after tap)
+  lastBeadTap = Date.now();
   
-  const wasActive = bead.dataset.active === 'true'; // previous state
-  bead.dataset.active = !wasActive; // toggle clicked bead
-  
+  const wasActive = bead.dataset.active === 'true';
   const isHeaven = bead.classList.contains('heaven');
   const OFFSET = 24;
   
+  const allEarth = [...rod.querySelectorAll('.soroban-bead:not(.heaven)')];
+  
   if (isHeaven) {
-    const offset = wasActive ? '' : `translateY(${OFFSET}px)`;
-    bead.style.transform = offset;
+    // Heaven toggle - ADD 5 without resetting earth beads
+    const newActive = !wasActive;
+    bead.dataset.active = newActive ? 'true' : 'false';
+    bead.style.transform = newActive ? `translateY(${OFFSET}px)` : '';
     
-    if (!wasActive) { // heaven turned ON → reset all earth
-      const earthBeads = rod.querySelectorAll('.soroban-bead:not(.heaven)');
-      earthBeads.forEach(b => {
-        b.dataset.active = 'false';
-        b.style.transform = '';
-      });
-    }
+    // NO reset of earth beads when heaven is activated (your requested behavior)
   } else {
-    // ---- EARTH BEAD ----
-    const allEarth = [...rod.querySelectorAll('.soroban-bead:not(.heaven)')];
+    // Earth bead logic (unchanged - standard cascading)
     const clickIndex = allEarth.indexOf(bead);
     
     if (!wasActive) {
-      // Activating: cascade from top (index 0) to clicked bead
-      allEarth.slice(0, clickIndex + 1).forEach(b => {
-        b.dataset.active = 'true';
-        b.style.transform = `translateY(${-OFFSET}px)`; // move up
-      });
+      for (let i = 0; i <= clickIndex; i++) {
+        allEarth[i].dataset.active = 'true';
+        allEarth[i].style.transform = `translateY(${-OFFSET}px)`;
+      }
     } else {
-      // Deactivating: cascade from clicked bead to bottom (last index)
-      allEarth.slice(clickIndex).forEach(b => {
-        b.dataset.active = 'false';
-        b.style.transform = ''; // move back down
-      });
+      for (let i = clickIndex; i < allEarth.length; i++) {
+        allEarth[i].dataset.active = 'false';
+        allEarth[i].style.transform = '';
+      }
     }
   }
   
