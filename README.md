@@ -1,5 +1,5 @@
 # 🪷 Lotus – The World's Lightest Super App
-
+ 
 **Lotus** is the world's lightest super app: a **Progressive Web App (PWA)** — install-free, offline-first, ultra-low resource use. Add to your home screen and it feels like a native app.
 
 How did we achieve this lightness and power?  
