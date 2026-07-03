@@ -5617,24 +5617,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize calendar system
   GPCCalendar.init();
   
-  // Auto-load full vault on first visit (with async handling)
-  const vaultStatus = localStorage.getItem('lotus-full-vault-loaded');
+// Auto-load full vault on first visit (improved)
+document.addEventListener('DOMContentLoaded', async () => {
+  GPCCalendar.init();
+  
+  window.editorCore = new EditorCore();
+  window.editorCore.toggleEditMode(); // Start in view mode
+  
+  // === IMPROVED AUTO VAULT CHECK ===
+  const vaultLoaded = localStorage.getItem('lotus-full-vault-loaded');
   const dontShowAgain = localStorage.getItem('vault-dont-show-again') === 'true';
   
-  // Only show popup if:
-  // 1. User hasn't checked "Don't show again" AND
-  // 2. No vault status flag (hasn't loaded before)
-  if (!dontShowAgain && !vaultStatus) {
-    // Use setTimeout to avoid blocking initial render
-    setTimeout(async () => {
-      try {
-        await loadFullVault(true);
-      } catch (error) {
-        devLog('Auto-load failed:', error);
-        // Continue anyway - user can load manually
-      }
-    }, 1200);
+  if (!vaultLoaded && !dontShowAgain) {
+    setTimeout(() => {
+      loadFullVault(true); // true = auto mode
+    }, 800);
   }
+  
+  setTimeout(addLoadVaultButton, 800);
+});
   
   // Create and initialize editor core
   window.editorCore = new EditorCore();
