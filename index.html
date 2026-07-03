@@ -4068,6 +4068,7 @@ insertNewListLine(cursor, prefix) {
 
   const stampType = ["doy","dos","dom","heptad","gregorian"][parseInt(choice.trim()) - 1] || "doy";
 
+  // Use flatpickr but with longer delay + cleanup
   const tempInput = document.createElement('input');
   tempInput.type = 'text';
   tempInput.style.position = 'absolute';
@@ -4080,6 +4081,7 @@ insertNewListLine(cursor, prefix) {
     onClose: (selectedDates) => {
       if (tempInput._flatpickr) tempInput._flatpickr.destroy();
       tempInput.remove();
+      
       if (!selectedDates?.length) return;
 
       const date = selectedDates[0];
@@ -4098,7 +4100,10 @@ insertNewListLine(cursor, prefix) {
     }
   });
 
-  tempInput._flatpickr.open();
+  // Small delay to prevent conflict with vault popup
+  setTimeout(() => {
+    if (tempInput._flatpickr) tempInput._flatpickr.open();
+  }, 150);
 }
 
 // ===== HABIT TRACKER ACTIONS =====
