@@ -1040,6 +1040,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-stamp="dom">DOM</button>
   <button data-stamp="heptad">Heptad</button>
   <button data-stamp="gregorian">Civil Date</button>
+  <button data-action="date-picker" style="font-weight:600; background:#f0f8ff;">📅 Date Picker</button>
 </div>
 
 <div id="floating-table-dropdown" class="floating-dropdown">
@@ -1093,7 +1094,8 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <a href="vnd.youtube://watch" class="deeplink-btn">▶️ YouTube</a>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js">
@@ -3568,7 +3570,13 @@ handleDropdownClick(type, e) {
     switch(type) {
   case 'h': this.applyHeading(action); break;
   case 't': this.applyTextFormat(action); break;
-  case 'date': this.insertDateStamp(action); break;
+  case 'date':
+if (action === 'date-picker') {
+  this.showDatePicker();
+} else {
+  this.insertDateStamp(action);
+}
+break;
   case 'highlight': this.applyHighlight(action); break;
   case 'table': this.handleTableAction(action); break;
   case 'habit': this.handleHabitAction(action); break;   // ← ADD THIS LINE
@@ -4047,6 +4055,51 @@ insertNewListLine(cursor, prefix) {
     
     this.insertAtCursor(stamp);
   }
+  
+  showDatePicker() {
+  this.closeAllDropdowns();
+
+  const choice = prompt(
+    "Pick format:\n\n1 = DOY\n2 = DOS\n3 = DOM\n4 = Heptad\n5 = Civil\n\nEnter 1-5",
+    "1"
+  );
+
+  if (!choice) return;
+
+  const stampType = ["doy","dos","dom","heptad","gregorian"][parseInt(choice.trim()) - 1] || "doy";
+
+  const tempInput = document.createElement('input');
+  tempInput.type = 'text';
+  tempInput.style.position = 'absolute';
+  tempInput.style.opacity = '0';
+  document.body.appendChild(tempInput);
+
+  flatpickr(tempInput, {
+    defaultDate: new Date(),
+    dateFormat: "Y-m-d",
+    onClose: (selectedDates) => {
+      if (tempInput._flatpickr) tempInput._flatpickr.destroy();
+      tempInput.remove();
+      if (!selectedDates?.length) return;
+
+      const date = selectedDates[0];
+      const stamps = GPCCalendar.calculateForDate(date);
+
+      let stamp = '';
+      switch(stampType) {
+        case 'doy':      stamp = `${stamps.emoji} ${stamps.doy}`; break;
+        case 'dos':      stamp = `${stamps.emoji} ${stamps.dos}`; break;
+        case 'dom':      stamp = `${stamps.emoji} ${stamps.dom}`; break;
+        case 'heptad':   stamp = stamps.heptad || 'Heptad'; break;
+        case 'gregorian':stamp = stamps.civil; break;
+      }
+
+      this.insertAtCursor(stamp + ' ');
+    }
+  });
+
+  tempInput._flatpickr.open();
+}
 
 // ===== HABIT TRACKER ACTIONS =====
 // ===== HABIT TRACKER ACTIONS =====
@@ -4998,6 +5051,65 @@ class GPCCalendar {
     const doyToday = Math.max(1, Math.min(364, remainingDays + 1));
     return { gpcYear, doyToday };
   }
+  
+  static calculateForDate(date) {
+  // Use local date components to avoid timezone shift
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  
+  const targetUTC = Date.UTC(year, month, day);
+  let remainingDays = Math.floor((targetUTC - this.epochDate.getTime()) / 86400000);
+  
+  let gpcYear = this.epochYear;
+  
+  while (true) {
+    const rel = gpcYear - this.epochYear;
+    let leapDays = 0;
+    if (rel % 7 === 6) leapDays += 7;
+    if (rel % 49 === 48) leapDays += 7;
+    if ((rel + 29) % 70 === 0) leapDays += 7;
+    
+    const yearLength = 364 + leapDays;
+    if (remainingDays < yearLength) break;
+    
+    remainingDays -= yearLength;
+    gpcYear++;
+  }
+  
+  const doy = Math.max(1, Math.min(364, remainingDays + 1));
+  const emoji = this.weekEmojis[(doy - 1) % 7] || '⚫';
+  
+  // DOS
+  const quarter = Math.floor((doy - 1) / 91) + 1;
+  const dayInSeason = ((doy - 1) % 91) + 1;
+  const dos = `Q${quarter} ${String(dayInSeason).padStart(2, '0')}`;
+  
+  // DOM — fixed
+  let remaining = doy;
+  let monthIndex = 0;
+  for (let i = 0; i < this.gpcMonths.length; i++) {
+    if (remaining <= this.gpcMonths[i].days) {
+      monthIndex = i;
+      break;
+    }
+    remaining -= this.gpcMonths[i].days;
+  }
+  const dom = `${String(monthIndex + 1).padStart(2, '0')}.${String(remaining).padStart(2, '0')}`;
+  
+  const civil = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const heptad = this.heptadMap[doy] || '';
+  
+  return {
+    doy: String(doy).padStart(3, '0'),
+    dos,
+    dom,
+    heptad,
+    civil,
+    emoji,
+    year: gpcYear
+  };
+}
   
   // Section 3.3.3 - Core calculations (add this method)
 static getSeason(doy) {
