@@ -5853,7 +5853,7 @@ if ('serviceWorker' in navigator) {
 
 <!-- === NGONDRO TRACKER GLOBAL === -->
 
-// ===== CUSTOM DEEP LINKS MANAGER =====
+// ===== CUSTOM DEEP LINKS MANAGER (with position support) =====
 const DeepLinkManager = {
   KEY: '__customDeeplinks',
   
@@ -5863,11 +5863,10 @@ const DeepLinkManager = {
       const saved = await VaultDB.get(this.KEY);
       if (saved) links = JSON.parse(saved);
     } catch (e) {}
-
-    // If no saved links, return all defaults
+    
     if (!links.length) return this.getDefaults();
-
-    // Merge: add any default links that are not already in saved list (by text)
+    
+    // Merge defaults that aren't already present
     const savedTexts = new Set(links.map(l => l.text));
     const defaults = this.getDefaults();
     for (const def of defaults) {
@@ -5877,7 +5876,6 @@ const DeepLinkManager = {
     }
     return links;
   },
-
   
   async save(links) {
     await VaultDB.set(this.KEY, JSON.stringify(links));
@@ -5890,7 +5888,6 @@ const DeepLinkManager = {
       { text: "🍏 WhatsApp", url: "https://wa.me/10001234567?text=" },
       { text: "💬 Messenger", url: "http://m.me/facebook?ref=yourpage" },
       { text: "🎥 Zoom", url: "zoomus://join?action=join&confno=yourmeetingid" },
-      // New deep links
       { text: "👻 Snapchat", url: "snapchat://add/yourusername" },
       { text: "🗺️ Maps", url: "https://maps.app.goo.gl/XKqHcBTfN2xYz9jg7" },
       { text: "🚕 Uber", url: "uber://?action=setPickup" },
@@ -5908,11 +5905,22 @@ const DeepLinkManager = {
     ];
   },
   
-  async addOrUpdate(newLink) {
+  async addOrUpdate(newLink, position = null) {
     let links = await this.load();
+    
+    // Update existing or add new
     const index = links.findIndex(l => l.text === newLink.text);
-    if (index > -1) links[index] = newLink;
-    else links.push(newLink);
+    if (index > -1) {
+      links[index] = newLink;
+    } else {
+      if (position !== null && position >= 0) {
+        const pos = Math.min(Math.max(0, parseInt(position)), links.length);
+        links.splice(pos, 0, newLink);
+      } else {
+        links.push(newLink);
+      }
+    }
+    
     await this.save(links);
     this.refreshDropdown();
   },
@@ -5930,7 +5938,7 @@ const DeepLinkManager = {
     dropdown.innerHTML = '';
     
     this.load().then(links => {
-      links.forEach(link => {
+      links.forEach((link, idx) => {
         const a = document.createElement('a');
         a.href = "javascript:void(0)";
         a.className = 'deeplink-btn';
@@ -5939,70 +5947,68 @@ const DeepLinkManager = {
         a.style.alignItems = 'center';
         a.style.textDecoration = 'none';
 
-        // Label – inserts markdown
         const label = document.createElement('span');
         label.textContent = link.text;
         label.style.flexGrow = '1';
         label.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const markdown = `[${link.text}](${link.url})`;
-          if (window.editorCore && window.editorCore.insertAtCursor) {
-            window.editorCore.insertAtCursor(markdown);
-          }
+          e.preventDefault(); e.stopPropagation();
+          const markdown = `[\( {link.text}]( \){link.url})`;
+          if (window.editorCore?.insertAtCursor) window.editorCore.insertAtCursor(markdown);
         };
 
-        // Edit button (pencil)
+        // Edit
         const edit = document.createElement('small');
         edit.innerHTML = '✏️';
         edit.style.marginLeft = '8px';
         edit.style.opacity = '0.6';
         edit.style.cursor = 'pointer';
-        edit.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        edit.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
           const newText = prompt('Edit label:', link.text);
           const newUrl = prompt('Edit URL:', link.url);
-          if (newText && newUrl) {
-            DeepLinkManager.addOrUpdate({ text: newText, url: newUrl });
-          }
+          if (!newText || !newUrl) return;
+          
+          const newPos = prompt('New position? (1 = first, blank = keep current)', idx + 1);
+          const pos = newPos ? parseInt(newPos) - 1 : null;
+          
+          await DeepLinkManager.addOrUpdate({ text: newText, url: newUrl }, pos);
         };
 
-        // Delete button (trash)
+        // Delete
         const del = document.createElement('small');
         del.innerHTML = '🗑️';
         del.style.marginLeft = '4px';
         del.style.opacity = '0.6';
         del.style.cursor = 'pointer';
         del.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (confirm(`Delete "${link.text}"?`)) {
-            DeepLinkManager.remove(link.text);
-          }
+          e.preventDefault(); e.stopPropagation();
+          if (confirm(`Delete "${link.text}"?`)) DeepLinkManager.remove(link.text);
         };
 
-        a.appendChild(label);
-        a.appendChild(edit);
-        a.appendChild(del);
+        a.append(label, edit, del);
         dropdown.appendChild(a);
       });
       
-      // Add new deep link button
+      // Add New button
       const addBtn = document.createElement('button');
       addBtn.textContent = '➕ Add New Deep Link';
       addBtn.style.marginTop = '8px';
       addBtn.style.width = '100%';
-      addBtn.onclick = () => {
+      addBtn.onclick = async () => {
         const text = prompt('Label (e.g. WhatsApp Mom):');
-        const url = prompt('URL (e.g. https://wa.me/971...):');
-        if (text && url) DeepLinkManager.addOrUpdate({ text, url });
+        if (!text) return;
+        const url = prompt('URL (e.g. https://wa.me/...):');
+        if (!url) return;
+        
+        const posStr = prompt('Position number? (1 = first, blank = last)');
+        const position = posStr ? parseInt(posStr) - 1 : null;
+        
+        await DeepLinkManager.addOrUpdate({ text, url }, position);
       };
       dropdown.appendChild(addBtn);
     });
   }
 };
-
 
 // ===== HABIT TRACKER – per-dot states (red/gray/black) =====
 const HabitTracker = {
