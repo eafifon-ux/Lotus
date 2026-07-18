@@ -6431,7 +6431,8 @@ const SimpleCalculator = {
   </div>`;
     
     this.attachListeners(container.querySelector('.calculator'), uid);
-    this.updateDisplay(uid);
+this.updateDisplay(uid);
+this.addDoubleTapCopy(uid); // ← ADD THIS
   },
   
   toggleFormat(uid) {
@@ -6546,11 +6547,46 @@ const SimpleCalculator = {
   calculate(a, b, op) {
     const x = parseFloat(a) || 0;
     const y = parseFloat(b) || 0;
+    
     let res = op === '+' ? x + y :
       op === '-' ? x - y :
       op === '*' ? x * y :
       op === '/' ? (y !== 0 ? x / y : 0) : 0;
+    
     return parseFloat(res.toFixed(8)).toString();
+  },
+  
+  // ===== DOUBLE-TAP TO COPY RESULT =====
+  addDoubleTapCopy(uid) {
+    const container = document.querySelector(`.calc-container[data-uid="${uid}"]`);
+    if (!container) return;
+    
+    const display = container.querySelector('.calculator-display');
+    if (!display) return;
+    
+    display.style.cursor = 'pointer';
+    display.title = 'Double-tap to copy result';
+    
+    display.ondblclick = null; // clear any old listener
+    
+    display.ondblclick = () => {
+      const state = SimpleCalculator.states.get(uid);
+      if (!state) return;
+      
+      let textToCopy = state.expression ?
+        state.expression :
+        SimpleCalculator.formatNumber(state.current, state.formatMode);
+      
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        const originalColor = display.style.color;
+        display.style.color = '#4ade80'; // green flash
+        setTimeout(() => {
+          display.style.color = originalColor || '#0f0';
+        }, 600);
+        
+        window.editorCore?.showToast(`✅ Copied: ${textToCopy}`);
+      });
+    };
   }
 };
 
