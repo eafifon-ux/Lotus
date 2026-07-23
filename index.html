@@ -4065,7 +4065,7 @@ insertNewListLine(cursor, prefix) {
     // ========== JOURNAL (works exactly like DOY) ==========
     if (type === 'journal') {
       const doyNum = doyToday; // keep unpadded as in your example
-      stamp = `[[Journal#Day ${doyNum}| ${weekEmoji} ${doyNum}]] - Subject\n\n#### Day ${doyNum}\n\nWrite...`;
+      stamp = `[[📁 Boomerang/Journal#Day ${doyNum}| ${weekEmoji} ${doyNum}]] - Subject\n\n#### Day ${doyNum}\n\nWrite...`;
       this.insertAtCursor(stamp);
       return;
     }
