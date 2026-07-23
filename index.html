@@ -1090,6 +1090,7 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-stamp="heptad">Heptad</button>
   <button data-stamp="gregorian">Civil Date</button>
   <button data-action="date-picker" style="font-weight:600; background:#f0f8ff;">📅 Date Picker</button>
+   <button data-stamp="journal">📙 Journal</button> <!-- ← add this -->
 </div>
 
 <div id="floating-table-dropdown" class="floating-dropdown">
@@ -2490,20 +2491,36 @@ this.saveTimeout = setTimeout(async () => {
   }
   
   processGPCStamps(html) {
-    // 1. First handle ALL emoji-triggered DOM patterns using their exact Unicode escapes
-    const emojiPattern = /(\uD83D[\uDD35\uDFE0-\uDFE4]|\uD83C\uDF7A|\u26AB)\s(\d{2}\.\d{2})/g;
-    html = html.replace(emojiPattern, '<span class="gpc-stamp">$1 $2</span>');
-    
-    // 2. Then handle all other patterns (unchanged)
-    html = html.replace(/([♣♠♦♥]️)\s*(\d+)/g, '<span class="gpc-stamp">$1</span> <strong>$2</strong>');
-    html = html.replace(/(\d{4}\.\d{3})/g, '<span class="gpc-stamp">$&</span>');
-    html = html.replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="gregorian-stamp">$&</span>');
-    html = html.replace(
-  /(Q\d \d{2}|(?<![\d,])\b\d{3}\b(?![\d,]))/g,
-  '<span class="gpc-stamp">$1</span>'
-);
-    
-    return html;
+  // 1. Emoji-triggered DOM patterns (unchanged)
+  const emojiPattern = /(\uD83D[\uDD35\uDFE0-\uDFE4]|\uD83C\uDF7A|\u26AB)\s(\d{2}\.\d{2})/g;
+  html = html.replace(emojiPattern, '<span class="gpc-stamp">$1 $2</span>');
+  
+  // 2. Suit + number
+  html = html.replace(/([♣♠♦♥]️)\s*(\d+)/g, '<span class="gpc-stamp">$1</span> <strong>$2</strong>');
+  
+  // 3. Full GPC year.doy
+  html = html.replace(/(\d{4}\.\d{3})/g, '<span class="gpc-stamp">$&</span>');
+  
+  // 4. Civil dates
+  html = html.replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="gregorian-stamp">$&</span>');
+  
+  // 5. Qx xx  and  plain 3-digit DOY numbers
+  //    BUT only when they are NOT inside an HTML tag / attribute
+  html = html.replace(
+    /(Q\d \d{2}|(?<![\d,])\b\d{3}\b(?![\d,]))/g,
+    (match, _p1, offset, full) => {
+      const before = full.slice(0, offset);
+      const lastOpen = before.lastIndexOf('<');
+      const lastClose = before.lastIndexOf('>');
+      if (lastOpen > lastClose) {
+        // We are inside a tag → leave the number alone
+        return match;
+      }
+      return `<span class="gpc-stamp">${match}</span>`;
+    }
+  );
+  
+  return html;
 }
 
   
@@ -4044,6 +4061,17 @@ insertNewListLine(cursor, prefix) {
     const heptad = GPCCalendar.heptadMap[doyToday] || '';
     
     let stamp = '';
+    
+    // ========== JOURNAL (works exactly like DOY) ==========
+    if (type === 'journal') {
+      const doyNum = doyToday; // keep unpadded as in your example
+      stamp = `[[Journal#Day ${doyNum}| ${weekEmoji} ${doyNum}]] - Subject\n\n#### Day ${doyNum}\n\nWrite...`;
+      this.insertAtCursor(stamp);
+      return;
+    }
+    // ======================================================
+    
+
     
     // If Heptad mode is enabled
     if (GPCCalendar.heptadEnabled) {
