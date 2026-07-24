@@ -1344,6 +1344,8 @@ this.debouncedReindex = null; // will be set in init
     this.backlinksMap = {};
     this.cachedIndex = null;   // ← ADD THIS LINE
     this.photoMap = {};   // ← Add this
+    this.navHistory = [];
+this.navHistoryIndex = -1;
     this.init();
   }
   
@@ -1456,10 +1458,18 @@ redo() {
   this.updatePreviewAndSave();
 }
 
-async switchToNote(noteName) {
+async switchToNote(noteName, fromHistory = false) {
   if (!noteName || noteName === this.currentNote) return;
   
   devLog('Switching to note:', noteName);
+  
+  // Save current note to history (unless we are going back)
+  if (!fromHistory && this.currentNote) {
+    // Truncate any “forward” history
+    this.navHistory = this.navHistory.slice(0, this.navHistoryIndex + 1);
+    this.navHistory.push(this.currentNote);
+    this.navHistoryIndex = this.navHistory.length - 1;
+  }
   
   // 1. Force photo map load
   await this.loadPhotoMap();
@@ -1483,7 +1493,7 @@ async switchToNote(noteName) {
   this.currentNote = noteName;
   this.editor.value = content;
   
-  this.pushHistory();
+  this.pushHistory(true);
   await this.updatePreviewAndSave(); // This should fix text + photos
   this.updateActiveNoteUI();
 }
@@ -1793,14 +1803,18 @@ sidebarToggle.addEventListener('pointercancel', cancelLongPress);
 document.getElementById('back-btn').addEventListener('click', async (e) => {
   e.stopPropagation();
   
-  // Always go to Home, regardless of current location
-  if (this.currentNote !== 'Home') {
-    await this.switchToNote('Home');
+  if (this.navHistoryIndex >= 0) {
+    const previousNote = this.navHistory[this.navHistoryIndex];
+    this.navHistoryIndex--; // move back in history
+    await this.switchToNote(previousNote, true); // true = coming from history
   } else {
-    devLog('Already at Home');
+    // Optional: if no history left, go Home (or do nothing)
+    if (this.currentNote !== 'Home') {
+      await this.switchToNote('Home', true);
+    }
   }
   
-  // Close sidebar after navigation
+  // Close sidebar
   sidebar.classList.remove('open');
 });
 
@@ -3708,32 +3722,7 @@ async handleDeepLink() {
   }, 200);
 }
 
-// Improved switchToNote (replace your existing one)
-async switchToNote(noteName) {
-  if (!noteName || noteName === this.currentNote) return;
-  
-  devLog('switchToNote called with:', noteName);
-  
-  await this.loadPhotoMap();
-  
-  let content = await VaultDB.get(noteName);
-  if (!content) {
-    content = `# ${noteName}\n\n`;
-  }
-  
-  content = this.collapsePhotosForEdit(content);
-  
-  if (this.currentNote && this.currentNote !== noteName) {
-    await VaultDB.set(this.currentNote, this.expandPhotosForSave(this.editor.value));
-  }
-  
-  this.currentNote = noteName;
-  this.editor.value = content;
-  
-  this.pushHistory(true);
-  await this.updatePreviewAndSave();
-  this.updateActiveNoteUI();
-}
+
 
 handleDropdownClick(type, e) {
   // Handle button-based dropdowns (unchanged - headings, text, date, colors, table)
