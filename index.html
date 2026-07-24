@@ -3326,34 +3326,24 @@ syncTaskOrder() {
 
 
 makeTasksDraggable() {
-    const taskItems = this.preview.querySelectorAll('li.task-item');
-    
-    if (taskItems.length === 0) {
-      devLog('No tasks found to make draggable');
-      return;
-    }
-    
-    let draggedItem = null;
-    
-    const handleDragStart = (e) => {
-      draggedItem = e.target.closest('li');
-      if (!draggedItem) return;
-      
-      draggedItem.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', 'task');
-    };
+  const taskItems = this.preview.querySelectorAll('li.task-item');
+  if (taskItems.length === 0) return;
 
-  const handleDragOver = (e) => {
+  let draggedItem = null;
+
+  const handlePointerMove = (e) => {
+    if (!draggedItem) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    const targetItem = e.target.closest('li.task-item');
+
+    // Find the element under the pointer
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    const targetItem = target ? target.closest('li.task-item') : null;
+
     if (!targetItem || targetItem === draggedItem) return;
 
     const rect = targetItem.getBoundingClientRect();
     const offset = e.clientY - rect.top;
-    
+
     if (offset < rect.height / 2) {
       targetItem.parentNode.insertBefore(draggedItem, targetItem);
     } else {
@@ -3361,31 +3351,33 @@ makeTasksDraggable() {
     }
   };
 
-  const handleDragEnd = (e) => {
-    e.preventDefault();
+  const handlePointerUp = () => {
     if (draggedItem) {
       draggedItem.classList.remove('dragging');
+      draggedItem.style.opacity = '1';
       this.syncTaskOrder();
       draggedItem = null;
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
     }
   };
 
-  this.preview.querySelectorAll('li.task-item').forEach(item => {
-    item.draggable = true;
+  taskItems.forEach(item => {
+    item.style.touchAction = 'none'; // Prevents scrolling while dragging
     
-    // Remove old listeners
-    item.ondragstart = null;
-    item.ondragover = null;
-    item.ondragend = null;
-    
-    // Add new listeners
-    item.ondragstart = handleDragStart;
-    item.ondragover = handleDragOver;
-    item.ondragend = handleDragEnd;
+    item.onpointerdown = (e) => {
+      draggedItem = e.currentTarget;
+      draggedItem.classList.add('dragging');
+      draggedItem.style.opacity = '0.5';
+      
+      document.addEventListener('pointermove', handlePointerMove);
+      document.addEventListener('pointerup', handlePointerUp);
+    };
   });
-  
-  devLog('Made', this.preview.querySelectorAll('li.task-item').length, 'tasks draggable with links support');
+
+  devLog('Made', taskItems.length, 'tasks draggable with Pointer Events (Mobile Ready)');
 }
+
 
 
 
