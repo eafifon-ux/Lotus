@@ -1368,12 +1368,17 @@ this.initReminders();
 // Setup debounced re-indexing
 this.debouncedReindex = debounce(() => this.buildNoteIndex(), 4000);
 
-  // Add offline support monitoring
-  window.addEventListener('offline', () => {
-    const alert = document.getElementById('offline-alert');
-    if (alert) alert.style.display = 'block';
-    devLog('📴 Offline mode activated');
-  });
+window.addEventListener('offline', () => {
+  const alert = document.getElementById('offline-alert');
+  if (alert) alert.style.display = 'block';
+  devLog('📴 Offline mode activated');
+  
+  // Show the vault prompt if nothing has been loaded yet
+  if (shouldShowVaultPrompt()) {
+    // small delay so the offline banner appears first
+    setTimeout(() => loadFullVault(true), 600);
+  }
+});
   
   window.addEventListener('online', () => {
     const alert = document.getElementById('offline-alert');
@@ -5417,6 +5422,12 @@ static updateGPC() {
 
 // Section 4.1 - DOMContentLoaded event handler
 
+function shouldShowVaultPrompt() {
+  const vaultStatus = localStorage.getItem('lotus-full-vault-loaded');
+  const dontShowAgain = localStorage.getItem('vault-dont-show-again') === 'true';
+  return !dontShowAgain && !vaultStatus;
+}
+
 // ====================== FULL VAULT AUTO + MANUAL LOADER ======================
 async function loadFullVault(isAuto = false) {
   const VAULT_KEY = 'lotus-full-vault-loaded';
@@ -5830,6 +5841,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }, 1200);
   }
+  
+  // If we start offline and no vault exists → show the prompt
+if (!navigator.onLine && shouldShowVaultPrompt()) {
+  setTimeout(() => loadFullVault(true), 1400);
+}
   
   // Create and initialize editor core
   window.editorCore = new EditorCore();
