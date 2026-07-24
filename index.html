@@ -6098,7 +6098,7 @@ const DeepLinkManager = {
         label.onclick = (e) => {
           e.preventDefault(); 
           e.stopPropagation();
-          const markdown = `[\( {link.text}]( \){link.url})`;
+          const markdown = `[${link.text}](${link.url})`;
           if (window.editorCore?.insertAtCursor) window.editorCore.insertAtCursor(markdown);
         };
 
