@@ -3328,54 +3328,88 @@ syncTaskOrder() {
 makeTasksDraggable() {
   const taskItems = this.preview.querySelectorAll('li.task-item');
   if (taskItems.length === 0) return;
-
+  
   let draggedItem = null;
-
+  let pressTimer = null;
+  let startX = 0;
+  let startY = 0;
+  const LONG_PRESS_MS = 420; // feel free to tweak 350–500
+  const MOVE_THRESHOLD = 8; // px – cancels long-press if finger slides
+  
+  const clearPress = () => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  };
+  
   const handlePointerMove = (e) => {
-    if (!draggedItem) return;
+    if (!draggedItem) {
+      // Still in the long-press window → cancel if moved too far
+      if (pressTimer && (Math.abs(e.clientX - startX) > MOVE_THRESHOLD ||
+          Math.abs(e.clientY - startY) > MOVE_THRESHOLD)) {
+        clearPress();
+      }
+      return;
+    }
+    
     e.preventDefault();
-
-    // Find the element under the pointer
+    
     const target = document.elementFromPoint(e.clientX, e.clientY);
     const targetItem = target ? target.closest('li.task-item') : null;
-
+    
     if (!targetItem || targetItem === draggedItem) return;
-
+    
     const rect = targetItem.getBoundingClientRect();
     const offset = e.clientY - rect.top;
-
+    
     if (offset < rect.height / 2) {
       targetItem.parentNode.insertBefore(draggedItem, targetItem);
     } else {
       targetItem.parentNode.insertBefore(draggedItem, targetItem.nextSibling);
     }
   };
-
+  
   const handlePointerUp = () => {
+    clearPress();
     if (draggedItem) {
       draggedItem.classList.remove('dragging');
       draggedItem.style.opacity = '1';
       this.syncTaskOrder();
       draggedItem = null;
-      document.removeEventListener('pointermove', handlePointerMove);
-      document.removeEventListener('pointerup', handlePointerUp);
     }
+    document.removeEventListener('pointermove', handlePointerMove);
+    document.removeEventListener('pointerup', handlePointerUp);
+    document.removeEventListener('pointercancel', handlePointerUp);
   };
-
+  
   taskItems.forEach(item => {
-    item.style.touchAction = 'none'; // Prevents scrolling while dragging
+    item.style.touchAction = 'none';
     
     item.onpointerdown = (e) => {
-      draggedItem = e.currentTarget;
-      draggedItem.classList.add('dragging');
-      draggedItem.style.opacity = '0.5';
+      // Only left / primary pointer
+      if (e.button && e.button !== 0) return;
+      
+      startX = e.clientX;
+      startY = e.clientY;
+      clearPress();
+      
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        draggedItem = item;
+        draggedItem.classList.add('dragging');
+        draggedItem.style.opacity = '0.5';
+        // Optional haptic
+        if (navigator.vibrate) navigator.vibrate(12);
+      }, LONG_PRESS_MS);
       
       document.addEventListener('pointermove', handlePointerMove);
       document.addEventListener('pointerup', handlePointerUp);
+      document.addEventListener('pointercancel', handlePointerUp);
     };
   });
-
-  devLog('Made', taskItems.length, 'tasks draggable with Pointer Events (Mobile Ready)');
+  
+  devLog('Made', taskItems.length, 'tasks draggable (long-press to move)');
 }
 
 
