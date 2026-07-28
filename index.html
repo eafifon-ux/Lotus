@@ -2612,31 +2612,52 @@ this.saveTimeout = setTimeout(async () => {
   }
   
   processGPCStamps(html) {
-  // 1. Emoji-triggered DOM patterns (unchanged)
+  // ── First: strip any existing gpc-stamp / gregorian-stamp wrappers
+  // This is the key fix that stops infinite nesting
+  html = html.replace(/<span class="gpc-stamp">(.*?)<\/span>/gi, '$1');
+  html = html.replace(/<span class="gregorian-stamp">(.*?)<\/span>/gi, '$1');
+  
+  // 1. Emoji + DOM pattern (🟠 03.14 etc.)
   const emojiPattern = /(\uD83D[\uDD35\uDFE0-\uDFE4]|\uD83C\uDF7A|\u26AB)\s(\d{2}\.\d{2})/g;
   html = html.replace(emojiPattern, '<span class="gpc-stamp">$1 $2</span>');
   
-  // 2. Suit + number
-  html = html.replace(/([♣♠♦♥]️)\s*(\d+)/g, '<span class="gpc-stamp">$1</span> <strong>$2</strong>');
+  // 2. Suit + number (♣ 5 etc.)
+  html = html.replace(/([♣♠♦♥]️?)\s*(\d+)/g, '<span class="gpc-stamp">$1</span> <strong>$2</strong>');
   
-  // 3. Full GPC year.doy
+  // 3. Full GPC year.doy (2026.134)
   html = html.replace(/(\d{4}\.\d{3})/g, '<span class="gpc-stamp">$&</span>');
   
-  // 4. Civil dates
+  // 4. Civil / Gregorian dates
   html = html.replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="gregorian-stamp">$&</span>');
   
-  // 5. Qx xx  and  plain 3-digit DOY numbers
-  //    BUT only when they are NOT inside an HTML tag / attribute
+  // 5. Qx xx patterns (Q1 34)
   html = html.replace(
-    /(Q\d \d{2}|(?<![\d,])\b\d{3}\b(?![\d,]))/g,
+    /(Q[1-4]\s\d{2})/g,
     (match, _p1, offset, full) => {
       const before = full.slice(0, offset);
-      const lastOpen = before.lastIndexOf('<');
-      const lastClose = before.lastIndexOf('>');
-      if (lastOpen > lastClose) {
-        // We are inside a tag → leave the number alone
-        return match;
-      }
+      if (before.lastIndexOf('<') > before.lastIndexOf('>')) return match; // inside tag
+      return `<span class="gpc-stamp">${match}</span>`;
+    }
+  );
+  
+  // 6. Plain 3-digit DOY numbers — ONLY when they are standalone
+  //    and NOT already inside a span we just created
+  html = html.replace(
+    /(?<![\d,.])\b(\d{3})\b(?![\d,.])/g,
+    (match, num, offset, full) => {
+      const before = full.slice(0, offset);
+      const after = full.slice(offset + match.length);
+      
+      // Skip if inside any HTML tag
+      if (before.lastIndexOf('<') > before.lastIndexOf('>')) return match;
+      
+      // Skip if we are already inside a gpc-stamp or gregorian-stamp
+      if (/gpc-stamp|gregorian-stamp/.test(before.slice(-80))) return match;
+      
+      // Optional: only style if it looks like a real DOY (001-364)
+      const n = parseInt(num, 10);
+      if (n < 1 || n > 364) return match;
+      
       return `<span class="gpc-stamp">${match}</span>`;
     }
   );
