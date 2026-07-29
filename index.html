@@ -4294,15 +4294,14 @@ insertNewListLine(cursor, prefix) {
     "Pick format:\n\n1 = DOY\n2 = DOS\n3 = DOM\n4 = Heptad\n5 = Civil\n\nEnter 1-5",
     "1"
   );
-
   if (!choice) return;
 
-  const stampType = ["doy","dos","dom","heptad","gregorian"][parseInt(choice.trim()) - 1] || "doy";
+  const stampType = ["doy", "dos", "dom", "heptad", "gregorian"][parseInt(choice.trim()) - 1] || "doy";
 
-  const tempInput = document.createElement('input');
-  tempInput.type = 'text';
-  tempInput.style.position = 'absolute';
-  tempInput.style.opacity = '0';
+  const tempInput = document.createElement("input");
+  tempInput.type = "text";
+  tempInput.style.position = "absolute";
+  tempInput.style.opacity = "0";
   document.body.appendChild(tempInput);
 
   flatpickr(tempInput, {
@@ -4311,21 +4310,69 @@ insertNewListLine(cursor, prefix) {
     onClose: (selectedDates) => {
       if (tempInput._flatpickr) tempInput._flatpickr.destroy();
       tempInput.remove();
-      if (!selectedDates?.length) return;
+      if (!selectedDates || !selectedDates.length) return;
 
       const date = selectedDates[0];
       const stamps = GPCCalendar.calculateForDate(date);
 
-      let stamp = '';
-      switch(stampType) {
-        case 'doy':      stamp = `${stamps.emoji} ${stamps.doy}`; break;
-        case 'dos':      stamp = `${stamps.emoji} ${stamps.dos}`; break;
-        case 'dom':      stamp = `${stamps.emoji} ${stamps.dom}`; break;
-        case 'heptad':   stamp = stamps.heptad || 'Heptad'; break;
-        case 'gregorian':stamp = stamps.civil; break;
+      let stamp = "";
+      switch (stampType) {
+        case "doy":      stamp = stamps.emoji + " " + stamps.doy; break;
+        case "dos":      stamp = stamps.emoji + " " + stamps.dos; break;
+        case "dom":      stamp = stamps.emoji + " " + stamps.dom; break;
+        case "heptad":   stamp = stamps.heptad || "Heptad"; break;
+        case "gregorian":stamp = stamps.civil; break;
       }
 
-      this.insertAtCursor(stamp + ' ');
+      const timeChoice = prompt(
+        "Time format:\n\n1 = no time\n2 = am/pm\n3 = 24hr clock\n4 = Zulu Time\n5 = Pahar System\n6 = Sierra\n7 = Rooster/Owl\n\nEnter 1-7",
+        "1"
+      );
+      if (!timeChoice) {
+        this.insertAtCursor(stamp + " ");
+        return;
+      }
+
+      const now = new Date();
+      const h = now.getHours();
+      const m = String(now.getMinutes()).padStart(2, "0");
+
+      let sierraH = (h - 6 + 24) % 24;
+      if (sierraH === 0) sierraH = 24;
+
+      let timeStr = "";
+      const choiceNum = parseInt(timeChoice.trim()) || 1;
+
+      if (choiceNum === 2) {
+        const h12 = h % 12 || 12;
+        const ampm = h < 12 ? "AM" : "PM";
+        timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
+      }
+      else if (choiceNum === 3) {
+        timeStr = " 🕛 " + String(h).padStart(2, "0") + ":" + m;
+      }
+      else if (choiceNum === 4) {
+        const uh = String(now.getUTCHours()).padStart(2, "0");
+        const um = String(now.getUTCMinutes()).padStart(2, "0");
+        timeStr = " 🕛 " + uh + ":" + um + "Z";
+      }
+      else if (choiceNum === 5) {
+        let pahar;
+        if (sierraH <= 6)       pahar = "Mike";
+        else if (sierraH <= 11) pahar = "Alpha";
+        else if (sierraH <= 18) pahar = "Echo";
+        else                    pahar = "Napa";
+        timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
+      }
+      else if (choiceNum === 6) {
+        timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
+      }
+      else if (choiceNum === 7) {
+        const bird = sierraH <= 11 ? "🐓" : "🦉";
+        timeStr = " " + bird + " " + sierraH + ":" + m;
+      }
+
+      this.insertAtCursor(stamp + timeStr + " ");
     }
   });
 
