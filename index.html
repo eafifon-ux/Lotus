@@ -4324,6 +4324,7 @@ insertNewListLine(cursor, prefix) {
         case "gregorian":stamp = stamps.civil; break;
       }
 
+      // ── Time format ──
       const timeChoice = prompt(
         "Time format:\n\n1 = no time\n2 = am/pm\n3 = 24hr clock\n4 = Zulu Time\n5 = Pahar System\n6 = Sierra\n7 = Rooster/Owl\n\nEnter 1-7",
         "1"
@@ -4333,43 +4334,65 @@ insertNewListLine(cursor, prefix) {
         return;
       }
 
-      const now = new Date();
-      const h = now.getHours();
-      const m = String(now.getMinutes()).padStart(2, "0");
-
-      let sierraH = (h - 6 + 24) % 24;
-      if (sierraH === 0) sierraH = 24;
-
-      let timeStr = "";
       const choiceNum = parseInt(timeChoice.trim()) || 1;
+      let timeStr = "";
 
-      if (choiceNum === 2) {
-        const h12 = h % 12 || 12;
-        const ampm = h < 12 ? "AM" : "PM";
-        timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
-      }
-      else if (choiceNum === 3) {
-        timeStr = " 🕛 " + String(h).padStart(2, "0") + ":" + m;
-      }
-      else if (choiceNum === 4) {
-        const uh = String(now.getUTCHours()).padStart(2, "0");
-        const um = String(now.getUTCMinutes()).padStart(2, "0");
-        timeStr = " 🕛 " + uh + ":" + um + "Z";
-      }
-      else if (choiceNum === 5) {
-        let pahar;
-        if (sierraH <= 6)       pahar = "Mike";
-        else if (sierraH <= 11) pahar = "Alpha";
-        else if (sierraH <= 18) pahar = "Echo";
-        else                    pahar = "Napa";
-        timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
-      }
-      else if (choiceNum === 6) {
-        timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
-      }
-      else if (choiceNum === 7) {
-        const bird = sierraH <= 11 ? "🐓" : "🦉";
-        timeStr = " " + bird + " " + sierraH + ":" + m;
+      if (choiceNum > 1) {
+        // Default = current civil time
+        const now = new Date();
+        const defaultTime =
+          String(now.getHours()).padStart(2, "0") + ":" +
+          String(now.getMinutes()).padStart(2, "0");
+
+        const civilStr = prompt("Civil time (HH:MM)", defaultTime);
+        if (!civilStr) {
+          this.insertAtCursor(stamp + " ");
+          return;
+        }
+
+        const parts = civilStr.trim().split(":");
+        let civilH = parseInt(parts[0], 10);
+        let civilM = parseInt(parts[1], 10) || 0;
+
+        if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
+        if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
+        const m = String(civilM).padStart(2, "0");
+
+        // Sierra = civil − 6
+        let sierraH = (civilH - 6 + 24) % 24;
+        if (sierraH === 0) sierraH = 24;
+
+        if (choiceNum === 2) {                     // am/pm
+          const h12 = civilH % 12 || 12;
+          const ampm = civilH < 12 ? "AM" : "PM";
+          timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
+        }
+        else if (choiceNum === 3) {                // 24hr
+          timeStr = " 🕛 " + String(civilH).padStart(2, "0") + ":" + m;
+        }
+        else if (choiceNum === 4) {                // Zulu
+          const temp = new Date();
+          temp.setHours(civilH, civilM, 0, 0);
+          const uh = String(temp.getUTCHours()).padStart(2, "0");
+          const um = String(temp.getUTCMinutes()).padStart(2, "0");
+          timeStr = " 🕛 " + uh + ":" + um + "Z";
+        }
+        else if (choiceNum === 5) {                // Pahar
+          let pahar;
+          if (sierraH <= 6)       pahar = "Mike";
+          else if (sierraH <= 11) pahar = "Alpha";
+          else if (sierraH <= 18) pahar = "Echo";
+          else                    pahar = "Napa";
+          timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
+        }
+        else if (choiceNum === 6) {                // Sierra
+          timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
+        }
+        else if (choiceNum === 7) {                // Rooster/Owl
+          const displayH = sierraH % 12 || 12;
+          const bird = sierraH <= 12 ? "🐓" : "🦉";
+          timeStr = " " + bird + " " + displayH + ":" + m;
+        }
       }
 
       this.insertAtCursor(stamp + timeStr + " ");
