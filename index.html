@@ -4335,7 +4335,7 @@ insertNewListLine(cursor, prefix) {
       // ── Time format ──
       const timeChoice = prompt(
         "Time format:\n\n1 = no time\n2 = am/pm\n3 = 24hr clock\n4 = Zulu Time\n5 = Pahar System\n6 = Sierra\n7 = Rooster/Owl\n\nEnter 1-7",
-        "1"
+        "7"
       );
       if (!timeChoice) {
         this.insertAtCursor(stamp + " ");
