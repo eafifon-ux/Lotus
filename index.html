@@ -3241,24 +3241,27 @@ syncTaskOrder() {
     
     // Enhanced reverse conversion with CORRECT highlight handling
     let markdownLike = renderedContent
-      // Wikilinks
-      .replace(/<a[^>]*data-note="([^"]*)"[^>]*>(.*?)<\/a>/g, '[[$1|$2]]')
-      .replace(/<a[^>]*>(.*?)<\/a>/g, '[[$1]]')
-      
-      // Highlights - CRITICAL FIX: No color prefix for simple highlights
-      .replace(/<span class="highlight\s+([a-z]+)">([^<]+)<\/span>/gi, '==$1:$2==')
-      .replace(/<span class="highlight">([^<]+)<\/span>/gi, '==$1==')  // Simple highlight
-      
-      // Other formatting
-      .replace(/<s>(.*?)<\/s>/gi, '~~$1~~')
-      .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
-      .replace(/<em>(.*?)<\/em>/gi, '*$1*')
-      .replace(/<u>(.*?)<\/u>/gi, '<u>$1</u>')
-      .replace(/<sub>(.*?)<\/sub>/gi, '~$1~')
-      .replace(/<sup>(.*?)<\/sup>/gi, '^$1^')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .trim();
+  // 1. Wikilinks (keep as-is)
+  .replace(/<a[^>]*data-note="([^"]*)"[^>]*data-anchor="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[[$1#$2|$3]]')
+  .replace(/<a[^>]*data-note="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[[$1|$2]]')
+  
+  // 2. Normal markdown links – PRESERVE the URL
+  .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
+  
+  // 3. Highlights
+  .replace(/<span class="highlight\s+([a-z]+)">([^<]+)<\/span>/gi, '==$1:$2==')
+  .replace(/<span class="highlight">([^<]+)<\/span>/gi, '==$1==')
+  
+  // 4. Other formatting
+  .replace(/<s>(.*?)<\/s>/gi, '~~$1~~')
+  .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
+  .replace(/<em>(.*?)<\/em>/gi, '*$1*')
+  .replace(/<u>(.*?)<\/u>/gi, '<u>$1</u>')
+  .replace(/<sub>(.*?)<\/sub>/gi, '\~$1\~')
+  .replace(/<sup>(.*?)<\/sup>/gi, '^$1^')
+  .replace(/&lt;/g, '<')
+  .replace(/&gt;/g, '>')
+  .trim();
     
     // Find the best matching original line
     let bestMatchLine = null;
