@@ -3240,7 +3240,12 @@ syncTaskOrder() {
     const renderedContent = tempDiv.innerHTML.trim();
     
     // Enhanced reverse conversion with CORRECT highlight handling
-    let markdownLike = renderedContent
+    // Clean processed spans first so they don't leak into the markdown
+let cleaned = renderedContent
+  .replace(/<span class="gpc-stamp">(.*?)<\/span>/gi, '$1')
+  .replace(/<span class="gregorian-stamp">(.*?)<\/span>/gi, '$1');
+
+let markdownLike = cleaned
   // 1. Wikilinks (keep as-is)
   .replace(/<a[^>]*data-note="([^"]*)"[^>]*data-anchor="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[[$1#$2|$3]]')
   .replace(/<a[^>]*data-note="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[[$1|$2]]')
