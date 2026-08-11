@@ -5340,26 +5340,27 @@ class GPCCalendar {
   
   // Section 3.3.3 - Core calculations
   static calculateGPC() {
-    const now = new Date();
-    const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    let remainingDays = Math.floor((todayUTC - this.epochDate.getTime()) / 86400000);
-    let gpcYear = this.epochYear;
-    
-    while(true) {
-      const rel = gpcYear - this.epochYear;
-      let leapDays = 0;
-      if(rel % 7 === 6) leapDays += 7;
-      if(rel % 49 === 48) leapDays += 7;
-      if((rel + 29) % 70 === 0) leapDays += 7;
-      const yearLength = 364 + leapDays;
-      if(remainingDays < yearLength) break;
-      remainingDays -= yearLength;
-      gpcYear++;
-    }
-    
-    const doyToday = Math.max(1, Math.min(364, remainingDays + 1));
-    return { gpcYear, doyToday };
+  const now = new Date();
+  // Use local date (not UTC) so evening in CDT still counts as the correct day
+  const todayLocal = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  let remainingDays = Math.floor((todayLocal - this.epochDate.getTime()) / 86400000);
+  let gpcYear = this.epochYear;
+  
+  while (true) {
+    const rel = gpcYear - this.epochYear;
+    let leapDays = 0;
+    if (rel % 7 === 6) leapDays += 7;
+    if (rel % 49 === 48) leapDays += 7;
+    if ((rel + 29) % 70 === 0) leapDays += 7;
+    const yearLength = 364 + leapDays;
+    if (remainingDays < yearLength) break;
+    remainingDays -= yearLength;
+    gpcYear++;
   }
+  
+  const doyToday = Math.max(1, Math.min(364, remainingDays + 1));
+  return { gpcYear, doyToday };
+}
   
   static calculateForDate(date) {
   // Use local date components to avoid timezone shift
