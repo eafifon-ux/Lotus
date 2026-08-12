@@ -6159,7 +6159,7 @@ const DeepLinkManager = {
   
   getDefaults() {
     return [
-      { text: "Grok", url: "https://grok.com/?q=" },
+     { text: "👾 Grok", url: "https://grok.com/?q=" }, { text: "🤖 ChatGPT", url: "https://chatgpt.com/?q=" },
       { text: "📨 Email", url: "mailto:user@gmail.com" },
       { text: "📞 Text Homie", url: "sms:+10001234567?body=" },
       { text: "🍏 WhatsApp", url: "https://wa.me/10001234567?text=" },
@@ -6242,13 +6242,24 @@ const DeepLinkManager = {
   e.preventDefault();
   e.stopPropagation();
   
-  if (link.text === "Grok") {
+  if (link.text.includes("Grok")) {
     const query = prompt("Ask Grok:", "How to say what time is it in Hindi?");
     if (!query) return;
     
     const encoded = encodeURIComponent(query.trim());
     const fullUrl = `https://grok.com/?q=${encoded}`;
-    const markdown = `[Grok](${fullUrl})`;
+    const markdown = `[👾 Grok](${fullUrl})`;
+    
+    if (window.editorCore?.insertAtCursor) {
+      window.editorCore.insertAtCursor(markdown);
+    }
+  } else if (link.text.includes("ChatGPT")) {
+    const query = prompt("Ask ChatGPT:", "");
+    if (!query) return;
+    
+    const encoded = encodeURIComponent(query.trim());
+    const fullUrl = `https://chatgpt.com/?q=${encoded}`;
+    const markdown = `[🤖 ChatGPT](${fullUrl})`;
     
     if (window.editorCore?.insertAtCursor) {
       window.editorCore.insertAtCursor(markdown);
