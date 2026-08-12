@@ -6243,33 +6243,20 @@ const DeepLinkManager = {
   e.stopPropagation();
   
   if (link.text.includes("Grok")) {
-    const query = prompt("Ask Grok:", "How to say what time is it in Hindi?");
+    const query = prompt("Ask Grok:", "");
     if (!query) return;
-    
-    const encoded = encodeURIComponent(query.trim());
-    const fullUrl = `https://grok.com/?q=${encoded}`;
-    const markdown = `[👾 Grok](${fullUrl})`;
-    
-    if (window.editorCore?.insertAtCursor) {
-      window.editorCore.insertAtCursor(markdown);
-    }
-  } else if (link.text.includes("ChatGPT")) {
+    const fullUrl = "https://grok.com/?q=" + encodeURIComponent(query.trim());
+    window.editorCore?.insertAtCursor("[👾 Grok](" + fullUrl + ")");
+  }
+  else if (link.text.includes("ChatGPT")) {
     const query = prompt("Ask ChatGPT:", "");
     if (!query) return;
-    
-    const encoded = encodeURIComponent(query.trim());
-    const fullUrl = `https://chatgpt.com/?q=${encoded}`;
-    const markdown = `[🤖 ChatGPT](${fullUrl})`;
-    
-    if (window.editorCore?.insertAtCursor) {
-      window.editorCore.insertAtCursor(markdown);
-    }
-  } else {
-    // Normal deep links
-    const markdown = `[\( {link.text}]( \){link.url})`;
-    if (window.editorCore?.insertAtCursor) {
-      window.editorCore.insertAtCursor(markdown);
-    }
+    const fullUrl = "https://chatgpt.com/?q=" + encodeURIComponent(query.trim());
+    window.editorCore?.insertAtCursor("[🤖 ChatGPT](" + fullUrl + ")");
+  }
+  else {
+    // Normal links (Email, Maps, Uber, WhatsApp, etc.)
+    window.editorCore?.insertAtCursor("[" + link.text + "](" + link.url + ")");
   }
 };
 
