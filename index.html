@@ -6159,6 +6159,7 @@ const DeepLinkManager = {
   
   getDefaults() {
     return [
+      { text: "Grok", url: "https://grok.com/?q=" },
       { text: "📨 Email", url: "mailto:user@gmail.com" },
       { text: "📞 Text Homie", url: "sms:+10001234567?body=" },
       { text: "🍏 WhatsApp", url: "https://wa.me/10001234567?text=" },
@@ -6238,11 +6239,28 @@ const DeepLinkManager = {
         label.textContent = `${idx + 1}. ${link.text}`;
         label.style.flexGrow = '1';
         label.onclick = (e) => {
-          e.preventDefault(); 
-          e.stopPropagation();
-          const markdown = `[${link.text}](${link.url})`;
-          if (window.editorCore?.insertAtCursor) window.editorCore.insertAtCursor(markdown);
-        };
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (link.text === "Grok") {
+    const query = prompt("Ask Grok:", "How to say what time is it in Hindi?");
+    if (!query) return;
+    
+    const encoded = encodeURIComponent(query.trim());
+    const fullUrl = `https://grok.com/?q=${encoded}`;
+    const markdown = `[Grok](${fullUrl})`;
+    
+    if (window.editorCore?.insertAtCursor) {
+      window.editorCore.insertAtCursor(markdown);
+    }
+  } else {
+    // Normal deep links
+    const markdown = `[\( {link.text}]( \){link.url})`;
+    if (window.editorCore?.insertAtCursor) {
+      window.editorCore.insertAtCursor(markdown);
+    }
+  }
+};
 
         const edit = document.createElement('small');
         edit.innerHTML = '✏️';
