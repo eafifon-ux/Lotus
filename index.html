@@ -4298,6 +4298,7 @@ insertNewListLine(cursor, prefix) {
   showDatePicker() {
   this.closeAllDropdowns();
 
+  // 1. Format choice
   const choice = prompt(
     "Pick format:\n\n1 = DOY\n2 = DOS\n3 = DOM\n4 = Heptad\n5 = Civil\n\nEnter 1-5",
     "1"
@@ -4306,108 +4307,128 @@ insertNewListLine(cursor, prefix) {
 
   const stampType = ["doy", "dos", "dom", "heptad", "gregorian"][parseInt(choice.trim()) - 1] || "doy";
 
-  const tempInput = document.createElement("input");
-  tempInput.type = "text";
-  tempInput.style.position = "absolute";
-  tempInput.style.opacity = "0";
-  document.body.appendChild(tempInput);
+  // 2. Create a hidden native date input and open it immediately
+  const input = document.createElement("input");
+  input.type = "date";
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  input.style.pointerEvents = "none";
+  document.body.appendChild(input);
 
-  flatpickr(tempInput, {
-    defaultDate: new Date(),
-    dateFormat: "Y-m-d",
-    onClose: (selectedDates) => {
-      if (tempInput._flatpickr) tempInput._flatpickr.destroy();
-      tempInput.remove();
-      if (!selectedDates || !selectedDates.length) return;
+  // Default to today
+  const today = new Date();
+  input.value = today.toISOString().slice(0, 10);
 
-      const date = selectedDates[0];
-      const stamps = GPCCalendar.calculateForDate(date);
+  // Open the native picker
+  setTimeout(() => {
+    input.focus();
+    if (input.showPicker) {
+      input.showPicker();
+    } else {
+      // Fallback for older browsers
+      input.click();
+    }
+  }, 50);
 
-      let stamp = "";
-      switch (stampType) {
-        case "doy":      stamp = stamps.emoji + " " + stamps.doy; break;
-        case "dos":      stamp = stamps.emoji + " " + stamps.dos; break;
-        case "dom":      stamp = stamps.emoji + " " + stamps.dom; break;
-        case "heptad":   stamp = stamps.heptad || "Heptad"; break;
-        case "gregorian":stamp = stamps.civil; break;
-      }
+  // When the user picks a date (or cancels)
+  const handleChange = () => {
+    const val = input.value;
+    input.removeEventListener("change", handleChange);
+    input.removeEventListener("blur", handleBlur);
+    document.body.removeChild(input);
 
-      // ── Time format ──
-      const timeChoice = prompt(
-        "Time format:\n\n1 = no time\n2 = am/pm\n3 = 24hr clock\n4 = Zulu Time\n5 = Pahar System\n6 = Sierra\n7 = Rooster/Owl\n\nEnter 1-7",
-        "7"
-      );
-      if (!timeChoice) {
+    if (!val) return; // user cancelled
+
+    const date = new Date(val + "T12:00:00"); // avoid timezone shift
+    const stamps = GPCCalendar.calculateForDate(date);
+
+    let stamp = "";
+    switch (stampType) {
+      case "doy":      stamp = stamps.emoji + " " + stamps.doy; break;
+      case "dos":      stamp = stamps.emoji + " " + stamps.dos; break;
+      case "dom":      stamp = stamps.emoji + " " + stamps.dom; break;
+      case "heptad":   stamp = stamps.heptad || "Heptad"; break;
+      case "gregorian":stamp = stamps.civil; break;
+    }
+
+    // 3. Time format
+    const timeChoice = prompt(
+      "Time format:\n\n1 = no time\n2 = am/pm\n3 = 24hr clock\n4 = Zulu Time\n5 = Pahar System\n6 = Sierra\n7 = Rooster/Owl\n\nEnter 1-7",
+      "7"
+    );
+    if (!timeChoice) {
+      this.insertAtCursor(stamp + " ");
+      return;
+    }
+
+    const choiceNum = parseInt(timeChoice.trim()) || 1;
+    let timeStr = "";
+
+    if (choiceNum > 1) {
+      const now = new Date();
+      const defaultTime =
+        String(now.getHours()).padStart(2, "0") + ":" +
+        String(now.getMinutes()).padStart(2, "0");
+
+      const civilStr = prompt("Civil time (HH:MM)", defaultTime);
+      if (!civilStr) {
         this.insertAtCursor(stamp + " ");
         return;
       }
 
-      const choiceNum = parseInt(timeChoice.trim()) || 1;
-      let timeStr = "";
+      const parts = civilStr.trim().split(":");
+      let civilH = parseInt(parts[0], 10);
+      let civilM = parseInt(parts[1], 10) || 0;
 
-      if (choiceNum > 1) {
-        // Default = current civil time
-        const now = new Date();
-        const defaultTime =
-          String(now.getHours()).padStart(2, "0") + ":" +
-          String(now.getMinutes()).padStart(2, "0");
+      if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
+      if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
+      const m = String(civilM).padStart(2, "0");
 
-        const civilStr = prompt("Civil time (HH:MM)", defaultTime);
-        if (!civilStr) {
-          this.insertAtCursor(stamp + " ");
-          return;
-        }
+      let sierraH = (civilH - 6 + 24) % 24;
+      if (sierraH === 0) sierraH = 24;
 
-        const parts = civilStr.trim().split(":");
-        let civilH = parseInt(parts[0], 10);
-        let civilM = parseInt(parts[1], 10) || 0;
-
-        if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
-        if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
-        const m = String(civilM).padStart(2, "0");
-
-        // Sierra = civil − 6
-        let sierraH = (civilH - 6 + 24) % 24;
-        if (sierraH === 0) sierraH = 24;
-
-        if (choiceNum === 2) {                     // am/pm
-          const h12 = civilH % 12 || 12;
-          const ampm = civilH < 12 ? "AM" : "PM";
-          timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
-        }
-        else if (choiceNum === 3) {                // 24hr
-          timeStr = " 🕛 " + String(civilH).padStart(2, "0") + ":" + m;
-        }
-        else if (choiceNum === 4) {                // Zulu
-          const temp = new Date();
-          temp.setHours(civilH, civilM, 0, 0);
-          const uh = String(temp.getUTCHours()).padStart(2, "0");
-          const um = String(temp.getUTCMinutes()).padStart(2, "0");
-          timeStr = " 🕛 " + uh + ":" + um + "Z";
-        }
-        else if (choiceNum === 5) {                // Pahar
-          let pahar;
-          if (sierraH <= 6)       pahar = "Mike";
-          else if (sierraH <= 11) pahar = "Alpha";
-          else if (sierraH <= 18) pahar = "Echo";
-          else                    pahar = "Napa";
-          timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
-        }
-        else if (choiceNum === 6) {                // Sierra
-          timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
-        }
-        else if (choiceNum === 7) {                // Rooster/Owl
-          const displayH = sierraH % 12 || 12;
-          const bird = sierraH <= 12 ? "🐓" : "🦉";
-          timeStr = " " + bird + " " + displayH + ":" + m;
-        }
+      if (choiceNum === 2) {
+        const h12 = civilH % 12 || 12;
+        const ampm = civilH < 12 ? "AM" : "PM";
+        timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
+      } else if (choiceNum === 3) {
+        timeStr = " 🕛 " + String(civilH).padStart(2, "0") + ":" + m;
+      } else if (choiceNum === 4) {
+        const temp = new Date();
+        temp.setHours(civilH, civilM, 0, 0);
+        const uh = String(temp.getUTCHours()).padStart(2, "0");
+        const um = String(temp.getUTCMinutes()).padStart(2, "0");
+        timeStr = " 🕛 " + uh + ":" + um + "Z";
+      } else if (choiceNum === 5) {
+        let pahar;
+        if (sierraH <= 6)       pahar = "Mike";
+        else if (sierraH <= 11) pahar = "Alpha";
+        else if (sierraH <= 18) pahar = "Echo";
+        else                    pahar = "Napa";
+        timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
+      } else if (choiceNum === 6) {
+        timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
+      } else if (choiceNum === 7) {
+        const displayH = sierraH % 12 || 12;
+        const bird = sierraH <= 12 ? "🐓" : "🦉";
+        timeStr = " " + bird + " " + displayH + ":" + m;
       }
-
-      this.insertAtCursor(stamp + timeStr + " ");
     }
-  });
 
-  tempInput._flatpickr.open();
+    this.insertAtCursor(stamp + timeStr + " ");
+  };
+
+  const handleBlur = () => {
+    // Small delay so change event can fire first
+    setTimeout(() => {
+      if (document.body.contains(input)) {
+        handleChange();
+      }
+    }, 300);
+  };
+
+  input.addEventListener("change", handleChange);
+  input.addEventListener("blur", handleBlur);
 }
 
 // ===== HABIT TRACKER ACTIONS =====
