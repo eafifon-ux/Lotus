@@ -4317,7 +4317,10 @@ insertNewListLine(cursor, prefix) {
 
   // Default to today
   const today = new Date();
-  input.value = today.toISOString().slice(0, 10);
+const yyyy = today.getFullYear();
+const mm = String(today.getMonth() + 1).padStart(2, '0');
+const dd = String(today.getDate()).padStart(2, '0');
+input.value = `\( {yyyy}- \){mm}-${dd}`;
 
   // Open the native picker
   setTimeout(() => {
@@ -4597,7 +4600,10 @@ showDatePickerModal() {
 
   // Default to today
   const today = new Date();
-  input.value = today.toISOString().slice(0, 10);
+const yyyy = today.getFullYear();
+const mm = String(today.getMonth() + 1).padStart(2, '0');
+const dd = String(today.getDate()).padStart(2, '0');
+input.value = `\( {yyyy}- \){mm}-${dd}`;
 
   const close = () => overlay.remove();
 
