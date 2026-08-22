@@ -6970,5 +6970,631 @@ document.getElementById('preview')?.addEventListener('click', () => setTimeout((
 
 
 </script>
+<script>
+
+/**
+ * Lotus / Capture — Now Strip
+ * Drop this file in before </body> (after your main <script>),
+ * or paste the IIFE at the end of your existing script block.
+ *
+ * What it does
+ * - Live strip under the GPC buttons: today + next 7 DOYs
+ * - Reads titles from 📁 Boomerang/Events (or Events)
+ * - {{Now}} or {{Now:14}} in any note renders the same strip in preview
+ * - Auto-injects at the top of any note whose name contains "Events"
+ * - Click a row → open Events and scroll to that DOY heading
+ */
+(function NowStripFeature() {
+  const YEAR_LEN = 364;
+  const DEFAULT_DAYS = 7;
+  const STORAGE_DAYS = 'lotus-now-strip-days';
+  const STORAGE_COLLAPSED = 'lotus-now-strip-collapsed';
+  const STORAGE_DIR = 'lotus-now-strip-dir';
+  const EVENT_NOTE_CANDIDATES = [
+    '📁 Boomerang/Events',
+    'Events',
+    '📁 Events'
+  ];
+
+  const state = {
+    days: clampDays(parseInt(localStorage.getItem(STORAGE_DAYS) || DEFAULT_DAYS, 10)),
+    collapsed: localStorage.getItem(STORAGE_COLLAPSED) === '1',
+    dir: localStorage.getItem(STORAGE_DIR) === 'past' ? 'past' : 'future',
+    index: Object.create(null), // doy -> [{title, raw, note}]
+    sourceNote: null,
+    ready: false
+  };
+
+  function clampDays(n) {
+    if (!Number.isFinite(n)) return DEFAULT_DAYS;
+    return Math.min(YEAR_LEN, Math.max(7, Math.round(n / 7) * 7 || 7));
+  }
+
+  function pad3(n) {
+    return String(n).padStart(3, '0');
+  }
+
+  function wrapDoy(doy) {
+    let d = ((doy - 1) % YEAR_LEN) + 1;
+    if (d < 1) d += YEAR_LEN;
+    return d;
+  }
+
+  function injectStyles() {
+    if (document.getElementById('now-strip-styles')) return;
+    const css = document.createElement('style');
+    css.id = 'now-strip-styles';
+    css.textContent = `
+#now-strip {
+  margin: 0;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  overflow: hidden;
+  font-family: Inter, Roboto, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+body.lotus-events-view #now-strip {
+  flex: 1 1 auto;
+  height: calc(100dvh - 132px);
+  max-height: calc(100dvh - 132px);
+}
+#now-strip.collapsed { height: auto !important; flex: 0 0 auto; }
+#now-strip.collapsed .now-strip-body { display: none; }
+body.lotus-edit #now-strip { display: none !important; }
+body.lotus-events-view #preview,
+body.lotus-events-view #editor-container { display: none !important; }
+.now-strip-actions button.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.now-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f4f6f8;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+  color: #333;
+}
+.now-strip-head strong { font-size: 14px; letter-spacing: 0.02em; }
+.now-strip-meta { color: #666; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-strip-actions { display: flex; gap: 4px; align-items: center; }
+.now-strip-actions button {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.now-strip-actions button:hover { background: #eee; }
+.now-strip-body { display: flex; flex-direction: column; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.now-row {
+  display: grid;
+  grid-template-columns: 28px 42px 36px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 12px;
+  border-top: 1px solid #f0f0f0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.25;
+}
+.now-row:first-child { border-top: none; }
+.now-row:hover { background: #f7fbff; }
+.now-row.today {
+  background: #fff8d6;
+  font-weight: 600;
+}
+.now-row .delta { color: #888; font-size: 12px; font-variant-numeric: tabular-nums; }
+.now-row.today .delta { color: #8a6d00; }
+.now-row .doy { font-variant-numeric: tabular-nums; font-family: "Times New Roman", Times, serif; }
+.now-row .titles { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #222; }
+.now-row .titles.empty { color: #999; font-weight: 400; }
+.now-row .place { color: #888; font-size: 12px; white-space: nowrap; }
+#preview .now-strip-embed { margin: 0 0 16px 0; }
+@media (max-width: 640px) {
+  .now-row { grid-template-columns: 24px 40px 32px minmax(0, 1fr); }
+  .now-row .place { display: none; }
+}
+`;
+    document.head.appendChild(css);
+  }
+
+  function ensureHost() {
+    let host = document.getElementById('now-strip');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'now-strip';
+    host.setAttribute('aria-label', 'Now strip');
+    const buttons = document.getElementById('gpc-buttons');
+    const display = document.getElementById('gpc-display');
+    if (buttons && buttons.parentNode) {
+      buttons.insertAdjacentElement('afterend', host);
+    } else if (display && display.parentNode) {
+      display.insertAdjacentElement('afterend', host);
+    } else {
+      document.body.insertBefore(host, document.body.firstChild);
+    }
+    return host;
+  }
+
+  const WEEK_EMOJIS = ['🟠','🟤','🌺','⚫','🟢','🔵','🟣'];
+  const GPC_MONTHS = [
+    { name: 'Unspring', days: 30 }, { name: 'Duspring', days: 30 }, { name: 'Trispring', days: 31 },
+    { name: 'Quadsum', days: 30 }, { name: 'Fivesum', days: 30 }, { name: 'Sixsum', days: 31 },
+    { name: 'Sepafall', days: 30 }, { name: 'Oktafall', days: 30 }, { name: 'Novafall', days: 31 },
+    { name: 'Dekawint', days: 30 }, { name: 'Elvawint', days: 30 }, { name: 'Dozawint', days: 31 }
+  ];
+  const EPOCH_UTC = Date.UTC(1982, 2, 24);
+  const EPOCH_YEAR = 5979;
+
+  function yearLength(gpcYear) {
+    const rel = gpcYear - EPOCH_YEAR;
+    let leapDays = 0;
+    if (rel % 7 === 6) leapDays += 7;
+    if (rel % 49 === 48) leapDays += 7;
+    if ((rel + 29) % 70 === 0) leapDays += 7;
+    return 364 + leapDays;
+  }
+
+  function calculateDoy(date) {
+    const d = date || new Date();
+    const todayLocal = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    let remainingDays = Math.floor((todayLocal - EPOCH_UTC) / 86400000);
+    let gpcYear = EPOCH_YEAR;
+    while (true) {
+      const len = yearLength(gpcYear);
+      if (remainingDays < len) break;
+      remainingDays -= len;
+      gpcYear++;
+    }
+    const doyToday = Math.max(1, Math.min(364, remainingDays + 1));
+    return { gpcYear, doyToday };
+  }
+
+  function gpcToday() {
+    try {
+      if (window.GPCCalendar && typeof GPCCalendar.calculateGPC === 'function') {
+        const r = GPCCalendar.calculateGPC();
+        if (r && r.doyToday >= 1) return r;
+      }
+    } catch (e) {}
+    return calculateDoy(new Date());
+  }
+
+  function stampsForDoy(doy) {
+    const Cal = window.GPCCalendar;
+    const emojis = (Cal && Cal.weekEmojis) ? Cal.weekEmojis : WEEK_EMOJIS;
+    const emoji = emojis[(doy - 1) % 7] || '';
+    const heptad = (Cal && Cal.heptadMap) ? (Cal.heptadMap[doy] || '') : '';
+
+    const quarter = Math.floor((doy - 1) / 91) + 1;
+    const dayInSeason = ((doy - 1) % 91) + 1;
+    const dos = `Q${quarter} ${String(dayInSeason).padStart(2, '0')}`;
+
+    let remaining = doy;
+    let monthIndex = 0;
+    const months = (Cal && Cal.gpcMonths && Cal.gpcMonths.length)
+      ? Cal.gpcMonths
+      : GPC_MONTHS;
+    for (let i = 0; i < months.length; i++) {
+      if (remaining <= months[i].days) {
+        monthIndex = i;
+        break;
+      }
+      remaining -= months[i].days;
+    }
+    const month = months[monthIndex] || { name: '', days: 30 };
+    const dom = `${String(monthIndex + 1).padStart(2, '0')}.${String(remaining).padStart(2, '0')}`;
+
+    return {
+      doy,
+      doyText: pad3(doy),
+      emoji,
+      heptad,
+      dos,
+      dom,
+      monthName: month.name || '',
+      monthNote: month.name ? `📁 Boomerang/${month.name}` : '',
+      dayNote: `📁 Boomerang/${parseInt(remaining, 10)}`,
+      quarterNote: `📁 Boomerang/Q${quarter}`,
+      quarterAnchor: 'D' + pad3(doy)
+    };
+  }
+
+  function cleanTitle(raw) {
+    if (!raw) return '';
+    return String(raw)
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^\[[ xX]\]\s*/, '')
+      .replace(/^#{1,6}\s*/, '')
+      .replace(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g, (_, n) => n.split('/').pop())
+      .replace(/!\[.*?\](\(.*?\))?/g, '')
+      .replace(/[*_`]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function parseEvents(text, noteName) {
+    const map = Object.create(null);
+    if (!text) return map;
+    const lines = String(text).split(/\r?\n/);
+
+    // Handles: "- [x] 🟤🌕 016 — Pink Moon" and "001 New Years"
+    const lineRe = /^\s*(?:[-*]\s+)?(?:\[[ xX]\]\s*)?(?:#{1,6}\s*)?(?:[+-]\s*)?(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F\u200D🟤🟢🔵🟣🟠🌺⚫🌏🌕🕎⏹️🌐📁 ]*)*?(\d{3})(?:\s*[–\-—to]+\s*(\d{3}))?(?:\s*[|:.—–-]\s*|\s+)(.*)$/u;
+
+    for (const line of lines) {
+      if (!line || line.trim().startsWith('| --')) continue;
+      if (/^#\s*\+?\s*For AI/i.test(line) || /^#\s*Clipboard/i.test(line)) continue;
+      const m = line.match(lineRe);
+      if (!m) continue;
+
+      const start = parseInt(m[1], 10);
+      const end = m[2] ? parseInt(m[2], 10) : start;
+      if (start < 1 || start > YEAR_LEN) continue;
+
+      const title = cleanTitle(m[3] || '');
+      const lo = Math.min(start, end);
+      const hi = Math.min(YEAR_LEN, Math.max(start, end));
+      for (let d = lo; d <= hi; d++) {
+        if (!map[d]) map[d] = [];
+        map[d].push({
+          title: title || ('Day ' + pad3(d)),
+          raw: line.trim(),
+          note: noteName
+        });
+      }
+    }
+    return map;
+  }
+
+  async function loadIndex() {
+    const merged = Object.create(null);
+    let source = null;
+
+    if (window.VaultDB && typeof VaultDB.list === 'function') {
+      let names = [];
+      try { names = await VaultDB.list(); } catch (e) { names = []; }
+
+      const preferred = EVENT_NOTE_CANDIDATES.filter(n => names.includes(n));
+      const extras = names.filter(n =>
+        /events/i.test(n) && !preferred.includes(n) && n !== '__photoMap__'
+      );
+      const toRead = preferred.concat(extras).slice(0, 8);
+
+      for (const name of toRead) {
+        let content = null;
+        try { content = await VaultDB.get(name); } catch (e) { content = null; }
+        if (!content) continue;
+        const parsed = parseEvents(content, name);
+        let hits = 0;
+        Object.keys(parsed).forEach(k => {
+          hits += parsed[k].length;
+          if (!merged[k]) merged[k] = [];
+          merged[k] = merged[k].concat(parsed[k]);
+        });
+        if (hits && !source) source = name;
+      }
+    }
+
+    // Also parse the note currently in the editor if it looks like Events
+    const core = window.editorCore;
+    if (core && /events/i.test(core.currentNote || '') && core.editor) {
+      const live = parseEvents(core.editor.value, core.currentNote);
+      Object.keys(live).forEach(k => {
+        if (!merged[k]) merged[k] = [];
+        const titles = new Set(merged[k].map(x => x.title));
+        live[k].forEach(ev => {
+          if (!titles.has(ev.title)) merged[k].push(ev);
+        });
+      });
+      if (!source) source = core.currentNote;
+    }
+
+    state.index = merged;
+    state.sourceNote = source || EVENT_NOTE_CANDIDATES[0];
+    state.ready = true;
+  }
+
+  function pastEventDays(today) {
+    return Object.keys(state.index)
+      .map(k => parseInt(k, 10))
+      .filter(d => Number.isFinite(d) && d >= 1 && d < today && eventsFor(d).some(e => e.title))
+      .sort((a, b) => a - b);
+  }
+
+  function eventsFor(doy) {
+    const list = state.index[doy] || [];
+    const seen = new Set();
+    const out = [];
+    for (const ev of list) {
+      const key = ev.title.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(ev);
+    }
+    return out;
+  }
+
+  function rowHtml(doy, today, opts) {
+    const s = stampsForDoy(doy);
+    const delta = wrapDoy(doy) === today ? 0 : ((doy - today + YEAR_LEN - 1) % YEAR_LEN) + (doy === today ? 0 : 0);
+    // simpler delta
+    let dlt = doy - today;
+    if (dlt > YEAR_LEN / 2) dlt -= YEAR_LEN;
+    if (dlt < -YEAR_LEN / 2) dlt += YEAR_LEN;
+    const isPastRow = doy < today;
+    const deltaLabel = dlt === 0 ? 'today' : (isPastRow ? '–' : '+' + dlt);
+    const evs = eventsFor(doy);
+    const titles = evs.map(e => e.title).filter(Boolean).join(' · ');
+    const empty = !titles;
+    const cls = ['now-row'];
+    if (dlt === 0) cls.push('today');
+    const clickNote = state.sourceNote || s.monthNote;
+    const anchor = s.doyText;
+    return `<div class="${cls.join(' ')}" data-note="${escapeAttr(clickNote)}" data-anchor="${anchor}" data-doy="${s.doyText}" data-month="${escapeAttr(s.monthNote)}">
+      <span class="emoji">${s.emoji}</span>
+      <span class="doy">${s.doyText}</span>
+      <span class="delta">${deltaLabel}</span>
+      <span class="titles${empty ? ' empty' : ''}">${escapeHtml(titles || (dlt === 0 ? 'No event titled yet' : '—'))}</span>
+      <span class="place">${escapeHtml(s.dom + (s.heptad ? ' · ' + s.heptad : ''))}</span>
+    </div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function escapeAttr(s) {
+    return escapeHtml(s).replace(/'/g, '&#39;');
+  }
+
+  function daysForStrip(embed) {
+    if (embed) return state.days;
+    if (!isEventsNote()) return 2;
+    return state.days;
+  }
+
+  function buildStripHtml(days, embed) {
+    const { doyToday } = gpcToday();
+    const todayS = stampsForDoy(doyToday);
+    const heptadOn = !!(window.GPCCalendar && GPCCalendar.heptadEnabled);
+    const meta = [
+      todayS.dos,
+      todayS.dom,
+      heptadOn ? todayS.heptad : ''
+    ].filter(Boolean).join(' · ');
+
+    let rows = '';
+    const past = state.dir === 'past';
+    if (past) {
+      const listed = pastEventDays(doyToday).slice(-days);
+      if (!listed.length) {
+        rows = `<div class="now-row"><span></span><span class="doy"></span><span class="delta"></span><span class="titles empty">No past events yet</span></div>`;
+      } else {
+        listed.forEach(d => { rows += rowHtml(d, doyToday); });
+      }
+    } else {
+      for (let i = 0; i < days; i++) {
+        rows += rowHtml(wrapDoy(doyToday + i), doyToday);
+      }
+    }
+
+    const collapsedClass = (!embed && state.collapsed) ? ' collapsed' : '';
+    return `<div class="now-strip-root${embed ? ' now-strip-embed' : ''}${collapsedClass}">
+      <div class="now-strip-head">
+        <strong>${past ? 'Past' : 'Now'}</strong>
+        <span class="now-strip-meta">${todayS.emoji} ${todayS.doyText} · ${escapeHtml(meta)}</span>
+        <span class="now-strip-actions">
+          <button type="button" data-now-act="past" title="Past events" class="${past ? 'active' : ''}">Past</button>
+          <button type="button" data-now-act="less" title="7 fewer">−</button>
+          <button type="button" data-now-act="more" title="7 more">+</button>
+          ${embed ? '' : '<button type="button" data-now-act="toggle" title="Hide / show">' + (state.collapsed ? '▸' : '▾') + '</button>'}
+        </span>
+      </div>
+      <div class="now-strip-body">${rows}</div>
+    </div>`;
+  }
+
+  function renderHost() {
+    const host = ensureHost();
+    host.innerHTML = buildStripHtml(daysForStrip(false), false);
+    if (state.collapsed) host.classList.add('collapsed');
+    else host.classList.remove('collapsed');
+    bind(host);
+  }
+
+  function bind(root) {
+    root.querySelectorAll('[data-now-act]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const act = btn.getAttribute('data-now-act');
+        if (act === 'more') {
+          state.days = clampDays(state.days + 7);
+          localStorage.setItem(STORAGE_DAYS, String(state.days));
+        } else if (act === 'less') {
+          state.days = clampDays(state.days - 7);
+          localStorage.setItem(STORAGE_DAYS, String(state.days));
+        } else if (act === 'past') {
+          state.dir = state.dir === 'past' ? 'future' : 'past';
+          localStorage.setItem(STORAGE_DIR, state.dir);
+        } else if (act === 'toggle') {
+          state.collapsed = !state.collapsed;
+          localStorage.setItem(STORAGE_COLLAPSED, state.collapsed ? '1' : '0');
+        }
+        renderHost();
+        refreshPreviewEmbeds();
+      });
+    });
+
+    root.querySelectorAll('.now-row').forEach(row => {
+      row.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const note = row.getAttribute('data-note');
+        const anchor = row.getAttribute('data-anchor');
+        const month = row.getAttribute('data-month');
+        const core = window.editorCore;
+        if (!core || typeof core.switchToNote !== 'function') return;
+
+        const target = note || month;
+        if (!target) return;
+        await core.switchToNote(target);
+
+        if (anchor) {
+          const tryScroll = (attempt) => {
+            const el = document.getElementById(anchor) ||
+              document.getElementById(anchor.replace(/^0+/, '')) ||
+              core.preview?.querySelector(`[id="${anchor}"]`);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const prev = el.style.backgroundColor;
+              el.style.backgroundColor = '#fffacd';
+              setTimeout(() => { el.style.backgroundColor = prev; }, 1400);
+            } else if (attempt < 20) {
+              setTimeout(() => tryScroll(attempt + 1), 80);
+            }
+          };
+          setTimeout(() => tryScroll(0), 200);
+        }
+      });
+    });
+  }
+
+  function replaceNowTokens(html) {
+    return String(html).replace(/\{\{Now(?::(\d+))?\}\}/gi, (_, n) => {
+      const days = clampDays(n ? parseInt(n, 10) : state.days);
+      return buildStripHtml(days, true);
+    });
+  }
+
+  function isEditMode() {
+    const editor = document.getElementById('editor');
+    return !!(editor && editor.style.display !== 'none');
+  }
+
+  function isEventsNote() {
+    const core = window.editorCore;
+    return !!(core && /events/i.test(core.currentNote || ''));
+  }
+
+  function syncChrome() {
+    const edit = isEditMode();
+    const events = isEventsNote();
+    document.body.classList.toggle('lotus-edit', edit);
+    document.body.classList.toggle('lotus-events-view', !edit && events);
+    const host = document.getElementById('now-strip');
+    if (host) host.style.display = edit ? 'none' : '';
+  }
+
+  function injectIntoEventsPreview() {
+    // View of Events uses the host strip only — do not duplicate inside preview.
+    syncChrome();
+  }
+
+  function refreshPreviewEmbeds() {
+    const core = window.editorCore;
+    if (!core || !core.preview) return;
+    core.preview.querySelectorAll('.now-strip-embed').forEach(old => {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = buildStripHtml(state.days, true);
+      const node = wrap.firstElementChild;
+      old.replaceWith(node);
+      bind(node);
+    });
+  }
+
+  function hookPreview() {
+    const core = window.editorCore;
+    if (!core || core.__nowStripHooked) return;
+    const orig = core.updatePreviewAndSave.bind(core);
+    core.updatePreviewAndSave = async function () {
+      const rawFn = this.renderWikilinks;
+      if (rawFn && !this.__nowStripRenderHooked) {
+        this.renderWikilinks = function (text) {
+          return rawFn.call(this, replaceNowTokens(text));
+        };
+        this.__nowStripRenderHooked = true;
+      }
+      const result = await orig();
+      syncChrome();
+      this.preview?.querySelectorAll('.now-strip-embed').forEach(el => bind(el));
+      if (/events/i.test(this.currentNote || '')) {
+        loadIndex().then(() => { renderHost(); syncChrome(); });
+      }
+      return result;
+    };
+    core.__nowStripHooked = true;
+  }
+
+  function hookMode() {
+    const btn = document.getElementById('mode-toggle');
+    if (btn && !btn.__nowStripMode) {
+      btn.addEventListener('click', () => setTimeout(syncChrome, 0));
+      btn.__nowStripMode = true;
+    }
+    const core = window.editorCore;
+    if (!core || core.__nowStripModeHooked) return;
+    const origToggle = core.toggleEditMode.bind(core);
+    core.toggleEditMode = function () {
+      origToggle();
+      syncChrome();
+    };
+    const origSwitch = core.switchToNote.bind(core);
+    core.switchToNote = async function () {
+      const r = await origSwitch.apply(this, arguments);
+      syncChrome();
+      return r;
+    };
+    core.__nowStripModeHooked = true;
+  }
+
+  async function boot() {
+    injectStyles();
+    ensureHost();
+    await loadIndex();
+    renderHost();
+    hookPreview();
+    hookMode();
+    syncChrome();
+  }
+
+  function start() {
+    boot().catch((err) => {
+      console.warn('Now strip failed to start', err);
+    });
+    setInterval(() => {
+      if (!isEditMode()) renderHost();
+      syncChrome();
+    }, 60000);
+  }
+
+  function kick() {
+    start();
+    setTimeout(() => { loadIndex().then(renderHost); refreshPreviewEmbeds(); }, 1500);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(kick, 400));
+  } else {
+    setTimeout(kick, 400);
+  }
+})();
+
+
+
+
+
+</script>
+
 </body>
 </html>
