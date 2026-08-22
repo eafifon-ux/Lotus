@@ -7040,6 +7040,7 @@ document.getElementById('preview')?.addEventListener('click', () => setTimeout((
 /**
  * Lotus / Capture — Now Strip
  * Your perfect build. Now list: today through 364.
+ * Wikilinks [[Note|Label]] and markdown [text](url) stay clickable in the Events list.
  */
 (function NowStripFeature() {
   const YEAR_LEN = 364;
@@ -7173,6 +7174,18 @@ body.lotus-events-collapsed #now-strip {
 .now-row .doy { font-variant-numeric: tabular-nums; font-family: "Times New Roman", Times, serif; }
 .now-row .titles { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #222; }
 .now-row .titles.empty { color: #999; font-weight: 400; }
+.now-row .titles a.wikilink,
+.now-row .titles a.event-link {
+  color: #1a73e8;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+}
+.now-row .titles a.wikilink:hover,
+.now-row .titles a.event-link:hover {
+  background: rgba(26,115,232,0.08);
+  border-bottom: 1px solid #1a73e8;
+}
 .now-row .place { color: #888; font-size: 12px; white-space: nowrap; }
 .now-row input.now-inline {
   width: 100%;
@@ -7290,6 +7303,24 @@ body.lotus-events-collapsed #now-strip {
     };
   }
 
+  function rawEventTitle(s) {
+    return String(s || '')
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^\[[ xX]\]\s*/, '')
+      .replace(/^#{1,6}\s*/, '')
+      .replace(/^\s+|\s+$/g, '');
+  }
+
+  function slugifyHeading(text) {
+    var str = String(text || '').trim();
+    if (/^\d+$/.test(str)) str = str.padStart(3, '0');
+    return str.toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
   function cleanTitle(raw) {
     if (!raw) return '';
     return String(raw)
@@ -7297,10 +7328,35 @@ body.lotus-events-collapsed #now-strip {
       .replace(/^\[[ xX]\]\s*/, '')
       .replace(/^#{1,6}\s*/, '')
       .replace(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g, function (_, n) { return n.split('/').pop(); })
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .replace(/!\[.*?\](\(.*?\))?/g, '')
       .replace(/[*_`]+/g, '')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  function renderEventTitleHtml(raw) {
+    var source = rawEventTitle(raw);
+    if (!source) return '';
+    var s = escapeHtml(source);
+    s = s.replace(/\[\[([^#\|\]:]+)(?:#([^\|\]:]+))?(?:\|\s*([^\]]+)|::\s*([^\]]+))?\]\]/g,
+      function (_, page, anchor, aliasPipe, aliasColon) {
+        var note = String(page || '').trim();
+        var heading = String(anchor || '').trim();
+        var label = (aliasPipe || aliasColon || '').trim() || (heading ? (note + '#' + heading) : note);
+        var attrs = ' class="wikilink" href="#" data-note="' + escapeAttr(note) + '"';
+        if (heading) attrs += ' data-anchor="' + escapeAttr(slugifyHeading(heading)) + '"';
+        return '<a' + attrs + '>' + escapeHtml(label) + '</a>';
+      });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (full, label, url) {
+      var href = String(url || '').trim();
+      if (!/^(https?:|mailto:|sms:|tel:|geo:|\/\/)/i.test(href) && href.charAt(0) !== '/') {
+        return full;
+      }
+      return '<a class="event-link" href="' + escapeAttr(href) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(label) + '</a>';
+    });
+    return s;
   }
 
   function parseEvents(text, noteName) {
@@ -7316,12 +7372,18 @@ body.lotus-events-collapsed #now-strip {
       const start = parseInt(m[1], 10);
       const end = m[2] ? parseInt(m[2], 10) : start;
       if (start < 1 || start > YEAR_LEN) continue;
-      const title = cleanTitle(m[3] || '');
+      const titleRaw = rawEventTitle(m[3] || '');
+      const title = cleanTitle(titleRaw);
       const lo = Math.min(start, end);
       const hi = Math.min(YEAR_LEN, Math.max(start, end));
       for (let d = lo; d <= hi; d++) {
         if (!map[d]) map[d] = [];
-        map[d].push({ title: title || ('Day ' + pad3(d)), raw: line.trim(), note: noteName });
+        map[d].push({
+          title: title || ('Day ' + pad3(d)),
+          titleRaw: titleRaw || title,
+          raw: line.trim(),
+          note: noteName
+        });
       }
     }
     return map;
@@ -7384,7 +7446,7 @@ body.lotus-events-collapsed #now-strip {
     const seen = {};
     const out = [];
     for (const ev of list) {
-      const key = ev.title.toLowerCase();
+      const key = (ev.title || '').toLowerCase();
       if (seen[key]) continue;
       seen[key] = true;
       out.push(ev);
@@ -7398,8 +7460,10 @@ body.lotus-events-collapsed #now-strip {
     const isPastRow = doy < today;
     const deltaLabel = dlt === 0 ? 'today' : (isPastRow ? '–' : '+' + dlt);
     const evs = eventsFor(doy);
-    const titles = evs.map(function (e) { return e.title; }).filter(Boolean).join(' · ');
-    const empty = !titles;
+    const titlesHtml = evs.map(function (e) {
+      return renderEventTitleHtml(e.titleRaw || e.title);
+    }).filter(Boolean).join(' · ');
+    const empty = !titlesHtml;
     const cls = ['now-row'];
     if (dlt === 0) cls.push('today');
     const clickNote = state.sourceNote || s.monthNote;
@@ -7408,7 +7472,9 @@ body.lotus-events-collapsed #now-strip {
       '<span class="emoji">' + s.emoji + '</span>' +
       '<span class="doy">' + s.doyText + '</span>' +
       '<span class="delta">' + deltaLabel + '</span>' +
-      '<span class="titles' + (empty ? ' empty' : '') + '">' + escapeHtml(titles || (dlt === 0 ? 'No event titled yet' : '—')) + '</span>' +
+      '<span class="titles' + (empty ? ' empty' : '') + '">' +
+        (titlesHtml || escapeHtml(dlt === 0 ? 'No event titled yet' : '—')) +
+      '</span>' +
       '<span class="place">' + escapeHtml(s.dom + (s.heptad ? ' · ' + s.heptad : '')) + '</span>' +
     '</div>';
   }
@@ -7422,6 +7488,11 @@ body.lotus-events-collapsed #now-strip {
   }
   function escapeAttr(s) {
     return escapeHtml(s).replace(/'/g, '&#39;');
+  }
+
+  function cssEscape(id) {
+    if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(id);
+    return String(id).replace(/[^a-zA-Z0-9_\-]/g, '\\$&');
   }
 
   function daysForStrip(embed) {
@@ -7472,6 +7543,27 @@ body.lotus-events-collapsed #now-strip {
     bind(host);
   }
 
+  function openWikilink(wiki) {
+    var noteName = (wiki.getAttribute('data-note') || '').trim();
+    var anchorId = (wiki.getAttribute('data-anchor') || '').trim();
+    if (!noteName || !window.editorCore || typeof window.editorCore.switchToNote !== 'function') return;
+    window.editorCore.switchToNote(noteName).then(function () {
+      if (!anchorId || !window.editorCore.preview) return;
+      var tries = 0;
+      var tick = function () {
+        var el = window.editorCore.preview.querySelector('#' + cssEscape(anchorId));
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.style.backgroundColor = '#fffacd';
+          setTimeout(function () { el.style.backgroundColor = ''; }, 1500);
+          return;
+        }
+        if (tries++ < 20) setTimeout(tick, 100);
+      };
+      setTimeout(tick, 250);
+    });
+  }
+
   function bind(root) {
     root.querySelectorAll('[data-now-act]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
@@ -7490,11 +7582,24 @@ body.lotus-events-collapsed #now-strip {
         refreshPreviewEmbeds();
       });
     });
+
+    root.addEventListener('click', function (e) {
+      var wiki = e.target.closest && e.target.closest('a.wikilink');
+      if (wiki) {
+        e.preventDefault();
+        e.stopPropagation();
+        openWikilink(wiki);
+        return;
+      }
+      var ext = e.target.closest && e.target.closest('a.event-link');
+      if (ext) e.stopPropagation();
+    });
+
     let lastTap = 0;
     let lastRow = null;
     root.querySelectorAll('.now-row[data-doy]').forEach(function (row) {
       row.addEventListener('click', function (e) {
-        if (e.target && e.target.tagName === 'INPUT') return;
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.closest('a'))) return;
         e.preventDefault();
         const now = Date.now();
         if (lastRow === row && now - lastTap < 420) {
@@ -7507,7 +7612,7 @@ body.lotus-events-collapsed #now-strip {
         }
       });
       row.addEventListener('dblclick', function (e) {
-        if (e.target && e.target.tagName === 'INPUT') return;
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.closest('a'))) return;
         e.preventDefault();
         startInlineEdit(row);
       });
@@ -7532,11 +7637,11 @@ body.lotus-events-collapsed #now-strip {
     if (live && core && core.editor) {
       core.editor.value = text;
       if (typeof core.updatePreviewAndSave === 'function') await core.updatePreviewAndSave();
-      else if (window.VaultDB && typeof VaultDB.put === 'function') await VaultDB.put(name, text);
+      else if (window.VaultDB && typeof VaultDB.set === 'function') await VaultDB.set(name, text);
       return;
     }
-    if (window.VaultDB && typeof VaultDB.put === 'function') {
-      await VaultDB.put(name, text);
+    if (window.VaultDB && typeof VaultDB.set === 'function') {
+      await VaultDB.set(name, text);
     }
     if (core && core.currentNote === name && core.editor) core.editor.value = text;
   }
@@ -7549,7 +7654,7 @@ body.lotus-events-collapsed #now-strip {
     const d = parseInt(m[1], 10);
     if (d < 1 || d > YEAR_LEN) return null;
     const rawTitle = String(m[2] || '').replace(/^\[[ xX]\]\s*/, '').trim();
-    return { doy: d, title: cleanTitle(rawTitle) };
+    return { doy: d, title: rawTitle };
   }
 
   async function saveEventTitle(doy, title) {
@@ -7591,7 +7696,9 @@ body.lotus-events-collapsed #now-strip {
     if (!doy) return;
     const titleEl = row.querySelector('.titles');
     if (!titleEl) return;
-    const current = eventsFor(doy).map(function (e) { return e.title; }).filter(Boolean).join(' · ');
+    const current = eventsFor(doy).map(function (e) {
+      return e.titleRaw || e.title;
+    }).filter(Boolean).join(' · ');
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'now-inline';
@@ -7772,7 +7879,6 @@ body.lotus-events-collapsed #now-strip {
     setTimeout(kick, 400);
   }
 })();
-
 
 
 
