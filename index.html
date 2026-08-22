@@ -1089,7 +1089,8 @@ Then read: [[📁 Boomerang/Manual|Manual]]
   <button data-stamp="dom">DOM</button>
   <button data-stamp="heptad">Heptad</button>
   <button data-stamp="gregorian">Civil Date</button>
-  <button data-action="date-picker" style="font-weight:600; background:#f0f8ff;">📅 Date Picker</button>
+  <button data-action="timestamp">⌛️ Timestamp</button>
+<button data-action="date-picker" style="font-weight:600; background:#f0f8ff;">📅 Date Picker</button>
    <button data-stamp="journal">📙 Journal</button> <!-- ← add this -->
 </div>
 
@@ -3790,12 +3791,14 @@ handleDropdownClick(type, e) {
   case 'h': this.applyHeading(action); break;
   case 't': this.applyTextFormat(action); break;
   case 'date':
-if (action === 'date-picker') {
-  this.showDatePicker();
-} else {
-  this.insertDateStamp(action);
-}
-break;
+    if (action === 'date-picker') {
+      this.showDatePicker();
+    } else if (action === 'timestamp') {
+      this.showTimestamp();
+    } else {
+      this.insertDateStamp(action);
+    }
+    break;
   case 'highlight': this.applyHighlight(action); break;
   case 'table': this.handleTableAction(action); break;
   case 'habit': this.handleHabitAction(action); break;   // ← ADD THIS LINE
@@ -4356,18 +4359,18 @@ input.value = `\( {yyyy}- \){mm}-${dd}`;
 
     // 3. Time format
     const timeChoice = prompt(
-      "Time format:\n\n1 = no time\n2 = am/pm\n3 = 24hr clock\n4 = Zulu Time\n5 = Pahar System\n6 = Sierra\n7 = Rooster/Owl\n\nEnter 1-7",
-      "7"
+      "Time format:\n\n0 = no time\n1 = am/pm\n2 = 24hr clock\n3 = Zulu Time\n4 = Pahar System\n5 = Sierra\n6 = Rooster/Owl\n\nEnter 0-6",
+      "6"
     );
     if (!timeChoice) {
       this.insertAtCursor(stamp + " ");
       return;
     }
 
-    const choiceNum = parseInt(timeChoice.trim()) || 1;
+    const choiceNum = parseInt(timeChoice.trim()) || 0;
     let timeStr = "";
 
-    if (choiceNum > 1) {
+    if (choiceNum > 0) {
       const now = new Date();
       const defaultTime =
         String(now.getHours()).padStart(2, "0") + ":" +
@@ -4390,28 +4393,28 @@ input.value = `\( {yyyy}- \){mm}-${dd}`;
       let sierraH = (civilH - 6 + 24) % 24;
       if (sierraH === 0) sierraH = 24;
 
-      if (choiceNum === 2) {
+      if (choiceNum === 1) {
         const h12 = civilH % 12 || 12;
         const ampm = civilH < 12 ? "AM" : "PM";
         timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
-      } else if (choiceNum === 3) {
+      } else if (choiceNum === 2) {
         timeStr = " 🕛 " + String(civilH).padStart(2, "0") + ":" + m;
-      } else if (choiceNum === 4) {
+      } else if (choiceNum === 3) {
         const temp = new Date();
         temp.setHours(civilH, civilM, 0, 0);
         const uh = String(temp.getUTCHours()).padStart(2, "0");
         const um = String(temp.getUTCMinutes()).padStart(2, "0");
         timeStr = " 🕛 " + uh + ":" + um + "Z";
-      } else if (choiceNum === 5) {
+      } else if (choiceNum === 4) {
         let pahar;
         if (sierraH <= 6)       pahar = "Mike";
         else if (sierraH <= 11) pahar = "Alpha";
         else if (sierraH <= 18) pahar = "Echo";
         else                    pahar = "Napa";
         timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
-      } else if (choiceNum === 6) {
+      } else if (choiceNum === 5) {
         timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
-      } else if (choiceNum === 7) {
+      } else if (choiceNum === 6) {
         const displayH = sierraH % 12 || 12;
         const bird = sierraH <= 12 ? "🐓" : "🦉";
         timeStr = " " + bird + " " + displayH + ":" + m;
@@ -4432,6 +4435,68 @@ input.value = `\( {yyyy}- \){mm}-${dd}`;
 
   input.addEventListener("change", handleChange);
   input.addEventListener("blur", handleBlur);
+}
+
+showTimestamp() {
+  this.closeAllDropdowns();
+  
+  const timeChoice = prompt(
+    "Time format:\n\n1 = am/pm\n2 = 24hr clock\n3 = Zulu Time\n4 = Pahar System\n5 = Sierra\n6 = Rooster/Owl\n\nEnter 1-6",
+    "6"
+  );
+  if (!timeChoice) return;
+  
+  const choiceNum = parseInt(timeChoice.trim()) || 1;
+  
+  const now = new Date();
+  const defaultTime =
+    String(now.getHours()).padStart(2, "0") + ":" +
+    String(now.getMinutes()).padStart(2, "0");
+  
+  const civilStr = prompt("Civil time (HH:MM)", defaultTime);
+  if (!civilStr) return;
+  
+  const parts = civilStr.trim().split(":");
+  let civilH = parseInt(parts[0], 10);
+  let civilM = parseInt(parts[1], 10) || 0;
+  
+  if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
+  if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
+  const m = String(civilM).padStart(2, "0");
+  
+  let sierraH = (civilH - 6 + 24) % 24;
+  if (sierraH === 0) sierraH = 24;
+  
+  let timeStr = "";
+  
+  if (choiceNum === 1) {
+    const h12 = civilH % 12 || 12;
+    const ampm = civilH < 12 ? "AM" : "PM";
+    timeStr = "🕛 " + h12 + ":" + m + " " + ampm;
+  } else if (choiceNum === 2) {
+    timeStr = "🕛 " + String(civilH).padStart(2, "0") + ":" + m;
+  } else if (choiceNum === 3) {
+    const temp = new Date();
+    temp.setHours(civilH, civilM, 0, 0);
+    const uh = String(temp.getUTCHours()).padStart(2, "0");
+    const um = String(temp.getUTCMinutes()).padStart(2, "0");
+    timeStr = "🕛 " + uh + ":" + um + "Z";
+  } else if (choiceNum === 4) {
+    let pahar;
+    if (sierraH <= 6) pahar = "Mike";
+    else if (sierraH <= 11) pahar = "Alpha";
+    else if (sierraH <= 18) pahar = "Echo";
+    else pahar = "Napa";
+    timeStr = "🕛 " + sierraH + ":" + m + " " + pahar;
+  } else if (choiceNum === 5) {
+    timeStr = "🕛 " + sierraH + ":" + m + " Sierra";
+  } else if (choiceNum === 6) {
+    const displayH = sierraH % 12 || 12;
+    const bird = sierraH <= 12 ? "🐓" : "🦉";
+    timeStr = bird + " " + displayH + ":" + m;
+  }
+  
+  if (timeStr) this.insertAtCursor(timeStr + " ");
 }
 
 // ===== HABIT TRACKER ACTIONS =====
