@@ -6323,7 +6323,9 @@ else if (link.text.includes("ChatGPT")) {
 else if (link.text.includes("Gemini")) {
   const query = prompt("Ask Gemini:", "");
   if (!query) return;
-  const fullUrl = "https://gemini.google.com/app?q=" + encodeURIComponent(query.trim());
+  const q = encodeURIComponent(query.trim());
+  // This one actually keeps the question:
+  const fullUrl = "https://www.google.com/search?udm=50&q=" + q;
   window.editorCore?.insertAtCursor("[✨ Gemini](" + fullUrl + ")");
 }
 
