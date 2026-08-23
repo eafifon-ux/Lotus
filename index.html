@@ -6225,6 +6225,7 @@ const DeepLinkManager = {
   getDefaults() {
     return [
      { text: "👾 Grok", url: "https://grok.com/?q=" }, { text: "🤖 ChatGPT", url: "https://chatgpt.com/?q=" },
+     { text: "✨ Gemini", url: "https://gemini.google.com/app?q=" },
       { text: "📨 Email", url: "mailto:user@gmail.com" },
       { text: "📞 Text Homie", url: "sms:+10001234567?body=" },
       { text: "🍏 WhatsApp", url: "https://wa.me/10001234567?text=" },
@@ -6307,18 +6308,25 @@ const DeepLinkManager = {
   e.preventDefault();
   e.stopPropagation();
   
-  if (link.text.includes("Grok")) {
-    const query = prompt("Ask Grok:", "");
-    if (!query) return;
-    const fullUrl = "https://grok.com/?q=" + encodeURIComponent(query.trim());
-    window.editorCore?.insertAtCursor("[👾 Grok](" + fullUrl + ")");
-  }
-  else if (link.text.includes("ChatGPT")) {
-    const query = prompt("Ask ChatGPT:", "");
-    if (!query) return;
-    const fullUrl = "https://chatgpt.com/?q=" + encodeURIComponent(query.trim());
-    window.editorCore?.insertAtCursor("[🤖 ChatGPT](" + fullUrl + ")");
-  }
+if (link.text.includes("Grok")) {
+  const query = prompt("Ask Grok:", "");
+  if (!query) return;
+  const fullUrl = "https://grok.com/?q=" + encodeURIComponent(query.trim());
+  window.editorCore?.insertAtCursor("[👾 Grok](" + fullUrl + ")");
+}
+else if (link.text.includes("ChatGPT")) {
+  const query = prompt("Ask ChatGPT:", "");
+  if (!query) return;
+  const fullUrl = "https://chatgpt.com/?q=" + encodeURIComponent(query.trim());
+  window.editorCore?.insertAtCursor("[🤖 ChatGPT](" + fullUrl + ")");
+}
+else if (link.text.includes("Gemini")) {
+  const query = prompt("Ask Gemini:", "");
+  if (!query) return;
+  const fullUrl = "https://gemini.google.com/app?q=" + encodeURIComponent(query.trim());
+  window.editorCore?.insertAtCursor("[✨ Gemini](" + fullUrl + ")");
+}
+
   else {
     // Normal links (Email, Maps, Uber, WhatsApp, etc.)
     window.editorCore?.insertAtCursor("[" + link.text + "](" + link.url + ")");
