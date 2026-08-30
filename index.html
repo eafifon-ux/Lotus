@@ -4207,6 +4207,50 @@ insertNewListLine(cursor, prefix) {
   this.updatePreviewAndSave();
 }
 
+sierraHour(civilH) {
+  let h = (civilH - 6 + 24) % 24;
+  return h === 0 ? 24 : h;
+}
+
+paharForSierra(sierraH) {
+  if (sierraH <= 6) return { emoji: "🌄", name: "Mike" };
+  if (sierraH <= 11) return { emoji: "🏙️", name: "Alpha" };
+  if (sierraH <= 18) return { emoji: "🌆", name: "Echo" };
+  return { emoji: "🌃", name: "Napa" };
+}
+
+formatStampTime(civilH, civilM, choiceNum) {
+  const m = String(civilM).padStart(2, "0");
+  const sH = this.sierraHour(civilH);
+  const sierra = sH + ":" + m;
+  const pahar = this.paharForSierra(sH);
+  
+  if (choiceNum === 1) {
+    const h12 = civilH % 12 || 12;
+    return "🕛 " + h12 + ":" + m + " " + (civilH < 12 ? "AM" : "PM");
+  }
+  if (choiceNum === 2) {
+    return "🕛 " + String(civilH).padStart(2, "0") + ":" + m;
+  }
+  if (choiceNum === 3) {
+    const t = new Date();
+    t.setHours(civilH, civilM, 0, 0);
+    return "🕛 " +
+      String(t.getUTCHours()).padStart(2, "0") + ":" +
+      String(t.getUTCMinutes()).padStart(2, "0") + "Z";
+  }
+  if (choiceNum === 4) {
+    return pahar.emoji + " " + sierra + " " + pahar.name;
+  }
+  if (choiceNum === 5) {
+    return "🕛 " + sierra + " Sierra";
+  }
+  if (choiceNum === 6) {
+    const displayH = sH % 12 || 12;
+    return (sH <= 12 ? "🐓 " : "🦉 ") + displayH + ":" + m;
+  }
+  return sierra;
+}
   
   // ===== Section 3.2.11 - DATE STAMPS =====
   insertDateStamp(type) {
@@ -4388,37 +4432,8 @@ input.value = `\( {yyyy}- \){mm}-${dd}`;
 
       if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
       if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
-      const m = String(civilM).padStart(2, "0");
-
-      let sierraH = (civilH - 6 + 24) % 24;
-      if (sierraH === 0) sierraH = 24;
-
-      if (choiceNum === 1) {
-        const h12 = civilH % 12 || 12;
-        const ampm = civilH < 12 ? "AM" : "PM";
-        timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
-      } else if (choiceNum === 2) {
-        timeStr = " 🕛 " + String(civilH).padStart(2, "0") + ":" + m;
-      } else if (choiceNum === 3) {
-        const temp = new Date();
-        temp.setHours(civilH, civilM, 0, 0);
-        const uh = String(temp.getUTCHours()).padStart(2, "0");
-        const um = String(temp.getUTCMinutes()).padStart(2, "0");
-        timeStr = " 🕛 " + uh + ":" + um + "Z";
-      } else if (choiceNum === 4) {
-        let pahar;
-        if (sierraH <= 6)       pahar = "Mike";
-        else if (sierraH <= 11) pahar = "Alpha";
-        else if (sierraH <= 18) pahar = "Echo";
-        else                    pahar = "Napa";
-        timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
-      } else if (choiceNum === 5) {
-        timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
-      } else if (choiceNum === 6) {
-        const displayH = sierraH % 12 || 12;
-        const bird = sierraH <= 12 ? "🐓" : "🦉";
-        timeStr = " " + bird + " " + displayH + ":" + m;
-      }
+      
+      timeStr = " " + this.formatStampTime(civilH, civilM, choiceNum);
     }
 
     this.insertAtCursor(stamp + timeStr + " ");
@@ -4446,7 +4461,7 @@ showTimestamp() {
   );
   if (!timeChoice) return;
   
-  const choiceNum = parseInt(timeChoice.trim()) || 1;
+  const choiceNum = parseInt(timeChoice.trim(), 10) || 4;
   
   const now = new Date();
   const defaultTime =
@@ -4462,41 +4477,8 @@ showTimestamp() {
   
   if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
   if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
-  const m = String(civilM).padStart(2, "0");
-  
-  let sierraH = (civilH - 6 + 24) % 24;
-  if (sierraH === 0) sierraH = 24;
-  
-  let timeStr = "";
-  
-  if (choiceNum === 1) {
-    const h12 = civilH % 12 || 12;
-    const ampm = civilH < 12 ? "AM" : "PM";
-    timeStr = "🕛 " + h12 + ":" + m + " " + ampm;
-  } else if (choiceNum === 2) {
-    timeStr = "🕛 " + String(civilH).padStart(2, "0") + ":" + m;
-  } else if (choiceNum === 3) {
-    const temp = new Date();
-    temp.setHours(civilH, civilM, 0, 0);
-    const uh = String(temp.getUTCHours()).padStart(2, "0");
-    const um = String(temp.getUTCMinutes()).padStart(2, "0");
-    timeStr = "🕛 " + uh + ":" + um + "Z";
-  } else if (choiceNum === 4) {
-    let pahar;
-    if (sierraH <= 6) pahar = "Mike";
-    else if (sierraH <= 11) pahar = "Alpha";
-    else if (sierraH <= 18) pahar = "Echo";
-    else pahar = "Napa";
-    timeStr = "🕛 " + sierraH + ":" + m + " " + pahar;
-  } else if (choiceNum === 5) {
-    timeStr = "🕛 " + sierraH + ":" + m + " Sierra";
-  } else if (choiceNum === 6) {
-    const displayH = sierraH % 12 || 12;
-    const bird = sierraH <= 12 ? "🐓" : "🦉";
-    timeStr = bird + " " + displayH + ":" + m;
-  }
-  
-  if (timeStr) this.insertAtCursor(timeStr + " ");
+  const timeStr = this.formatStampTime(civilH, civilM, choiceNum);
+if (timeStr) this.insertAtCursor(timeStr + " ");
 }
 
 // ===== HABIT TRACKER ACTIONS =====
