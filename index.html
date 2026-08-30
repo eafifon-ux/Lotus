@@ -4207,50 +4207,6 @@ insertNewListLine(cursor, prefix) {
   this.updatePreviewAndSave();
 }
 
-sierraHour(civilH) {
-  let h = (civilH - 6 + 24) % 24;
-  return h === 0 ? 24 : h;
-}
-
-paharForSierra(sierraH) {
-  if (sierraH <= 6) return { emoji: "🌄", name: "Mike" };
-  if (sierraH <= 11) return { emoji: "🏙️", name: "Alpha" };
-  if (sierraH <= 18) return { emoji: "🌆", name: "Echo" };
-  return { emoji: "🌃", name: "Napa" };
-}
-
-formatStampTime(civilH, civilM, choiceNum) {
-  const m = String(civilM).padStart(2, "0");
-  const sH = this.sierraHour(civilH);
-  const sierra = sH + ":" + m;
-  const pahar = this.paharForSierra(sH);
-  
-  if (choiceNum === 1) {
-    const h12 = civilH % 12 || 12;
-    return "🕛 " + h12 + ":" + m + " " + (civilH < 12 ? "AM" : "PM");
-  }
-  if (choiceNum === 2) {
-    return "🕛 " + String(civilH).padStart(2, "0") + ":" + m;
-  }
-  if (choiceNum === 3) {
-    const t = new Date();
-    t.setHours(civilH, civilM, 0, 0);
-    return "🕛 " +
-      String(t.getUTCHours()).padStart(2, "0") + ":" +
-      String(t.getUTCMinutes()).padStart(2, "0") + "Z";
-  }
-  if (choiceNum === 4) {
-    return pahar.emoji + " " + sierra + " " + pahar.name;
-  }
-  if (choiceNum === 5) {
-    return "🕛 " + sierra + " Sierra";
-  }
-  if (choiceNum === 6) {
-    const displayH = sH % 12 || 12;
-    return (sH <= 12 ? "🐓 " : "🦉 ") + displayH + ":" + m;
-  }
-  return sierra;
-}
   
   // ===== Section 3.2.11 - DATE STAMPS =====
   insertDateStamp(type) {
@@ -4432,8 +4388,37 @@ input.value = `\( {yyyy}- \){mm}-${dd}`;
 
       if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
       if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
-      
-      timeStr = " " + this.formatStampTime(civilH, civilM, choiceNum);
+      const m = String(civilM).padStart(2, "0");
+
+      let sierraH = (civilH - 6 + 24) % 24;
+      if (sierraH === 0) sierraH = 24;
+
+      if (choiceNum === 1) {
+        const h12 = civilH % 12 || 12;
+        const ampm = civilH < 12 ? "AM" : "PM";
+        timeStr = " 🕛 " + h12 + ":" + m + " " + ampm;
+      } else if (choiceNum === 2) {
+        timeStr = " 🕛 " + String(civilH).padStart(2, "0") + ":" + m;
+      } else if (choiceNum === 3) {
+        const temp = new Date();
+        temp.setHours(civilH, civilM, 0, 0);
+        const uh = String(temp.getUTCHours()).padStart(2, "0");
+        const um = String(temp.getUTCMinutes()).padStart(2, "0");
+        timeStr = " 🕛 " + uh + ":" + um + "Z";
+      } else if (choiceNum === 4) {
+        let pahar;
+        if (sierraH <= 6)       pahar = "Mike";
+        else if (sierraH <= 11) pahar = "Alpha";
+        else if (sierraH <= 18) pahar = "Echo";
+        else                    pahar = "Napa";
+        timeStr = " 🕛 " + sierraH + ":" + m + " " + pahar;
+      } else if (choiceNum === 5) {
+        timeStr = " 🕛 " + sierraH + ":" + m + " Sierra";
+      } else if (choiceNum === 6) {
+        const displayH = sierraH % 12 || 12;
+        const bird = sierraH <= 12 ? "🐓" : "🦉";
+        timeStr = " " + bird + " " + displayH + ":" + m;
+      }
     }
 
     this.insertAtCursor(stamp + timeStr + " ");
@@ -4461,7 +4446,7 @@ showTimestamp() {
   );
   if (!timeChoice) return;
   
-  const choiceNum = parseInt(timeChoice.trim(), 10) || 4;
+  const choiceNum = parseInt(timeChoice.trim()) || 1;
   
   const now = new Date();
   const defaultTime =
@@ -4477,8 +4462,41 @@ showTimestamp() {
   
   if (isNaN(civilH) || civilH < 0 || civilH > 23) civilH = 12;
   if (isNaN(civilM) || civilM < 0 || civilM > 59) civilM = 0;
-  const timeStr = this.formatStampTime(civilH, civilM, choiceNum);
-if (timeStr) this.insertAtCursor(timeStr + " ");
+  const m = String(civilM).padStart(2, "0");
+  
+  let sierraH = (civilH - 6 + 24) % 24;
+  if (sierraH === 0) sierraH = 24;
+  
+  let timeStr = "";
+  
+  if (choiceNum === 1) {
+    const h12 = civilH % 12 || 12;
+    const ampm = civilH < 12 ? "AM" : "PM";
+    timeStr = "🕛 " + h12 + ":" + m + " " + ampm;
+  } else if (choiceNum === 2) {
+    timeStr = "🕛 " + String(civilH).padStart(2, "0") + ":" + m;
+  } else if (choiceNum === 3) {
+    const temp = new Date();
+    temp.setHours(civilH, civilM, 0, 0);
+    const uh = String(temp.getUTCHours()).padStart(2, "0");
+    const um = String(temp.getUTCMinutes()).padStart(2, "0");
+    timeStr = "🕛 " + uh + ":" + um + "Z";
+  } else if (choiceNum === 4) {
+    let pahar;
+    if (sierraH <= 6) pahar = "Mike";
+    else if (sierraH <= 11) pahar = "Alpha";
+    else if (sierraH <= 18) pahar = "Echo";
+    else pahar = "Napa";
+    timeStr = "🕛 " + sierraH + ":" + m + " " + pahar;
+  } else if (choiceNum === 5) {
+    timeStr = "🕛 " + sierraH + ":" + m + " Sierra";
+  } else if (choiceNum === 6) {
+    const displayH = sierraH % 12 || 12;
+    const bird = sierraH <= 12 ? "🐓" : "🦉";
+    timeStr = bird + " " + displayH + ":" + m;
+  }
+  
+  if (timeStr) this.insertAtCursor(timeStr + " ");
 }
 
 // ===== HABIT TRACKER ACTIONS =====
@@ -7900,6 +7918,529 @@ body.lotus-events-collapsed #now-strip {
 
 
 
+</script>
+
+<script>
+(function HeptadStrip() {
+  const NOTE_H = '📁 Boomerang/🎴Weeks - Heptad';
+  const SUIT_RE = '(?:♣️|♦️|♥️|♠️|❤️|♣︎|♦︎|♥︎|♠︎|♣|♦|♥|♠)';
+  const WEEK_RE = new RegExp('(' + SUIT_RE + ')\\s*(\\d+)');
+  const SHOW = { clubs:'♣', diamonds:'♦', hearts:'♥', spades:'♠' };
+  const HOUR_HEAD = /^#{2,6}\s*[+-]?\s*(?:\[[ xX]\]\s*)?(\d{1,2})?\.\s*(.*)$/;
+  const QUARTER = /^[-*]\s*(?:\[[ xX]\]\s*)?(00|15|30|45)\.\s*(.*)$/;
+  const QS = ['15', '30', '45', '00'];
+  const KEY_OPEN = 'lotus-htb-96';
+  const state = { open96: localStorage.getItem(KEY_OPEN) !== '0', openHour: 0 };
+
+  function paharOf(h) {
+    if (h <= 6) return '🌄';
+    if (h <= 12) return '🏙️';
+    if (h <= 18) return '🌆';
+    return '🌃';
+  }
+
+  function suitKey(ch) {
+    const s = String(ch || '').replace(/\uFE0F|\uFE0E/g, '');
+    if (/[♣]/.test(s) || /♣️/.test(ch)) return 'clubs';
+    if (/[♦]/.test(s) || /♦️/.test(ch)) return 'diamonds';
+    if (/[♥❤]/.test(s) || /♥️|❤️/.test(ch)) return 'hearts';
+    if (/[♠]/.test(s) || /♠️/.test(ch)) return 'spades';
+    return '';
+  }
+
+  function css() {
+    if (document.getElementById('htb-strip-css')) return;
+    const s = document.createElement('style');
+    s.id = 'htb-strip-css';
+    s.textContent = `
+#htb-strip { margin: 8px 0 16px; background:#fff; border:1px solid #ddd; border-radius:10px; overflow:hidden; }
+#htb-strip .htb-head { padding:8px 12px; background:#f4f6f8; font-size:13px; border-bottom:1px solid #eee; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+#htb-strip .htb-head button { border:1px solid #ccc; background:#fff; border-radius:6px; padding:2px 8px; font-size:12px; cursor:pointer; }
+#htb-strip .htb-head button.active { background:#111; color:#fff; border-color:#111; }
+#htb-strip .htb-head .grow { margin-left:auto; display:flex; gap:6px; }
+#htb-strip .htb-nav { display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid #ddd; text-align:center; }
+#htb-strip.heptad .htb-nav { grid-template-columns:1fr 1fr 1fr; }
+#htb-strip .htb-nav a { display:block; padding:8px 6px; color:#1a73e8; text-decoration:none; font-weight:500; font-size:14px; border-right:1px solid #eee; }
+#htb-strip .htb-nav a:last-child { border-right:none; }
+#htb-strip .htb-row {
+  display:grid; grid-template-columns: 28px 36px minmax(0,1fr);
+  gap:8px; align-items:center; padding:9px 12px; border-top:1px solid #f0f0f0; font-size:16px; cursor:pointer;
+}
+#htb-strip .htb-row.season { grid-template-columns:1fr; background:#fafafa; font-weight:700; }
+#htb-strip .htb-row.quarter { padding-left:22px; font-size:14px; color:#444; }
+#htb-strip .htb-row.current { background:#fff8d6; box-shadow:inset 3px 0 0 #e6b800; font-weight:600; }
+#htb-strip .htb-row.hour-now { background:#111; color:#f5f5f5; box-shadow:inset 3px 0 0 #e6b800; }
+#htb-strip .htb-row.q-now { background:#222; color:#fff; }
+#htb-strip .mark { font-size:20px; line-height:1; text-align:center; }
+#htb-strip .htb-row[data-hour] > .mark { cursor:pointer; }
+#htb-strip .mark.red { color:#d4002a; }
+#htb-strip .mark.black { color:#111; }
+#htb-strip .num { font-variant-numeric:tabular-nums; font-weight:600; }
+#htb-strip .note { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#htb-strip .note.empty { color:#999; font-weight:400; }
+#htb-strip .hour-now .note.empty, #htb-strip .q-now .note.empty { color:#aaa; }
+#htb-strip .note a.wikilink, #htb-strip .note a.htb-ext { color:#1a73e8; text-decoration:none; font-weight:500; padding:0 2px; }
+#htb-strip .hour-now .note a, #htb-strip .q-now .note a { color:#8ec5ff; }
+#htb-strip input.htb-inline { width:100%; border:2px solid #3b82f6; border-radius:6px; padding:4px 8px; font:inherit; box-sizing:border-box; }
+#gpc-display a.wikilink { cursor:pointer !important; }
+body.lotus-edit #htb-strip { display:none !important; }
+body.lotus-htb-view #preview { display:none !important; }
+`;
+    document.head.appendChild(s);
+  }
+
+  function isEdit() {
+    const ed = document.getElementById('editor');
+    return !!(ed && ed.style.display !== 'none');
+  }
+  function core() { return window.editorCore; }
+  function curNote() { return (core() && core().currentNote) || ''; }
+  function isHep() { return /heptad|weeks\s*-\s*heptad/i.test(curNote()); }
+  function isTime() { return /time\s*block|timeblock|⏹️/i.test(curNote()); }
+
+  function currentWeek() {
+    try {
+      const { doyToday } = GPCCalendar.calculateGPC();
+      const h = GPCCalendar.heptadMap[doyToday] || '';
+      const m = String(h).match(WEEK_RE);
+      return m ? { key: suitKey(m[1]), week: +m[2] } : null;
+    } catch (e) { return null; }
+  }
+
+  function sunHour() {
+    const n = new Date();
+    let h = n.getHours() - 6;
+    if (h <= 0) h += 24;
+    const m = n.getMinutes();
+    const q = m < 15 ? '00' : m < 30 ? '15' : m < 45 ? '30' : '45';
+    return { hour: h, q: q, label: paharOf(h) + ' ' + h + ' Sierra' };
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escA(s) { return esc(s).replace(/"/g, '&quot;'); }
+
+  function splitLine(line) {
+    const raw = String(line || '');
+    const wikiPref = raw.match(/^(\s*\[\[[^\]]+\]\])/);
+    const mdPref = raw.match(/^(\s*\[[^\]]*\]\([^)]+\))/);
+    let prefix = '', rest = raw;
+    if (wikiPref) { prefix = wikiPref[1]; rest = raw.slice(wikiPref[1].length); }
+    else if (mdPref) { prefix = mdPref[1]; rest = raw.slice(mdPref[1].length); }
+    else {
+      const plain = raw.match(new RegExp('^(\\s*' + SUIT_RE + '\\s*\\d+)'));
+      if (plain) { prefix = plain[1]; rest = raw.slice(plain[1].length); }
+    }
+    rest = rest.replace(/^\s*\^\d+\^\s*/, '').replace(/^[—–\-\s:|]+/, '').trim();
+    return { prefix: prefix, rest: rest };
+  }
+
+  function renderAnno(text) {
+    if (!text) return '';
+    let s = esc(text);
+    s = s.replace(/\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g, function (_, page, anchor, alias) {
+      const note = String(page || '').trim();
+      const label = String(alias || page || '').trim();
+      const head = String(anchor || '').trim();
+      let attrs = ' class="wikilink" href="#" data-note="' + escA(note) + '"';
+      if (head) attrs += ' data-anchor="' + escA(head) + '"';
+      return '<a' + attrs + '>' + esc(label) + '</a>';
+    });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, label, url) {
+      return '<a class="htb-ext" href="' + escA(url) + '">' + esc(label) + '</a>';
+    });
+    return s;
+  }
+
+  function normalizeHref(url) {
+    let u = String(url || '').trim();
+    if (!u) return '';
+    if (/^intent:\/\//i.test(u)) {
+      const body = u.replace(/^intent:\/\//i, '');
+      const path = body.split('#')[0];
+      const sm = u.match(/[;?]scheme=([^;]+)/i);
+      const scheme = (sm && sm[1] && sm[1] !== 'intent') ? sm[1] : 'https';
+      u = scheme + '://' + path;
+    }
+    if (/^vnd\.youtube:\/\//i.test(u)) {
+      const list = u.match(/list=([^&]+)/);
+      const v = u.match(/[?&]v=([^&]+)/);
+      if (list) return 'https://www.youtube.com/playlist?list=' + list[1];
+      if (v) return 'https://www.youtube.com/watch?v=' + v[1];
+      return 'https://www.youtube.com';
+    }
+    if (/maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google/i.test(u) && !/^https?:/i.test(u))
+      u = 'https://' + u.replace(/^\/\//, '');
+    return u;
+  }
+
+  function openHref(url) {
+    const href = normalizeHref(url);
+    if (!href) return;
+    const a = document.createElement('a');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function parseWeeks(text) {
+    const rows = [];
+    String(text || '').split(/\r?\n/).forEach(function (line, idx) {
+      const t = line.trim();
+      const season = t.match(/^#{2,6}\s*[+-]?\s*(Spring|Summer|Fall|Winter)\b/i);
+      if (season) { rows.push({ type:'season', title: season[1], idx: idx }); return; }
+      const m = t.match(WEEK_RE);
+      if (!m) return;
+      rows.push({ type:'week', key: suitKey(m[1]), week: +m[2], note: splitLine(t).rest, idx: idx });
+    });
+    return rows;
+  }
+
+  function parseHours(text) {
+    const hours = {};
+    const quarters = {};
+    let last = 0;
+    String(text || '').split(/\r?\n/).forEach(function (line, idx) {
+      const t = line.trim();
+      const q = t.match(QUARTER);
+      if (q && last) {
+        quarters[last + '-' + q[1]] = { note: (q[2] || '').trim(), idx: idx };
+        return;
+      }
+      const h = t.match(HOUR_HEAD);
+      if (h) {
+        last = h[1] ? parseInt(h[1], 10) : last + 1;
+        if (last >= 1 && last <= 24) hours[last] = { note: (h[2] || '').trim(), idx: idx };
+      }
+    });
+    return { hours: hours, quarters: quarters };
+  }
+
+  function host() {
+    let el = document.getElementById('htb-strip');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'htb-strip';
+    const preview = document.getElementById('preview');
+    if (preview && preview.parentNode) preview.parentNode.insertBefore(el, preview);
+    else document.body.appendChild(el);
+    return el;
+  }
+
+  function goNote(name) {
+    const c = core();
+    if (!c || !name) return;
+    return c.switchToNote(name);
+  }
+
+  function jumpNow() {
+    const hit = document.querySelector('#htb-strip .q-now, #htb-strip .hour-now');
+    if (hit) hit.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+
+  function jumpCurrentWeek() {
+    const cur = currentWeek();
+    const el = cur && document.getElementById('heptad-' + cur.key + '-' + cur.week);
+    if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+
+  function goCurrentHeptad() {
+    const after = function () { paint(); setTimeout(jumpCurrentWeek, 100); setTimeout(jumpCurrentWeek, 350); };
+    if (isHep()) after();
+    else {
+      const p = goNote(NOTE_H);
+      if (p && p.then) p.then(after);
+      else setTimeout(after, 200);
+    }
+  }
+
+  function showQuarters(h) {
+    return state.open96 || state.openHour === h;
+  }
+
+  function renderHep() {
+    const text = core() && core().editor ? core().editor.value : '';
+    const rows = parseWeeks(text);
+    const cur = currentWeek();
+    const glyph = cur ? (SHOW[cur.key] || '') : '';
+    const redNow = cur && (cur.key === 'diamonds' || cur.key === 'hearts');
+    let html = '<div class="htb-head"><strong>Heptad</strong><span class="mark ' +
+      (redNow ? 'red' : 'black') + '">' + esc(glyph) + '</span><span>' +
+      (cur ? cur.week : '') + '</span></div>' +
+      '<div class="htb-nav">' +
+      '<a href="#" data-go="📁 Boomerang/Events">Events</a>' +
+      '<a href="#" data-go="📁 Boomerang/Timeline">Timeline</a>' +
+      '<a href="#" data-go="📁 Boomerang/Blank Heptad">Blank</a></div>';
+    rows.forEach(function (r) {
+      if (r.type === 'season') {
+        html += '<div class="htb-row season">' + esc(r.title) + '</div>';
+        return;
+      }
+      const on = !!(cur && r.key === cur.key && r.week === cur.week);
+      const red = (r.key === 'diamonds' || r.key === 'hearts');
+      html += '<div class="htb-row' + (on ? ' current' : '') + '" data-idx="' + r.idx + '" id="heptad-' + r.key + '-' + r.week + '">' +
+        '<span class="mark ' + (red ? 'red' : 'black') + '">' + (SHOW[r.key] || '') + '</span>' +
+        '<span class="num">' + r.week + '</span>' +
+        '<span class="note' + (r.note ? '' : ' empty') + '">' + (r.note ? renderAnno(r.note) : '—') + '</span></div>';
+    });
+    const el = host();
+    el.className = 'heptad';
+    el.innerHTML = html;
+    el.style.display = '';
+    bind(el);
+  }
+
+  function renderTime() {
+    const text = core() && core().editor ? core().editor.value : '';
+    const map = parseHours(text);
+    const now = sunHour();
+    let html = '<div class="htb-head"><strong>Time Block</strong><span>' + esc(now.label) + '</span>' +
+      '<span class="grow">' +
+      '<button type="button" data-htb-now="1">Now</button>' +
+      '<button type="button" data-htb-toggle="1" class="' + (state.open96 ? 'active' : '') + '">' +
+      (state.open96 ? '24' : '96') + '</button></span></div>' +
+      '<div class="htb-nav">' +
+      '<a href="#" data-go="📁 Boomerang/Events">🗓️ Events</a>' +
+      '<a href="#" data-go="📁 Boomerang/Timeblock Weekend">Timeblock Weekend</a></div>';
+    for (let h = 1; h <= 24; h++) {
+      const hour = map.hours[h] || { note: '', idx: -1 };
+      const onHour = h === now.hour;
+      html += '<div class="htb-row' + (onHour ? ' hour-now' : '') + '" id="sun-' + h + '" data-hour="' + h + '"' +
+        (hour.idx >= 0 ? ' data-idx="' + hour.idx + '"' : '') + '>' +
+        '<span class="mark" data-open-hour="' + h + '">' + paharOf(h) + '</span>' +
+        '<span class="num">' + h + '</span>' +
+        '<span class="note' + (hour.note ? '' : ' empty') + '">' +
+        (hour.note ? renderAnno(hour.note) : '—') + '</span></div>';
+      if (!showQuarters(h)) continue;
+      QS.forEach(function (q) {
+        const slot = map.quarters[h + '-' + q] || { note: '', idx: -1 };
+        const on = onHour && q === now.q;
+        html += '<div class="htb-row quarter' + (on ? ' q-now' : '') + '" data-hour="' + h + '" data-q="' + q + '"' +
+          (slot.idx >= 0 ? ' data-idx="' + slot.idx + '"' : '') + '>' +
+          '<span class="mark"></span><span class="num">' + q + '</span>' +
+          '<span class="note' + (slot.note ? '' : ' empty') + '">' +
+          (slot.note ? renderAnno(slot.note) : '—') + '</span></div>';
+      });
+    }
+    const el = host();
+    el.className = '';
+    el.innerHTML = html;
+    el.style.display = '';
+    bind(el);
+    setTimeout(jumpNow, 80);
+  }
+
+  function hide() {
+    const el = document.getElementById('htb-strip');
+    if (el) el.style.display = 'none';
+    document.body.classList.remove('lotus-htb-view');
+  }
+
+  function prefixOf(line) {
+    const t = String(line || '');
+    if (HOUR_HEAD.test(t.trim()) || QUARTER.test(t.trim())) {
+      const m = t.match(/^(.*?(?:00|15|30|45|\d{1,2})\.)\s*/);
+      return m ? m[1] : t;
+    }
+    return splitLine(t).prefix || t.replace(/\s+[—–-]\s+.*$/, '').trim();
+  }
+
+  function saveIdx(idx, newNote) {
+    const c = core();
+    if (!c || !c.editor || idx < 0) return;
+    const lines = c.editor.value.split('\n');
+    if (lines[idx] == null) return;
+    const keep = prefixOf(lines[idx]);
+    lines[idx] = keep + (String(newNote || '').trim() ? ' ' + String(newNote).trim() : '');
+    c.editor.value = lines.join('\n');
+    if (c.updatePreviewAndSave) c.updatePreviewAndSave();
+  }
+
+  function saveNew(hour, q, text) {
+    const c = core();
+    if (!c || !c.editor) return;
+    const lines = c.editor.value.split('\n');
+    const note = String(text || '').trim();
+    if (q) lines.push('- [ ] ' + q + '.' + (note ? ' ' + note : ''));
+    else lines.push('#### - [ ] ' + hour + '.' + (note ? ' ' + note : ''));
+    c.editor.value = lines.join('\n');
+    if (c.updatePreviewAndSave) c.updatePreviewAndSave();
+  }
+
+  function rawRest(idx) {
+    const c = core();
+    const line = (c && c.editor && c.editor.value.split('\n')[idx]) || '';
+    const t = line.trim();
+    const q = t.match(QUARTER);
+    if (q) return q[2] || '';
+    const h = t.match(HOUR_HEAD);
+    if (h) return h[2] || '';
+    return splitLine(t).rest;
+  }
+
+  function editRow(row) {
+    if (!row || row.querySelector('input')) return;
+    const idx = row.hasAttribute('data-idx') ? parseInt(row.getAttribute('data-idx'), 10) : -1;
+    const hour = row.getAttribute('data-hour');
+    const q = row.getAttribute('data-q');
+    if (idx < 0 && !hour) return;
+    let noteEl = row.querySelector('.note');
+    if (!noteEl) {
+      noteEl = document.createElement('span');
+      noteEl.className = 'note';
+      row.appendChild(noteEl);
+    }
+    const input = document.createElement('input');
+    input.className = 'htb-inline';
+    input.value = idx >= 0 ? rawRest(idx) : '';
+    noteEl.replaceWith(input);
+    input.focus();
+    let done = false;
+    const finish = function (ok) {
+      if (done) return;
+      done = true;
+      if (!ok) { paint(); return; }
+      if (idx >= 0) saveIdx(idx, input.value);
+      else saveNew(hour, q, input.value);
+    };
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', function () { finish(true); });
+  }
+
+  function bind(root) {
+    let last = 0, lastEl = null;
+    root.querySelectorAll('[data-htb-now]').forEach(function (b) {
+      b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); jumpNow(); });
+    });
+    root.querySelectorAll('[data-htb-toggle]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.open96 = !state.open96;
+        if (state.open96) state.openHour = 0;
+        localStorage.setItem(KEY_OPEN, state.open96 ? '1' : '0');
+        paint();
+      });
+    });
+    root.querySelectorAll('[data-open-hour]').forEach(function (mark) {
+      mark.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (state.open96) return;
+        const h = parseInt(mark.getAttribute('data-open-hour'), 10);
+        state.openHour = state.openHour === h ? 0 : h;
+        paint();
+      });
+    });
+    root.querySelectorAll('a[data-go], a.wikilink').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        goNote(a.getAttribute('data-go') || a.getAttribute('data-note'));
+      });
+    });
+    root.querySelectorAll('a.htb-ext').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openHref(a.getAttribute('href'));
+      });
+    });
+    root.querySelectorAll('.htb-row[data-hour], .htb-row[data-idx]').forEach(function (row) {
+      row.addEventListener('click', function (e) {
+        if (e.target.tagName === 'INPUT' || e.target.closest('a') || e.target.closest('button') || e.target.closest('[data-open-hour]')) return;
+        const now = Date.now();
+        if (lastEl === row && now - last < 420) { editRow(row); last = 0; lastEl = null; }
+        else { last = now; lastEl = row; }
+      });
+      row.addEventListener('dblclick', function (e) {
+        if (e.target.tagName === 'INPUT' || e.target.closest('a') || e.target.closest('[data-open-hour]')) return;
+        e.preventDefault();
+        editRow(row);
+      });
+    });
+  }
+
+  function paint() {
+    css();
+    if (isEdit()) { hide(); return; }
+    if (isHep() || isTime()) {
+      document.body.classList.add('lotus-htb-view');
+      if (isHep()) renderHep();
+      else renderTime();
+    } else hide();
+  }
+
+  function isHeptadChip(el) {
+    const a = el && el.closest && el.closest('#gpc-display a');
+    if (!a) return false;
+    const note = a.getAttribute('data-note') || '';
+    const text = (a.textContent || '').trim();
+    return a.classList.contains('heptad-link') || /heptad|weeks|🎴/i.test(note) || WEEK_RE.test(text);
+  }
+
+  function hookGpc() {
+    if (document.__htbHepDoc) return;
+    document.__htbHepDoc = true;
+    document.addEventListener('click', function (e) {
+      if (isHeptadChip(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        goCurrentHeptad();
+      }
+    }, true);
+    const btn = document.querySelector('#gpc-buttons button[data-mode="HEPTAD"]');
+    if (btn && !btn.__htbStripNav) {
+      btn.__htbStripNav = true;
+      btn.addEventListener('click', function () {
+        if (window.GPCCalendar && GPCCalendar.heptadEnabled) setTimeout(goCurrentHeptad, 40);
+      });
+    }
+  }
+
+  function hook() {
+    const c = core();
+    if (!c || c.__htbStripHooked) return;
+    if (c.updatePreviewAndSave) {
+      const o = c.updatePreviewAndSave.bind(c);
+      c.updatePreviewAndSave = async function () {
+        const r = await o();
+        setTimeout(paint, 50);
+        return r;
+      };
+    }
+    if (c.switchToNote) {
+      const o = c.switchToNote.bind(c);
+      c.switchToNote = async function () {
+        const r = await o.apply(this, arguments);
+        setTimeout(paint, 80);
+        return r;
+      };
+    }
+    if (c.toggleEditMode) {
+      const o = c.toggleEditMode.bind(c);
+      c.toggleEditMode = function () { o(); setTimeout(paint, 30); };
+    }
+    c.__htbStripHooked = true;
+  }
+
+  function start() {
+    hook();
+    hookGpc();
+    paint();
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(start, 900); });
+  else setTimeout(start, 900);
+  setInterval(function () { if (!isEdit() && (isHep() || isTime())) paint(); }, 30000);
+})();
 </script>
 
 </body>
