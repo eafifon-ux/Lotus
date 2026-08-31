@@ -7923,6 +7923,7 @@ body.lotus-events-collapsed #now-strip {
 <script>
 (function HeptadStrip() {
   const NOTE_H = '📁 Boomerang/🎴Weeks - Heptad';
+  const NOTE_BLANK = '📁 Boomerang/Blank Heptad';
   const SUIT_RE = '(?:♣️|♦️|♥️|♠️|❤️|♣︎|♦︎|♥︎|♠︎|♣|♦|♥|♠)';
   const WEEK_RE = new RegExp('(' + SUIT_RE + ')\\s*(\\d+)');
   const SHOW = { clubs:'♣', diamonds:'♦', hearts:'♥', spades:'♠' };
@@ -8002,6 +8003,7 @@ body.lotus-htb-view #preview { display:none !important; }
   }
   function core() { return window.editorCore; }
   function curNote() { return (core() && core().currentNote) || ''; }
+  function isBlankHep() { return /blank\s*heptad/i.test(curNote()); }
   function isHep() { return /heptad|weeks\s*-\s*heptad/i.test(curNote()); }
   function isTime() { return /time\s*block|timeblock|⏹️/i.test(curNote()); }
   function onWeekend() { return /weekend/i.test(curNote()); }
@@ -8013,7 +8015,9 @@ body.lotus-htb-view #preview { display:none !important; }
       '📁 Boomerang/Time Block',
       '⏹️ Time Block',
       '📁 Boomerang/Timeblock Weekend',
-      'Timeblock Weekend'
+      'Timeblock Weekend',
+      NOTE_H,
+      NOTE_BLANK
     ];
     if (c && c.notes) pool.push.apply(pool, Object.keys(c.notes));
     if (c && c.vault && c.vault.notes) pool.push.apply(pool, Object.keys(c.vault.notes));
@@ -8047,12 +8051,8 @@ body.lotus-htb-view #preview { display:none !important; }
     return { hour: h, q: q, label: label };
   }
 
-  function hourMark(h) {
-    return state.bird ? birdOf(h) : paharOf(h).icon;
-  }
-  function hourNum(h) {
-    return state.bird ? clock12(h) : h;
-  }
+  function hourMark(h) { return state.bird ? birdOf(h) : paharOf(h).icon; }
+  function hourNum(h) { return state.bird ? clock12(h) : h; }
 
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8192,7 +8192,7 @@ body.lotus-htb-view #preview { display:none !important; }
 
   function goCurrentHeptad() {
     const after = function () { paint(); setTimeout(jumpCurrentWeek, 100); setTimeout(jumpCurrentWeek, 350); };
-    if (isHep()) after();
+    if (isHep() && !isBlankHep()) after();
     else {
       const p = goNote(NOTE_H);
       if (p && p.then) p.then(after);
@@ -8217,19 +8217,25 @@ body.lotus-htb-view #preview { display:none !important; }
       '<a href="#" data-go="' + escA(week) + '">Timeblock Weekend</a></div>';
   }
 
+  function hepNav() {
+    const thirdNote = isBlankHep() ? NOTE_H : NOTE_BLANK;
+    const thirdLabel = isBlankHep() ? 'Heptad' : 'Blank';
+    return '<div class="htb-nav">' +
+      '<a href="#" data-go="📁 Boomerang/Events">Events</a>' +
+      '<a href="#" data-go="📁 Boomerang/Timeline">Timeline</a>' +
+      '<a href="#" data-go="' + escA(thirdNote) + '">' + esc(thirdLabel) + '</a></div>';
+  }
+
   function renderHep() {
     const text = core() && core().editor ? core().editor.value : '';
     const rows = parseWeeks(text);
     const cur = currentWeek();
     const glyph = cur ? (SHOW[cur.key] || '') : '';
     const redNow = cur && (cur.key === 'diamonds' || cur.key === 'hearts');
-    let html = '<div class="htb-head"><strong>Heptad</strong><span class="mark ' +
+    let html = '<div class="htb-head"><strong>' + (isBlankHep() ? 'Blank Heptad' : 'Heptad') +
+      '</strong><span class="mark ' +
       (redNow ? 'red' : 'black') + '">' + esc(glyph) + '</span><span>' +
-      (cur ? cur.week : '') + '</span></div>' +
-      '<div class="htb-nav">' +
-      '<a href="#" data-go="📁 Boomerang/Events">Events</a>' +
-      '<a href="#" data-go="📁 Boomerang/Timeline">Timeline</a>' +
-      '<a href="#" data-go="📁 Boomerang/Blank Heptad">Blank</a></div>';
+      (cur ? cur.week : '') + '</span></div>' + hepNav();
     rows.forEach(function (r) {
       if (r.type === 'season') {
         html += '<div class="htb-row season">' + esc(r.title) + '</div>';
