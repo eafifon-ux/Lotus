@@ -1,0 +1,10 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# Not used by this project (static site); stray npm stub
+package-lock.json
+node_modules/
+
+# Local Claude Code settings
+.claude/settings.local.json
