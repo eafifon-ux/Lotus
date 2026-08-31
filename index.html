@@ -7930,7 +7930,12 @@ body.lotus-events-collapsed #now-strip {
   const QUARTER = /^[-*]\s*(?:\[[ xX]\]\s*)?(00|15|30|45)\.\s*(.*)$/;
   const QS = ['15', '30', '45', '00'];
   const KEY_OPEN = 'lotus-htb-96';
-  const state = { open96: localStorage.getItem(KEY_OPEN) !== '0', openHour: 0 };
+  const KEY_BIRD = 'lotus-htb-bird';
+  const state = {
+    open96: localStorage.getItem(KEY_OPEN) !== '0',
+    openHour: 0,
+    bird: localStorage.getItem(KEY_BIRD) === '1'
+  };
 
   function paharOf(h) {
     if (h <= 6) return { icon:'🌄', name:'Mike' };
@@ -7938,6 +7943,8 @@ body.lotus-events-collapsed #now-strip {
     if (h <= 18) return { icon:'🌆', name:'Echo' };
     return { icon:'🌃', name:'Napa' };
   }
+  function birdOf(h) { return h <= 12 ? '🐓' : '🦉'; }
+  function clock12(h) { return h % 12 || 12; }
 
   function suitKey(ch) {
     const s = String(ch || '').replace(/\uFE0F|\uFE0E/g, '');
@@ -8033,7 +8040,18 @@ body.lotus-htb-view #preview { display:none !important; }
     const m = n.getMinutes();
     const q = m < 15 ? '00' : m < 30 ? '15' : m < 45 ? '30' : '45';
     const p = paharOf(h);
-    return { hour: h, q: q, label: p.icon + ' ' + h + ' ' + p.name };
+    const mm = String(m).padStart(2, '0');
+    const label = state.bird
+      ? birdOf(h) + ' ' + clock12(h) + ':' + mm
+      : p.icon + ' ' + h + ' ' + p.name;
+    return { hour: h, q: q, label: label };
+  }
+
+  function hourMark(h) {
+    return state.bird ? birdOf(h) : paharOf(h).icon;
+  }
+  function hourNum(h) {
+    return state.bird ? clock12(h) : h;
   }
 
   function esc(s) {
@@ -8239,6 +8257,8 @@ body.lotus-htb-view #preview { display:none !important; }
       '</strong><span>' + esc(now.label) + '</span>' +
       '<span class="grow">' +
       '<button type="button" data-htb-now="1">Now</button>' +
+      '<button type="button" data-htb-bird="1" class="' + (state.bird ? 'active' : '') + '" title="Bird mode">' +
+      (state.bird ? '🦉' : '🐓') + '</button>' +
       '<button type="button" data-htb-toggle="1" class="' + (state.open96 ? 'active' : '') + '">' +
       (state.open96 ? '24' : '96') + '</button></span></div>' + timeNav();
     for (let h = 1; h <= 24; h++) {
@@ -8246,8 +8266,8 @@ body.lotus-htb-view #preview { display:none !important; }
       const onHour = h === now.hour;
       html += '<div class="htb-row' + (onHour ? ' hour-now' : '') + '" id="sun-' + h + '" data-hour="' + h + '"' +
         (hour.idx >= 0 ? ' data-idx="' + hour.idx + '"' : '') + '>' +
-        '<span class="mark" data-open-hour="' + h + '">' + paharOf(h).icon + '</span>' +
-        '<span class="num">' + h + '</span>' +
+        '<span class="mark" data-open-hour="' + h + '">' + hourMark(h) + '</span>' +
+        '<span class="num">' + hourNum(h) + '</span>' +
         '<span class="note' + (hour.note ? '' : ' empty') + '">' +
         (hour.note ? renderAnno(hour.note) : '—') + '</span></div>';
       if (!showQuarters(h)) continue;
@@ -8353,6 +8373,15 @@ body.lotus-htb-view #preview { display:none !important; }
     let last = 0, lastEl = null;
     root.querySelectorAll('[data-htb-now]').forEach(function (b) {
       b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); jumpNow(); });
+    });
+    root.querySelectorAll('[data-htb-bird]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.bird = !state.bird;
+        localStorage.setItem(KEY_BIRD, state.bird ? '1' : '0');
+        paint();
+      });
     });
     root.querySelectorAll('[data-htb-toggle]').forEach(function (b) {
       b.addEventListener('click', function (e) {
