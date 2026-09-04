@@ -2,9 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Capture</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rythos</title>
+<meta name="description" content="A perennial calendar and markdown notebook. Days are numbered 1-364 across four equal seasons, so dates never drift.">
 <link rel="manifest" href="manifest.json">
+
+<!-- Theme colour follows the app's light/dark palettes so the browser and
+     Android system bars match the interface. -->
+<meta name="theme-color" content="#EDF0EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101A1F" media="(prefers-color-scheme: dark)">
+
+<!-- iOS has no manifest support, so home-screen installs need these. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rythos">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
 /**
  * ====================================================================

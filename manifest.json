@@ -1,21 +1,52 @@
 {
+  "id": "./",
   "name": "Rythos",
   "short_name": "Rythos",
-  "description": "A system for aligning behavior through time, rhythm, and reflection.",
-  "start_url": "/Lotus/",
+  "description": "A perennial calendar and markdown notebook. Days are numbered 1-364 across four equal seasons, so dates never drift. Works offline; nothing leaves your device.",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities", "lifestyle"],
+  "background_color": "#101A1F",
+  "theme_color": "#101A1F",
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/phone-1.png",
+      "sizes": "1080x2340",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Today's date in the perennial year, above your notes"
+    },
+    {
+      "src": "screenshots/phone-2.png",
+      "sizes": "1080x2340",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Write in markdown, with tables and checklists"
     }
   ]
 }

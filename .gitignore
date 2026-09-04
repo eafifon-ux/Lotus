@@ -8,3 +8,6 @@ node_modules/
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Icon working files; the shipped icons live at the repo root
+assets/generated/

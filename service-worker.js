@@ -11,7 +11,7 @@
  *
  * Bump CACHE whenever the precached asset list changes.
  */
-const CACHE = 'lotus-2026-09-05a';
+const CACHE = 'rythos-2026-09-05b';
 
 const ASSETS = [
   './',
@@ -19,6 +19,7 @@ const ASSETS = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
+  './icon-maskable-512.png',
   './vendor/marked.min.js',
   './vendor/jszip.min.js',
   './vendor/fonts/familjen-grotesk-var.woff2',
