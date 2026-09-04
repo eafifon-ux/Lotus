@@ -119,7 +119,9 @@ body { display: flex; flex-direction: column; background: #f8f9fa; padding: 20px
 #preview {
   white-space: normal;
 }
-#preview *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+/* Table structure must stay on `normal`: with pre-wrap the newlines in the
+   generated table markup render as blank rows inside the table box. */
+#preview *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(table):not(thead):not(tbody):not(tfoot):not(tr) {
   white-space: pre-wrap;
 }
 /* Prevent empty collapsible blocks from creating space */
@@ -918,6 +920,400 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
   letter-spacing: 1px;
 }
 
+
+/* ==========================================================================
+   Section 1.9 - DESIGN SYSTEM
+   --------------------------------------------------------------------------
+   Lotus is an instrument for keeping time with a writing surface attached.
+   The chrome reads as an instrument (grotesque + mono); rendered notes read
+   as a document (serif). Fonts are self-hosted so the app makes no
+   third-party requests at runtime and works offline.
+
+   This layer sits last in the stylesheet and intentionally supersedes the
+   earlier component rules rather than editing them in place, which keeps the
+   diff small while the file is under concurrent development.
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Familjen Grotesk';
+  src: url('vendor/fonts/familjen-grotesk-var.woff2') format('woff2');
+  font-weight: 400 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Literata';
+  src: url('vendor/fonts/literata-var.woff2') format('woff2');
+  font-weight: 400 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('vendor/fonts/dm-mono-400.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('vendor/fonts/dm-mono-500.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+
+:root {
+  --ui:   'Familjen Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --doc:  'Literata', Georgia, 'Times New Roman', serif;
+  --mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --paper:      #EDF0EC;
+  --sheet:      #FBFCFA;
+  --sheet-2:    #F3F6F1;
+  --ink:        #101A1F;
+  --ink-2:      #41504F;
+  --ink-3:      #6E7D79;
+  --rule:       #D6DCD6;
+  --rule-2:     #E4E9E3;
+  --sage:       #4A6B5D;
+  --sage-2:     #3B584C;
+  --sage-tint:  #DEE9E2;
+  --sage-line:  rgba(74,107,93,.35);
+  --sage-on:    #FFFFFF;
+  --amber:      #B4762A;
+  --amber-tint: #F4E7D3;
+  --toolbar-bg: rgba(251,252,250,.9);
+  --ring-future: #E2E7E2;
+  --ring-past:   #BDC8C1;
+
+  --r:    14px;
+  --r-sm: 9px;
+  --shadow-sheet: 0 1px 2px rgba(16,26,31,.05), 0 14px 34px -20px rgba(16,26,31,.30);
+  --shadow-pop:   0 2px 6px rgba(16,26,31,.09), 0 20px 44px -18px rgba(16,26,31,.34);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #0D1417;
+    --sheet:      #141D21;
+    --sheet-2:    #1A2429;
+    --ink:        #E6EDE9;
+    --ink-2:      #A5B3AE;
+    --ink-3:      #7B8B86;
+    --rule:       #26343A;
+    --rule-2:     #1E2A2F;
+    --sage:       #7FB49C;
+    --sage-2:     #96C6B0;
+    --sage-tint:  #1B302A;
+    --sage-line:  rgba(127,180,156,.4);
+    --sage-on:    #0D1417;
+    --amber:      #D9A45C;
+    --amber-tint: #33281A;
+    --toolbar-bg: rgba(20,29,33,.9);
+    --ring-future: #223035;
+    --ring-past:   #40545B;
+    --shadow-sheet: 0 1px 2px rgba(0,0,0,.34), 0 14px 34px -20px rgba(0,0,0,.66);
+    --shadow-pop:   0 2px 6px rgba(0,0,0,.4), 0 20px 44px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#0D1417; --sheet:#141D21; --sheet-2:#1A2429;
+  --ink:#E6EDE9; --ink-2:#A5B3AE; --ink-3:#7B8B86;
+  --rule:#26343A; --rule-2:#1E2A2F;
+  --sage:#7FB49C; --sage-2:#96C6B0; --sage-tint:#1B302A;
+  --sage-line:rgba(127,180,156,.4); --sage-on:#0D1417;
+  --amber:#D9A45C; --amber-tint:#33281A;
+  --toolbar-bg: rgba(20,29,33,.9);
+  --ring-future:#223035; --ring-past:#40545B;
+  --shadow-sheet: 0 1px 2px rgba(0,0,0,.34), 0 14px 34px -20px rgba(0,0,0,.66);
+  --shadow-pop:   0 2px 6px rgba(0,0,0,.4), 0 20px 44px -18px rgba(0,0,0,.7);
+}
+
+/* ---------- Base ---------------------------------------------------------- */
+html, body { font-family: var(--ui); }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  padding: 14px 14px 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+@media (min-width: 700px) { body { padding: 26px 26px 0; } }
+
+:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ---------- Header: the instrument cluster -------------------------------- */
+#gpc-cluster { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+#gpc-dial { position: relative; width: 78px; height: 78px; flex: none; }
+#perennial-ring { position: absolute; inset: 0; width: 78px; height: 78px; display: block; }
+#perennial-ring .tick      { stroke: var(--ring-future); stroke-width: 1.1; stroke-linecap: round; }
+#perennial-ring .tick-past { stroke: var(--ring-past);   stroke-width: 1.1; stroke-linecap: round; }
+#perennial-ring .tick-now  { stroke: var(--sage);  stroke-width: 2.5; stroke-linecap: round; }
+#perennial-ring .season    { stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; }
+#perennial-ring .today     { fill: var(--amber); }
+
+#gpc-display {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 2px;
+  margin: 0 !important;
+  font-family: var(--ui); font-weight: 700; font-size: 19px;
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1;
+  white-space: nowrap;
+  color: var(--ink);
+}
+#gpc-display a.wikilink { font: inherit; color: inherit !important; }
+
+#gpc-meta { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+#gpc-season {
+  font-family: var(--ui); font-weight: 600; font-size: 13px;
+  letter-spacing: .15em; text-transform: uppercase; color: var(--ink);
+}
+#gpc-progress {
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+}
+#gpc-progress .now { color: var(--amber); }
+
+#top-bar { position: static; }
+#mode-toggle {
+  position: fixed; top: 14px; right: 14px; z-index: 1200;
+  width: 38px; height: 38px; display: grid; place-items: center;
+  font-size: 16px; line-height: 1;
+  background: var(--sheet); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 50%;
+  box-shadow: var(--shadow-sheet); cursor: pointer;
+}
+@media (min-width: 700px) { #mode-toggle { top: 26px; right: 26px; } }
+
+/* ---------- Segmented control --------------------------------------------- */
+#gpc-buttons { gap: 0; margin-bottom: 14px; align-items: stretch; }
+#gpc-buttons button[data-mode] {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em;
+  padding: 8px 12px;
+  color: var(--ink-2); background: var(--sheet);
+  border: 1px solid var(--rule); border-right-width: 0; border-radius: 0;
+  transition: background .15s ease, color .15s ease;
+}
+#gpc-buttons button[data-mode]:first-of-type { border-radius: var(--r-sm) 0 0 var(--r-sm); }
+#gpc-buttons button[data-mode="HEPTAD"] { border-right-width: 1px; border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+#gpc-buttons button[data-mode]:hover { background: var(--sheet-2); color: var(--ink); }
+#gpc-buttons button[data-mode].active { background: var(--sage); color: var(--sage-on); border-color: var(--sage); }
+
+/* Scoped through #gpc-buttons so it outranks the earlier
+   `#gpc-buttons button` rule, which would otherwise force a light background. */
+#gpc-buttons #sidebar-toggle {
+  margin-left: auto; width: 36px; height: 36px;
+  display: grid; place-items: center; font-size: 15px;
+  background: var(--sheet); color: var(--ink-2);
+  border: 1px solid var(--rule); border-radius: var(--r-sm); cursor: pointer;
+}
+#gpc-buttons #sidebar-toggle:hover { background: var(--sheet-2); }
+
+/* ---------- The writing sheet --------------------------------------------- */
+#editor-container { margin-bottom: 78px; }
+#editor, #preview {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sheet);
+  color: var(--ink);
+  padding: 20px 18px;
+}
+@media (min-width: 700px) { #editor, #preview { padding: 32px 34px; } }
+
+/* On a wide screen an unbounded writing column runs to unreadable line
+   lengths, so the whole stack centres on a measure instead. */
+@media (min-width: 900px) {
+  #gpc-cluster, #gpc-buttons, #editor-container {
+    width: 100%; max-width: 860px; margin-left: auto; margin-right: auto;
+  }
+}
+
+#editor {
+  font-family: var(--mono);
+  font-size: 14.5px; line-height: 1.7;
+  caret-color: var(--sage); resize: none;
+}
+#editor:focus { outline: none; border-color: var(--sage); box-shadow: var(--shadow-sheet), 0 0 0 3px var(--sage-tint); }
+
+/* ---------- Rendered note: the document voice ------------------------------ */
+#preview { font-family: var(--ui); font-size: 15.5px; line-height: 1.65; color: var(--ink); }
+#preview h1, #preview h2, #preview h3 {
+  font-family: var(--doc); font-weight: 600; color: var(--ink);
+  letter-spacing: -.012em; line-height: 1.25; margin-left: 0; text-wrap: balance;
+}
+#preview h1 { font-size: 1.6rem;  margin: 0 0 .6em; }
+#preview h2 { font-size: 1.28rem; margin: 1.5em 0 .5em; }
+#preview h3 { font-size: 1.09rem; margin: 1.3em 0 .45em; }
+#preview h4, #preview h5, #preview h6 {
+  font-family: var(--ui); font-weight: 600; font-size: .78rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+  margin: 1.4em 0 .4em; margin-left: 0;
+}
+#preview h1::before, #preview h2::before, #preview h3::before,
+#preview h4::before, #preview h5::before, #preview h6::before {
+  color: var(--ink-3); opacity: .32; font-size: .44em;
+  vertical-align: middle; margin-right: .25em;
+}
+
+/* Inside a table the grid already reads as navigation; underlining every
+   cell just adds noise. Colour alone carries the affordance there. */
+#preview td a.wikilink, #preview th a.wikilink,
+#preview td a:not(.wikilink):not(.backlink),
+#preview th a:not(.wikilink):not(.backlink) { border-bottom: 0; }
+#preview td a.wikilink:hover, #preview th a.wikilink:hover { background: var(--sage-tint); }
+
+#preview p { margin: 0 0 .85em; }
+#preview a:not(.wikilink):not(.backlink) {
+  color: var(--sage-2); text-decoration: none;
+  border-bottom: 1px solid var(--sage-line); padding-bottom: 1px;
+  transition: border-color .15s ease, background .15s ease;
+}
+#preview a:not(.wikilink):not(.backlink):hover { border-bottom-color: var(--sage); }
+#preview a.wikilink {
+  color: var(--sage-2); text-decoration: none;
+  border-bottom: 1px dashed var(--sage-line); padding-bottom: 1px;
+}
+#preview a.wikilink:hover { background: var(--sage-tint); border-bottom-style: solid; }
+
+#preview blockquote {
+  font-family: var(--doc); font-size: 1.02em; font-style: italic; color: var(--ink-2);
+  margin: 1.2em 0; padding: .1em 0 .1em 1.1em; border-left: 2px solid var(--sage);
+}
+
+#preview code {
+  font-family: var(--mono); font-size: .87em;
+  background: var(--sheet-2); border: 1px solid var(--rule-2);
+  border-radius: 5px; padding: .08em .38em;
+}
+#preview pre {
+  font-family: var(--mono); background: var(--sheet-2);
+  border: 1px solid var(--rule-2); border-radius: var(--r-sm);
+  padding: 14px 16px; font-size: .86em; line-height: 1.6;
+}
+#preview pre code { background: none; border: 0; padding: 0; }
+.copy-btn {
+  background: var(--sheet); color: var(--ink-3);
+  border: 1px solid var(--rule); border-radius: 6px;
+  font-family: var(--mono); font-size: 11px;
+  top: 8px; right: 8px; padding: 3px 7px;
+}
+.copy-btn:hover { color: var(--ink); }
+
+/* An earlier rule puts white-space:pre-wrap on every element in the preview,
+   which makes the newlines in the generated table markup render as blank
+   rows. Table structure must stay on `normal`; cell content keeps pre-wrap. */
+/* Collapse runs of line breaks so notes padded with <br><br> stay compact */
+#preview br + br { display: none; }
+
+/* Tables scroll inside their own box so the page never scrolls sideways */
+#preview table {
+  display: block; width: max-content; max-width: 100%; overflow-x: auto;
+  border-collapse: collapse; border: 1px solid var(--rule);
+  border-radius: var(--r-sm); margin: 1.1em 0;
+  font-size: .93em; background: var(--sheet);
+}
+#preview th, #preview td {
+  border: 0; border-bottom: 1px solid var(--rule-2); border-right: 1px solid var(--rule-2);
+  padding: 8px 12px; vertical-align: middle;
+}
+#preview th:last-child, #preview td:last-child { border-right: 0; }
+#preview tr:last-child td { border-bottom: 0; }
+#preview th {
+  background: var(--sheet-2); font-family: var(--ui);
+  font-weight: 600; font-size: .82em; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3); white-space: nowrap;
+}
+
+#preview ul, #preview ol { padding-left: 1.35em; margin: .5em 0 .9em; }
+#preview li { margin-bottom: .28em; line-height: 1.6; }
+#preview li::marker { color: var(--ink-3); }
+#preview hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }
+
+#preview .backlinks { border-top: 1px solid var(--rule); margin-top: 2.5em; }
+#preview .backlinks h4 { font-family: var(--ui); color: var(--ink-3); }
+#preview .backlinks a.backlink { color: var(--sage-2); font-weight: 500; }
+#preview .backlinks a.backlink:hover { background: var(--sage-tint); border-bottom-color: var(--sage); }
+
+/* Date stamps: keep them in the instrument voice, not Times New Roman */
+#preview .gpc-stamp       { font-family: var(--mono) !important; color: var(--sage-2); font-size: .9em; }
+#preview .gregorian-stamp { font-family: var(--mono) !important; color: var(--ink-3); font-size: .9em; }
+
+#preview .task-item, #preview li.task-unchecked { border-radius: 7px; }
+#preview input[type="checkbox"] { accent-color: var(--sage); width: 15px; height: 15px; }
+
+/* ---------- Bottom toolbar: floating, grouped ------------------------------ */
+#toolbar {
+  background: var(--toolbar-bg);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rule);
+  padding: 9px 0 calc(9px + env(safe-area-inset-bottom, 0px));
+}
+#toolbar-inner { gap: 6px; padding: 0 12px; padding-right: 120px; }
+#toolbar button {
+  min-width: 38px; height: 38px; padding: 0 10px;
+  font-family: var(--mono); font-size: 14px;
+  color: var(--ink-2); background: var(--sheet);
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
+  transition: background .14s ease, border-color .14s ease, transform .08s ease;
+}
+#toolbar button:hover { background: var(--sheet-2); color: var(--ink); }
+#toolbar button:active { transform: translateY(1px); background: var(--sage-tint); border-color: var(--sage); }
+
+/* ---------- Popovers ------------------------------------------------------- */
+.floating-dropdown {
+  background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: var(--r); box-shadow: var(--shadow-pop);
+  padding: 5px; overflow: hidden auto;
+}
+.floating-dropdown button,
+.floating-dropdown a.deeplink-btn {
+  font-family: var(--ui); font-size: 14px; color: var(--ink);
+  background: none; border: 0 !important; border-radius: var(--r-sm);
+  padding: 9px 11px; text-align: left;
+}
+.floating-dropdown button:hover,
+.floating-dropdown a.deeplink-btn:hover { background: var(--sage-tint); color: var(--ink); }
+.floating-dropdown::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+.floating-dropdown::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- Sidebar -------------------------------------------------------- */
+#sidebar {
+  box-sizing: border-box;
+  background: var(--sheet); border-right: 1px solid var(--rule);
+  box-shadow: 22px 0 60px -26px rgba(16,26,31,.45);
+  padding: 18px 12px; width: 288px; left: -288px;
+}
+/* Dim the page behind the open panel; without it the sidebar and the writing
+   sheet are the same tone and the panel reads as a ghost. */
+#sidebar.open::before {
+  content: ''; position: fixed; inset: 0 0 0 288px;
+  background: rgba(16,26,31,.34);
+  pointer-events: none;
+}
+.sidebar-item {
+  font-family: var(--ui); font-size: 14.5px; font-weight: 500;
+  color: var(--ink-2); padding: 10px 12px; margin-bottom: 3px; border-radius: var(--r-sm);
+}
+.sidebar-item:hover { background: var(--sheet-2); color: var(--ink); transform: none; }
+.sidebar-item.active { background: var(--sage-tint); color: var(--ink); }
+
+#search-input {
+  font-family: var(--ui); font-size: 14px;
+  background: var(--sheet-2); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 9px 11px;
+}
+#search-input:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px var(--sage-tint); }
+#search-input::placeholder { color: var(--ink-3); }
+
+.note-item {
+  font-size: 14px; color: var(--ink-2);
+  border-bottom: 1px solid var(--rule-2); border-radius: 6px; padding: 8px 10px;
+}
+.note-item:hover { background: var(--sheet-2); }
+.note-item.active { background: var(--sage-tint) !important; color: var(--ink); font-weight: 600; }
+.folder-item { color: var(--ink); font-weight: 500; }
+.search-result .title { color: var(--ink); font-weight: 500; }
+.search-result .snippet { color: var(--ink-3); }
+.search-result mark { background: var(--amber-tint); color: var(--ink); border-radius: 3px; }
+
 </style>
 </head>
 <body>
@@ -934,7 +1330,19 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 
 
 <!-- ========== Section 2.2 - GPC DISPLAY and buttons ========== -->
-<div id="gpc-display"></div>
+<!-- Instrument cluster: the perennial ring encircles the day value, with the
+     GPC month and season progress alongside. #gpc-display keeps its id so the
+     existing calendar + wikilink navigation code is unaffected. -->
+<div id="gpc-cluster">
+  <div id="gpc-dial">
+    <svg id="perennial-ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false"></svg>
+    <div id="gpc-display"></div>
+  </div>
+  <div id="gpc-meta">
+    <div id="gpc-season"></div>
+    <div id="gpc-progress"></div>
+  </div>
+</div>
 
 <div id="gpc-buttons">
   <button data-mode="DOY" class="active">DOY</button>
@@ -951,12 +1359,8 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 | [[📁 Boomerang/Capture|Capture]] | [[📁 Boomerang/Events|Events]] | [[📁 Boomerang/To Do|ToDo]] | [[📁 Boomerang/Shopping|Shopping]] |
 | -- | -- | -- | -- |
 
-<br><br>
-
 | [🗓️ Today](https://www.gpc364.com/2026/03/holidays.html?m=1) | [[📁 Boomerang/⏹️ Time Block|⏹️ Blocks]] | [[📁 Boomerang/📿 Tracker::📿 Tracker]] | [☯️ Balance](https://www.gpc364.com/2025/12/calendar_95.html) | [📅 EZDates](https://www.gpc364.com/2026/01/ez-dates.html) | [🌙 Moon](https://www.gpc364.com/2026/01/my-moon.html) |
 | :---: | :---: |---|---| :---: | :---: |
-
-<br><br>
 
 | Q1 | Q2 | Q3 | Q4 |
 | :--: | :--: | :--: | :--: |
@@ -964,16 +1368,12 @@ h4:not(.collapsed)::before, h5:not(.collapsed)::before, h6:not(.collapsed)::befo
 | [[📁 Boomerang/Duspring|🌺 Duspring]] <br><br> | [[📁 Boomerang/Fivesum|🌺 Fivesum]] <br><br> | [[📁 Boomerang/Oktafall|🌺 Oktafall]] <br><br> | [[📁 Boomerang/Elvawint|🌺 Elvawint]] <br><br> |
 | [[📁 Boomerang/Trispring|🟢 Trispring]] <br><br> | [[📁 Boomerang/Sixsum|🟢 Sixsum]] <br><br> | [[📁 Boomerang/Novafall|🟢 Novafall]] <br><br> | [[📁 Boomerang/Dozawint|🟢 Dozawint]] <br><br> |
 
-<br><br>
-
 | **[[📁 Boomerang/1|1]]** <br><br> | [[📁 Boomerang/2|2]] <br><br> | [[📁 Boomerang/3|3]] <br><br> | [[📁 Boomerang/4|4]] <br><br> | [[📁 Boomerang/5|5]] <br><br> | [[📁 Boomerang/6|6]] <br><br> | [[📁 Boomerang/7|7]] <br><br> |
 | -- | -- | -- | -- | -- | -- | -- |
 | **[[📁 Boomerang/8|8]]** <br><br> | [[📁 Boomerang/9|9]] <br><br> | [[📁 Boomerang/10|10]] <br><br> | [[📁 Boomerang/11|11]] <br><br> | [[📁 Boomerang/12|12]] <br><br> | [[📁 Boomerang/13|13]] <br><br> | [[📁 Boomerang/14|14]] <br><br> |
 | **[[📁 Boomerang/15|15]]** <br><br> | [[📁 Boomerang/16|16]] <br><br> | [[📁 Boomerang/17|17]] <br><br> | [[📁 Boomerang/18|18]] <br><br> | [[📁 Boomerang/19|19]] <br><br> | [[📁 Boomerang/20|20]] <br><br> | [[📁 Boomerang/21|21]] <br><br> |
 | **[[📁 Boomerang/22|22]]** <br><br> | [[📁 Boomerang/23|23]] <br><br> | [[📁 Boomerang/24|24]] <br><br> | [[📁 Boomerang/25|25]] <br><br> | [[📁 Boomerang/26|26]] <br><br> | [[📁 Boomerang/27|27]] <br><br> | [[📁 Boomerang/28|28]] <br><br> |
 | **[[📁 Boomerang/29|29]]** <br><br> | [[📁 Boomerang/30|30]] <br><br> | [[📁 Boomerang/31|31]] <br><br> | | | | |
-
-<br><br><br>
 
 ## - Get Started
 
@@ -2117,7 +2517,7 @@ async loadRecentNotes() {
     const recentList = document.getElementById('recent-list');
     try {
         const notes = await VaultDB.list();
-        const validNotes = notes.filter(n => n && n !== '__folders__');
+        const validNotes = notes.filter(n => n && !n.startsWith('__'));
         
         // Separate folders and root-level notes
         const folders = validNotes.filter(n => n.startsWith('📁 ') && !n.includes('/'));
@@ -5497,9 +5897,54 @@ static getSeason(doy) {
   return 'Winter'; // DOY 274-364 or invalid
 }
 
+// ===== Section 3.3.6 - Perennial ring =====
+// 364 days = 52 heptads x 7 = 4 seasons x 91. The ring is only drawable
+// because the perennial year divides evenly; a Gregorian year cannot be
+// rendered this way, which is precisely the point it makes.
+static renderRing(doy) {
+  const svg = document.getElementById('perennial-ring');
+  if (!svg) return;
+
+  const CX = 32, CY = 32, R = 28;
+  const weekNow = Math.floor((doy - 1) / 7);          // 0..51
+  let out = '';
+
+  for (let i = 0; i < 52; i++) {
+    const a = (-90 + (i / 52) * 360) * Math.PI / 180;
+    const isSeasonStart = i % 13 === 0;               // 13 heptads per season
+    const cls = i === weekNow ? 'tick-now'
+              : isSeasonStart ? 'season'
+              : i < weekNow ? 'tick-past' : 'tick';
+    const inner = R - (isSeasonStart ? 7 : i === weekNow ? 7 : 2.6);
+    out += '<line x1="' + (CX + Math.cos(a) * inner).toFixed(2) +
+           '" y1="' + (CY + Math.sin(a) * inner).toFixed(2) +
+           '" x2="' + (CX + Math.cos(a) * R).toFixed(2) +
+           '" y2="' + (CY + Math.sin(a) * R).toFixed(2) +
+           '" class="' + cls + '"/>';
+  }
+
+  const ad = (-90 + ((doy - 1) / 364) * 360) * Math.PI / 180;
+  out += '<circle class="today" cx="' + (CX + Math.cos(ad) * R).toFixed(2) +
+         '" cy="' + (CY + Math.sin(ad) * R).toFixed(2) + '" r="2.4"/>';
+  svg.innerHTML = out;
+
+  let rem = doy, mi = 0;
+  for (let i = 0; i < this.gpcMonths.length; i++) {
+    if (rem <= this.gpcMonths[i].days) { mi = i; break; }
+    rem -= this.gpcMonths[i].days;
+  }
+  const dayInSeason = ((doy - 1) % 91) + 1;
+  const seasonEl = document.getElementById('gpc-season');
+  const progEl = document.getElementById('gpc-progress');
+  if (seasonEl) seasonEl.textContent = this.gpcMonths[mi].name;
+  if (progEl) progEl.innerHTML =
+    'Day <span class="now">' + dayInSeason + '</span> of 91 &middot; Heptad ' + ((weekNow % 13) + 1);
+}
+
 // ===== Section 3.3.4 - Display Updates =====
 static updateGPC() {
   const { doyToday } = this.calculateGPC();
+  this.renderRing(doyToday);
   const emoji = this.weekEmojis[(doyToday - 1) % 7] || '';
   let displayHtml = emoji + ' ';
   

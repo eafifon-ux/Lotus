@@ -11,7 +11,7 @@
  *
  * Bump CACHE whenever the precached asset list changes.
  */
-const CACHE = 'lotus-2026-08-31b';
+const CACHE = 'lotus-2026-09-04a';
 
 const ASSETS = [
   './',
@@ -21,6 +21,10 @@ const ASSETS = [
   './icon-512.png',
   './vendor/marked.min.js',
   './vendor/jszip.min.js',
+  './vendor/fonts/familjen-grotesk-var.woff2',
+  './vendor/fonts/literata-var.woff2',
+  './vendor/fonts/dm-mono-400.woff2',
+  './vendor/fonts/dm-mono-500.woff2',
 ];
 
 self.addEventListener('install', (event) => {
