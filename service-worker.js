@@ -11,7 +11,7 @@
  *
  * Bump CACHE whenever the precached asset list changes.
  */
-const CACHE = 'lotus-2026-09-04a';
+const CACHE = 'lotus-2026-09-05a';
 
 const ASSETS = [
   './',
@@ -62,11 +62,18 @@ self.addEventListener('fetch', (event) => {
 
   // App navigations: try the network, fall back to the cached shell.
   if (request.mode === 'navigate') {
+    const root = new URL('./', self.registration.scope).pathname;
+    const isShell = url.pathname === root || url.pathname === root + 'index.html';
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          // Only the app shell may refresh the shell cache. Caching any other
+          // in-scope page here (docs/, for instance) would leave that page
+          // stored as the shell, so the app would open it when offline.
+          if (isShell && response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          }
           return response;
         })
         .catch(() => caches.match('./index.html', { ignoreSearch: true })
