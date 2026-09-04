@@ -5765,6 +5765,13 @@ function showUpdateToast(reg) {
 const DeepLinkManager = {
   KEY: '__customDeeplinks',
   
+  // Bump when a starter link is added to getDefaults(), and tag that link with
+  // `since: <the new version>`. Users are only offered links newer than the
+  // version they have already seen, so starter links they renamed or deleted
+  // are never resurrected.
+  DEFAULTS_VERSION: 2,
+  VERSION_KEY: '__deeplinkDefaultsVersion',
+  
   async load() {
     let links = [];
     try {
@@ -5772,15 +5779,29 @@ const DeepLinkManager = {
       if (saved) links = JSON.parse(saved);
     } catch (e) {}
     
-    if (!links.length) return this.getDefaults();
+    const strip = ({ text, url }) => ({ text, url });
+    
+    // No saved list yet: this user starts on the current defaults.
+    if (!links.length) {
+      await VaultDB.set(this.VERSION_KEY, String(this.DEFAULTS_VERSION));
+      return this.getDefaults().map(strip);
+    }
+    
+    let seen = 1;
+    try {
+      const v = await VaultDB.get(this.VERSION_KEY);
+      if (v) seen = parseInt(v, 10) || 1;
+    } catch (e) {}
+    if (seen >= this.DEFAULTS_VERSION) return links;
     
     const savedTexts = new Set(links.map(l => l.text));
-    const defaults = this.getDefaults();
-    for (const def of defaults) {
-      if (!savedTexts.has(def.text)) {
-        links.push(def);
-      }
-    }
+    this.getDefaults().forEach((def, i) => {
+      if ((def.since || 1) <= seen || savedTexts.has(def.text)) return;
+      // Insert at the slot the link was designed for rather than appending it.
+      links.splice(Math.min(i, links.length), 0, strip(def));
+    });
+    await VaultDB.set(this.VERSION_KEY, String(this.DEFAULTS_VERSION));
+    await this.save(links);
     return links;
   },
   
@@ -5798,6 +5819,9 @@ const DeepLinkManager = {
       { text: "🤖 ChatGPT", url: "https://chatgpt.com/?q=" },
       { text: "✨ Gemini", url: "https://gemini.google.com/app?q=" },
       { text: "📨 Email", url: "mailto:" },
+      // Opens the Gmail app itself (inbox) rather than a compose window.
+      // Falls back to the Gmail web inbox where the Android app isn't present.
+      { text: "📥 Inbox", since: 2, url: "intent://#Intent;package=com.google.android.gm;S.browser_fallback_url=https%3A%2F%2Fmail.google.com%2F;end" },
       { text: "📞 Text", url: "sms:" },
       { text: "🍏 WhatsApp", url: "https://wa.me/" },
       { text: "💬 Messenger", url: "https://m.me/" },
