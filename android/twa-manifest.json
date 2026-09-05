@@ -1,0 +1,43 @@
+{
+  "packageId": "com.rythos.app",
+  "host": "eafifon-ux.github.io",
+  "name": "Rythos",
+  "launcherName": "Rythos",
+  "display": "standalone",
+  "themeColor": "#101A1F",
+  "themeColorDark": "#101A1F",
+  "navigationColor": "#101A1F",
+  "navigationColorDark": "#101A1F",
+  "navigationDividerColor": "#101A1F",
+  "navigationDividerColorDark": "#101A1F",
+  "backgroundColor": "#101A1F",
+  "enableNotifications": false,
+  "startUrl": "/Lotus/",
+  "iconUrl": "https://eafifon-ux.github.io/Lotus/icon-512.png",
+  "maskableIconUrl": "https://eafifon-ux.github.io/Lotus/icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "<local path to rythos-upload.keystore \u2014 never committed>",
+    "alias": "rythos-upload"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://eafifon-ux.github.io/Lotus/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://eafifon-ux.github.io/Lotus/",
+  "minSdkVersion": 23,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "1.0.0"
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.rythos.app",
+      "sha256_cert_fingerprints": [
+        "92:B8:5C:FD:94:F8:7B:CE:DD:18:38:7B:5C:18:A5:C2:C7:A7:29:A7:B8:80:23:10:76:0E:F5:CB:31:8C:AD:F7"
+      ]
+    }
+  }
+]

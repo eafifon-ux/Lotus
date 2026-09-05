@@ -11,3 +11,10 @@ node_modules/
 
 # Icon working files; the shipped icons live at the repo root
 assets/generated/
+
+# Generated Android project and signed binaries; rebuild from android/twa-manifest.json
+android/build/
+android/app/
+*.keystore
+*.aab
+*.apk
