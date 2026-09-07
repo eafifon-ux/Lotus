@@ -7315,7 +7315,7 @@ body.lotus-events-collapsed #now-strip {
 
   function gpcToday() {
     try {
-      if (window.GPCCalendar && typeof GPCCalendar.calculateGPC === 'function') {
+      if ((typeof GPCCalendar !== "undefined" ? GPCCalendar : null) && typeof GPCCalendar.calculateGPC === 'function') {
         const r = GPCCalendar.calculateGPC();
         if (r && r.doyToday >= 1) return r;
       }
@@ -7324,7 +7324,7 @@ body.lotus-events-collapsed #now-strip {
   }
 
   function stampsForDoy(doy) {
-    const Cal = window.GPCCalendar;
+    const Cal = (typeof GPCCalendar !== "undefined" ? GPCCalendar : null);
     const emojis = (Cal && Cal.weekEmojis) ? Cal.weekEmojis : WEEK_EMOJIS;
     const emoji = emojis[(doy - 1) % 7] || '';
     const heptad = (Cal && Cal.heptadMap) ? (Cal.heptadMap[doy] || '') : '';
@@ -7405,10 +7405,19 @@ body.lotus-events-collapsed #now-strip {
       });
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (full, label, url) {
       var href = String(url || '').trim();
-      if (!/^(https?:|mailto:|sms:|tel:|geo:|\/\/)/i.test(href) && href.charAt(0) !== '/') {
-        return full;
-      }
-      return '<a class="event-link" href="' + escapeAttr(href) + '" target="_blank" rel="noopener noreferrer">' +
+      // Anything that can execute script stays blocked. Everything else is
+      // allowed: an allow-list of http/mailto/sms/tel silently refused the
+      // app links the launcher itself hands out - intent:// for the Gmail
+      // inbox, uber://, spotify://, audible:// - so they rendered as plain
+      // text inside an event instead of opening the app.
+      if (/^(javascript|data|vbscript|file|blob):/i.test(href)) return full;
+      var isRelative = href.charAt(0) === '/' || href.indexOf('//') === 0;
+      if (!isRelative && !/^[a-z][a-z0-9+.-]*:/i.test(href)) return full;
+      // Only open a new tab for the web. An app scheme is handed to the OS,
+      // and a new tab would be left behind empty.
+      var newTab = /^(https?:)?\/\//i.test(href) || /^https?:/i.test(href);
+      return '<a class="event-link" href="' + escapeAttr(href) + '"' +
+        (newTab ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' +
         escapeHtml(label) + '</a>';
     });
     return s;
@@ -7459,7 +7468,7 @@ body.lotus-events-collapsed #now-strip {
       ? core.currentNote
       : null;
 
-    if (window.VaultDB && typeof VaultDB.list === 'function') {
+    if (typeof VaultDB !== 'undefined' && typeof VaultDB.list === 'function') {
       let names = [];
       try { names = await VaultDB.list(); } catch (e) { names = []; }
       const preferred = EVENT_NOTE_CANDIDATES.filter(function (n) { return names.includes(n); });
@@ -7565,7 +7574,7 @@ body.lotus-events-collapsed #now-strip {
     const todayInfo = gpcToday();
     const doyToday = todayInfo.doyToday;
     const todayS = stampsForDoy(doyToday);
-    const heptadOn = !!(window.GPCCalendar && GPCCalendar.heptadEnabled);
+    const heptadOn = !!((typeof GPCCalendar !== "undefined" ? GPCCalendar : null) && GPCCalendar.heptadEnabled);
     const meta = [todayS.dos, todayS.dom, heptadOn ? todayS.heptad : ''].filter(Boolean).join(' · ');
     let rows = '';
     const past = state.dir === 'past';
@@ -7686,7 +7695,7 @@ body.lotus-events-collapsed #now-strip {
     }
     const name = state.sourceNote || EVENT_NOTE_CANDIDATES[0];
     let text = '';
-    if (window.VaultDB && typeof VaultDB.get === 'function') {
+    if (typeof VaultDB !== 'undefined' && typeof VaultDB.get === 'function') {
       try { text = (await VaultDB.get(name)) || ''; } catch (e) { text = ''; }
     }
     return { text: text, name: name, live: false };
@@ -7697,10 +7706,10 @@ body.lotus-events-collapsed #now-strip {
     if (live && core && core.editor) {
       core.editor.value = text;
       if (typeof core.updatePreviewAndSave === 'function') await core.updatePreviewAndSave();
-      else if (window.VaultDB && typeof VaultDB.set === 'function') await VaultDB.set(name, text);
+      else if (typeof VaultDB !== 'undefined' && typeof VaultDB.set === 'function') await VaultDB.set(name, text);
       return;
     }
-    if (window.VaultDB && typeof VaultDB.set === 'function') {
+    if (typeof VaultDB !== 'undefined' && typeof VaultDB.set === 'function') {
       await VaultDB.set(name, text);
     }
     if (core && core.currentNote === name && core.editor) core.editor.value = text;
@@ -8516,7 +8525,7 @@ body.lotus-htb-view #preview { display:none !important; }
     if (btn && !btn.__htbStripNav) {
       btn.__htbStripNav = true;
       btn.addEventListener('click', function () {
-        if (window.GPCCalendar && GPCCalendar.heptadEnabled) setTimeout(goCurrentHeptad, 40);
+        if ((typeof GPCCalendar !== "undefined" ? GPCCalendar : null) && GPCCalendar.heptadEnabled) setTimeout(goCurrentHeptad, 40);
       });
     }
   }
