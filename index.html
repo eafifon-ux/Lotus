@@ -8206,6 +8206,8 @@ body.lotus-events-collapsed #now-strip {
   display:grid; grid-template-columns: 28px 36px minmax(0,1fr);
   gap:8px; align-items:center; padding:9px 12px; border-top:1px solid #f0f0f0; font-size:16px; cursor:pointer;
 }
+#htb-strip .htb-dih { margin-left:auto; font-size:12px; color:#6E7D79; white-space:nowrap; }
+#htb-strip .htb-row.current .num .htb-dot { margin-left:3px; font-size:10px; font-weight:700; color:#B4762A; }
 #htb-strip .htb-row.season { grid-template-columns:1fr; background:#fafafa; font-weight:700; }
 #htb-strip .htb-row.quarter { padding-left:22px; font-size:14px; color:#444; }
 #htb-strip .htb-row.current { background:#fff8d6; box-shadow:inset 3px 0 0 #e6b800; font-weight:600; }
@@ -8266,6 +8268,22 @@ body.lotus-htb-view #preview { display:none !important; }
       const h = GPCCalendar.heptadMap[doyToday] || '';
       const m = String(h).match(WEEK_RE);
       return m ? { key: suitKey(m[1]), week: +m[2] } : null;
+    } catch (e) { return null; }
+  }
+
+  // Which day of the current heptad today is. Heptads are mostly seven days
+  // but three per season run to nine, so the length is measured rather than
+  // assumed.
+  function dayInHeptad() {
+    try {
+      const { doyToday } = GPCCalendar.calculateGPC();
+      const map = GPCCalendar.heptadMap;
+      const hep = map[doyToday];
+      if (!hep) return null;
+      let start = doyToday, end = doyToday;
+      while (start > 1 && map[start - 1] === hep) start--;
+      while (end < 364 && map[end + 1] === hep) end++;
+      return { day: doyToday - start + 1, of: end - start + 1 };
     } catch (e) { return null; }
   }
 
@@ -8419,7 +8437,19 @@ body.lotus-htb-view #preview { display:none !important; }
   function jumpCurrentWeek() {
     const cur = currentWeek();
     const el = cur && document.getElementById('heptad-' + cur.key + '-' + cur.week);
-    if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+    if (!el) return;
+    // scrollIntoView cannot resolve a scroller in this view: the strip itself
+    // is overflow:hidden and body reports almost no height, so the call is a
+    // no-op. Scroll the window to the row's own document offset instead.
+    const box = el.getBoundingClientRect();
+    const holder = el.closest('#htb-strip');
+    if (holder && holder.scrollHeight > holder.clientHeight + 2) {
+      holder.scrollTop = el.offsetTop - Math.round(holder.clientHeight / 2) + Math.round(box.height / 2);
+      return;
+    }
+    const docTop = box.top + (window.scrollY || window.pageYOffset || 0);
+    const target = Math.max(0, docTop - Math.round((window.innerHeight || 600) / 2) + Math.round(box.height / 2));
+    window.scrollTo({ top: target, behavior: 'auto' });
   }
 
   function goCurrentHeptad() {
@@ -8464,10 +8494,13 @@ body.lotus-htb-view #preview { display:none !important; }
     const cur = currentWeek();
     const glyph = cur ? (SHOW[cur.key] || '') : '';
     const redNow = cur && (cur.key === 'diamonds' || cur.key === 'hearts');
+    const dih = dayInHeptad();
     let html = '<div class="htb-head"><strong>' + (isBlankHep() ? 'Blank Heptad' : 'Heptad') +
       '</strong><span class="mark ' +
       (redNow ? 'red' : 'black') + '">' + esc(glyph) + '</span><span>' +
-      (cur ? cur.week : '') + '</span></div>' + hepNav();
+      (cur ? cur.week : '') + '</span>' +
+      (dih ? '<span class="htb-dih">day ' + dih.day + ' of ' + dih.of + '</span>' : '') +
+      '</div>' + hepNav();
     rows.forEach(function (r) {
       if (r.type === 'season') {
         html += '<div class="htb-row season">' + esc(r.title) + '</div>';
@@ -8477,7 +8510,7 @@ body.lotus-htb-view #preview { display:none !important; }
       const red = (r.key === 'diamonds' || r.key === 'hearts');
       html += '<div class="htb-row' + (on ? ' current' : '') + '" data-idx="' + r.idx + '" id="heptad-' + r.key + '-' + r.week + '">' +
         '<span class="mark ' + (red ? 'red' : 'black') + '">' + (SHOW[r.key] || '') + '</span>' +
-        '<span class="num">' + r.week + '</span>' +
+        '<span class="num">' + r.week + (on && dih ? '<sup class="htb-dot">' + dih.day + '</sup>' : '') + '</span>' +
         '<span class="note' + (r.note ? '' : ' empty') + '">' + (r.note ? renderAnno(r.note) : '—') + '</span></div>';
     });
     const el = host();
@@ -8485,6 +8518,17 @@ body.lotus-htb-view #preview { display:none !important; }
     el.innerHTML = html;
     el.style.display = '';
     bind(el);
+
+    // The page used to open at the top, showing week one whatever the date.
+    // Bring today's heptad into view instead - but only when the page is
+    // first opened, so the thirty-second repaint does not drag the reader
+    // back while they are looking at another week.
+    const stamp = curNote() + '|' + (cur ? cur.key + cur.week : '');
+    if (state.hepShownFor !== stamp) {
+      state.hepShownFor = stamp;
+      setTimeout(jumpCurrentWeek, 60);
+      setTimeout(jumpCurrentWeek, 320);
+    }
   }
 
   function renderTime() {
