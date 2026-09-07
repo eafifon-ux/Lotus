@@ -1271,6 +1271,29 @@ body {
 #toolbar button:hover { background: var(--sheet-2); color: var(--ink); }
 #toolbar button:active { transform: translateY(1px); background: var(--sage-tint); border-color: var(--sage); }
 
+/* ---------- Starter-vault prompt ------------------------------------------- */
+#vault-prompt {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 1300;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  max-width: calc(100vw - 28px);
+  padding: 11px 13px;
+  background: var(--sheet); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: var(--r);
+  box-shadow: var(--shadow-pop);
+  font-family: var(--ui); font-size: 14px;
+}
+#vault-prompt button {
+  font-family: var(--ui); font-size: 13.5px; font-weight: 500;
+  padding: 7px 12px; border-radius: var(--r-sm); cursor: pointer;
+  border: 1px solid var(--rule); background: var(--sheet-2); color: var(--ink-2);
+}
+#vault-prompt #vault-load {
+  background: var(--sage); border-color: var(--sage); color: var(--sage-on);
+}
+#vault-prompt button:hover { filter: brightness(.96); }
+
 /* ---------- Popovers ------------------------------------------------------- */
 .floating-dropdown {
   background: var(--sheet); border: 1px solid var(--rule);
@@ -6059,10 +6082,91 @@ static updateGPC() {
 
 // Section 4.1 - DOMContentLoaded event handler
 
-// ====================== (removed) FULL VAULT LOADER ======================
-// The 'Load Full Vault' feature downloaded a ZIP from a personal GitHub
-// account and was removed for the Play Store release. Users import their
-// own notes via Import All in the sidebar.
+// ====================== STARTER VAULT ======================
+// The starter vault is the set of notes the Home page links into, so without
+// it most links on a fresh install go nowhere. It used to be fetched from a
+// personal GitHub account, which meant a cross-origin download that often
+// failed and left the user copying a URL by hand. It now ships with the app,
+// so loading it is a single request to our own origin.
+const VAULT_URL = 'vault/rythos-starter-vault.zip';
+const VAULT_DISMISSED_KEY = 'rythos-vault-prompt-dismissed';
+
+// A vault that holds nothing but the seeded Home note is treated as empty.
+async function vaultIsEmpty() {
+  try {
+    const names = (await VaultDB.list()).filter((n) => n && !n.startsWith('__'));
+    return names.filter((n) => n !== 'Home').length === 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadStarterVault(button) {
+  const setLabel = (t) => { if (button) button.textContent = t; };
+  try {
+    setLabel('Loading…');
+    const res = await fetch(VAULT_URL);
+    if (!res.ok) throw new Error('Could not download the starter notes (' + res.status + ')');
+
+    const zip = await new JSZip().loadAsync(await res.arrayBuffer());
+    const files = Object.values(zip.files).filter((f) => !f.dir && /\.md$/i.test(f.name));
+
+    let added = 0, skipped = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const name = f.name.replace(/\.md$/i, '');
+      // Never overwrite something the user has already written.
+      if (await VaultDB.get(name)) { skipped++; continue; }
+      await VaultDB.set(name, await f.async('text'));
+      added++;
+      if (i % 10 === 0) setLabel('Loading… ' + Math.round((i / files.length) * 100) + '%');
+    }
+
+    localStorage.setItem(VAULT_DISMISSED_KEY, '1');
+    setLabel('Loaded ' + added + ' notes');
+    if (window.editorCore) {
+      window.editorCore.cachedIndex = null;
+      await window.editorCore.buildNoteIndex();
+      await window.editorCore.switchToNote(window.editorCore.currentNote);
+    }
+    document.getElementById('vault-prompt')?.remove();
+    return { added, skipped };
+  } catch (err) {
+    devError('Starter vault failed:', err);
+    setLabel('Could not load — tap to retry');
+    return null;
+  }
+}
+
+// Quiet, dismissible bar rather than a modal over the app.
+function showVaultPrompt() {
+  if (document.getElementById('vault-prompt')) return;
+  const bar = document.createElement('div');
+  bar.id = 'vault-prompt';
+  bar.innerHTML =
+    '<span>Your notebook is empty. Load the starter notes?</span>' +
+    '<button type="button" id="vault-load">Load notes</button>' +
+    '<button type="button" id="vault-skip" aria-label="Dismiss">Not now</button>';
+  document.body.appendChild(bar);
+  bar.querySelector('#vault-load').addEventListener('click', (e) => loadStarterVault(e.currentTarget));
+  bar.querySelector('#vault-skip').addEventListener('click', () => {
+    localStorage.setItem(VAULT_DISMISSED_KEY, '1');
+    bar.remove();
+  });
+}
+
+function addLoadVaultButton() {
+  const section = document.querySelector('#sidebar .sidebar-section');
+  if (!section || document.getElementById('vault-sidebar-btn')) return;
+  const btn = document.createElement('div');
+  btn.className = 'sidebar-item';
+  btn.id = 'vault-sidebar-btn';
+  btn.textContent = '📦 Starter notes';
+  btn.title = 'Load the starter set of notes the Home page links to';
+  btn.addEventListener('click', (e) => { e.stopPropagation(); loadStarterVault(btn); });
+  const exportBtn = section.querySelector('[data-action="export-all"]');
+  if (exportBtn) exportBtn.before(btn); else section.appendChild(btn);
+}
 
 // ====================== INITIALIZATION ======================
 // Section 4.1 - DOMContentLoaded event handler
@@ -6073,6 +6177,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Create and initialize editor core
   window.editorCore = new EditorCore();
   window.editorCore.toggleEditMode(); // Start in view mode
+
+  // Offer the starter notes when there is nothing but the seeded Home note.
+  setTimeout(addLoadVaultButton, 800);
+  setTimeout(async () => {
+    if (localStorage.getItem(VAULT_DISMISSED_KEY)) return;
+    if (await vaultIsEmpty()) showVaultPrompt();
+  }, 1500);
 
   // Optimized GPC display click handler
   document.getElementById('gpc-display').addEventListener('click', async (e) => {
