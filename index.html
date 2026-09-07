@@ -7353,6 +7353,29 @@ body.lotus-events-collapsed #now-strip {
   border-bottom: 1px solid #1a73e8;
 }
 .now-row .place { color: #888; font-size: 12px; white-space: nowrap; }
+
+/* Tapping a row opens it: the title stops being clipped, and the ordinary
+   calendar date for that day appears. Collapsed is the default so the strip
+   still scans as one line per day. */
+.now-row .greg { display: none; }
+.now-row.expanded {
+  grid-template-columns: 28px 42px 36px minmax(0, 1fr) auto;
+  align-items: start;
+}
+.now-row.expanded .titles {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.now-row.expanded .greg {
+  display: block;
+  grid-column: 4 / -1;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #6b6b6b;
+  font-variant-numeric: tabular-nums;
+}
+.now-row.today.expanded .greg { color: #7a6100; }
 .now-row input.now-inline {
   width: 100%;
   min-width: 0;
@@ -7422,6 +7445,44 @@ body.lotus-events-collapsed #now-strip {
     }
     const doyToday = Math.max(1, Math.min(364, remainingDays + 1));
     return { gpcYear, doyToday };
+  }
+
+  // Day-of-year -> ordinary calendar date, for the perennial year we are in.
+  // Walks the same leap-week rules the calendar itself uses (7 / 49 / 70 year
+  // cycles) to find where the current year starts, then counts forward.
+  function gregorianForDoy(doy) {
+    var Cal = (typeof GPCCalendar !== 'undefined') ? GPCCalendar : null;
+    if (!Cal || !Cal.epochDate) return null;
+    var epoch = Cal.epochDate.getTime();
+    var now = new Date();
+    var todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    var remaining = Math.floor((todayUTC - epoch) / 86400000);
+    var y = Cal.epochYear;
+    var startOffset = 0;
+    while (true) {
+      var rel = y - Cal.epochYear;
+      var leap = 0;
+      if (rel % 7 === 6) leap += 7;
+      if (rel % 49 === 48) leap += 7;
+      if ((rel + 29) % 70 === 0) leap += 7;
+      var len = 364 + leap;
+      if (remaining < len) break;
+      remaining -= len;
+      startOffset += len;
+      y++;
+    }
+    var d = new Date(epoch + (startOffset + (doy - 1)) * 86400000);
+    return d;
+  }
+
+  function gregorianLabel(doy) {
+    var d = gregorianForDoy(doy);
+    if (!d || isNaN(d.getTime())) return '';
+    var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return days[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' +
+           months[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
   }
 
   function gpcToday() {
@@ -7650,6 +7711,7 @@ body.lotus-events-collapsed #now-strip {
         (titlesHtml || escapeHtml(dlt === 0 ? 'No event titled yet' : '—')) +
       '</span>' +
       '<span class="place">' + escapeHtml(s.dom + (s.heptad ? ' · ' + s.heptad : '')) + '</span>' +
+      '<span class="greg">' + escapeHtml(gregorianLabel(parseInt(s.doyText, 10))) + '</span>' +
     '</div>';
   }
 
@@ -7785,10 +7847,14 @@ body.lotus-events-collapsed #now-strip {
         if (lastRow === row && now - lastTap < 420) {
           lastTap = 0;
           lastRow = null;
+          // second tap of a double-tap: undo the expand it just caused,
+          // then hand over to editing
+          row.classList.toggle('expanded');
           startInlineEdit(row);
         } else {
           lastTap = now;
           lastRow = row;
+          row.classList.toggle('expanded');
         }
       });
       row.addEventListener('dblclick', function (e) {
