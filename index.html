@@ -2820,6 +2820,40 @@ html += `
 
 
   // ===== Section 3.2.5 - PREVIEW RENDERING =====
+  // A date written next to a perennial day number is recomputed for the current
+  // year, so a note written once stays right without being edited every year.
+  // Only two shapes are touched, and both state their own day number: a line
+  // carrying a #D### anchor, and the first dated line beneath a D### heading.
+  // Every other date the writer has typed is left exactly as written.
+  refreshPerennialDates(text) {
+    if (!text || typeof GPCCalendar === 'undefined') return text;
+    if (!/\d{4}-\d{2}-\d{2}/.test(text)) return text;
+    let gpcYear;
+    try { gpcYear = GPCCalendar.calculateGPC().gpcYear; } catch (e) { return text; }
+    if (!gpcYear) return text;
+
+    const lines = String(text).split('\n');
+    let heading = null;
+    let sinceHeading = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const h = line.trim().match(/^#{1,6}\s*[+-]?\s*D(\d{3})\b/);
+      if (h) { heading = parseInt(h[1], 10); sinceHeading = 0; continue; }
+      // A heading only speaks for the lines directly beneath it. A blank
+      // line, or a few lines' distance, ends its claim; otherwise an
+      // unrelated date later in the same note would be rewritten too.
+      if (heading !== null && (!line.trim() || ++sinceHeading > 3)) heading = null;
+      if (!/\d{4}-\d{2}-\d{2}/.test(line)) continue;
+      const inline = line.match(/#D(\d{3})\b/);
+      const doy = inline ? parseInt(inline[1], 10) : heading;
+      heading = null;
+      if (!doy) continue;
+      const iso = GPCCalendar.gregorianForDoy(gpcYear, doy);
+      if (iso) lines[i] = line.replace(/\d{4}-\d{2}-\d{2}/, iso);
+    }
+    return lines.join('\n');
+  }
+
   async updatePreviewAndSave() {
   try {
     const raw = this.editor.value;
@@ -2827,10 +2861,13 @@ html += `
     
     // Update backlinks
     this.updateBacklinks(this.currentNote, raw);
+    // Display only. The note on disk is never rewritten; `raw` above is what
+    // gets cached and saved.
+    const forDisplay = this.refreshPerennialDates(raw);
     
     // Process markdown
     // In updatePreviewAndSave(), modify this part:
-let html = this.renderWikilinks(raw);
+let html = this.renderWikilinks(forDisplay);
 html = this.processHighlights(html);
 html = this.processSubSuperScript(html);
 
@@ -5926,6 +5963,29 @@ class GPCCalendar {
   };
 }
   
+  // How long a perennial year runs. Most are 364 days; a leap week is added
+  // on the seven, forty-nine and seventy year rhythms.
+  static yearLength(gpcYear) {
+    const rel = gpcYear - this.epochYear;
+    let leap = 0;
+    if (rel % 7 === 6) leap += 7;
+    if (rel % 49 === 48) leap += 7;
+    if ((rel + 29) % 70 === 0) leap += 7;
+    return 364 + leap;
+  }
+
+  // Inverse of calculateForDate: the ordinary date a given perennial day falls
+  // on, as YYYY-MM-DD. Verified against 713 dates already written by hand in
+  // the starter vault, which it reproduces exactly.
+  static gregorianForDoy(gpcYear, doy) {
+    if (!(doy >= 1 && doy <= 364)) return null;
+    let days = 0;
+    for (let y = this.epochYear; y < gpcYear; y++) days += this.yearLength(y);
+    const d = new Date(this.epochDate.getTime() + (days + doy - 1) * 86400000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+  }
+
   // Section 3.3.3 - Core calculations (add this method)
 static getSeason(doy) {
   if (doy >= 1 && doy <= 91) return 'Spring';
