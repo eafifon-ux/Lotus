@@ -1361,6 +1361,13 @@ body {
 /* Highlight colours are deliberately fixed in both themes, so the text sitting
    on them is pinned dark rather than inheriting the theme's ink. */
 #preview .highlight { color: #101A1F; }
+/* Links and date stamps inside a highlight carry their own sage, which is the
+   light variant in dark mode and disappears on these backgrounds. They keep a
+   sage identity, darkened to stay legible on the highlight itself. */
+#preview .highlight a,
+#preview .highlight a.wikilink,
+#preview .highlight .gpc-stamp,
+#preview .highlight .gregorian-stamp { color: #2F4A3F; }
 .search-result .title { color: var(--ink); font-weight: 500; }
 .search-result .snippet { color: var(--ink-3); }
 .search-result mark { background: var(--amber-tint); color: var(--ink); border-radius: 3px; }
@@ -6401,6 +6408,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').then((reg) => {
+      // Ask for a new worker rather than waiting on the browser's own update
+      // heuristics. Installed as a standalone app, Chrome can go a long time
+      // without checking, which strands the user on an old build indefinitely.
+      // Checked on load and whenever the app is brought back to the front.
+      const checkForUpdate = () => { reg.update().catch(() => { /* offline */ }); };
+      checkForUpdate();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkForUpdate();
+      });
+
       reg.addEventListener('updatefound', () => {
         const incoming = reg.installing;
         if (!incoming) return;
