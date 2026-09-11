@@ -54,6 +54,13 @@
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Follows your phone's light or dark theme"
+    },
+    {
+      "src": "screenshots/phone-3.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Every day carries its number and its ordinary date"
     }
   ]
 }
