@@ -1346,7 +1346,21 @@ body {
 }
 .note-item:hover { background: var(--sheet-2); }
 .note-item.active { background: var(--sage-tint) !important; color: var(--ink); font-weight: 600; }
+/* Sections 1.2 and 1.5 both give .folder-item a light background. Without a
+   theme-aware override the near-white --ink text lands on it and the row reads
+   as blank in dark mode, so the background is restated here alongside the ink. */
 .folder-item { color: var(--ink); font-weight: 500; }
+.folder-item, .note-item.folder-item {
+  background: var(--sheet-2); border-left-color: var(--rule);
+}
+.folder-item:hover, .note-item.folder-item:hover { background: var(--sheet); }
+.folder-item.active, .note-item.folder-item.active {
+  background: var(--sage-tint) !important; color: var(--ink);
+}
+
+/* Highlight colours are deliberately fixed in both themes, so the text sitting
+   on them is pinned dark rather than inheriting the theme's ink. */
+#preview .highlight { color: #101A1F; }
 .search-result .title { color: var(--ink); font-weight: 500; }
 .search-result .snippet { color: var(--ink-3); }
 .search-result mark { background: var(--amber-tint); color: var(--ink); border-radius: 3px; }
@@ -1360,7 +1374,8 @@ body {
 <!-- ========== Section 2.1 - TOP BAR with Google mode========== -->
 <div id="top-bar">
   <button id="mode-toggle" title="View / Edit">✏️</button>
-  <div id="offline-alert" style="display:none; position:fixed; top:10px; left:10px; background:#ffcc00; padding:6px 12px; border-radius:4px; font-size:14px; z-index:10000;">
+  <!-- Anchored bottom-left: at top-left it sat on top of the perennial ring. -->
+  <div id="offline-alert" style="display:none; position:fixed; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); left:12px; background:var(--amber); color:#FFFFFF; padding:6px 12px; border-radius:var(--r-sm); font-size:13px; font-family:var(--ui); z-index:1200;">
     ⚠️ Offline Mode
   </div>
 </div>
@@ -2075,12 +2090,39 @@ document.addEventListener('click', (e) => {
   const sidebarToggle = document.getElementById('sidebar-toggle');
   const sidebar = document.getElementById('sidebar');
   
-  sidebarToggle.addEventListener('click', async () => {
-    sidebar.classList.toggle('open');
-    if (sidebar.classList.contains('open')) {
-      this.loadRecentNotes();
+  // The drawer is a state within the app, not a page. Opening it pushes a
+  // history entry so Android's back button closes it; without that, back fell
+  // through to the browser and quit the app outright from an open drawer.
+  const openDrawer = () => {
+    sidebar.classList.add('open');
+    if (!(history.state && history.state.rythosDrawer)) {
+      try { history.pushState({ rythosDrawer: 1 }, ''); } catch (e) { /* opaque origin */ }
     }
+    this.loadRecentNotes();
+  };
+  const closeDrawer = (fromPopstate) => {
+    if (!sidebar.classList.contains('open')) return;
+    sidebar.classList.remove('open');
+    if (!fromPopstate && history.state && history.state.rythosDrawer) {
+      try { history.back(); } catch (e) { /* no-op */ }
+    }
+  };
+  this.closeDrawer = closeDrawer;
+
+  sidebarToggle.addEventListener('click', async () => {
+    if (sidebar.classList.contains('open')) closeDrawer(); else openDrawer();
   });
+
+  window.addEventListener('popstate', () => {
+    if (sidebar.classList.contains('open')) closeDrawer(true);
+  });
+
+  // Tapping the page outside the drawer dismisses it, as a drawer is expected to.
+  document.addEventListener('click', (e) => {
+    if (!sidebar.classList.contains('open')) return;
+    if (sidebar.contains(e.target) || sidebarToggle.contains(e.target)) return;
+    closeDrawer();
+  }, true);
   
   // ── Long-press on 📁 → go Home + Alien Halo ──────────────────
 let pressTimer = null;
@@ -2172,7 +2214,7 @@ sidebarToggle.addEventListener('pointerdown', (e) => {
     } else {
       this.showToast('Already at Home');
     }
-    sidebar.classList.remove('open');
+    closeDrawer();
   }, LONG_PRESS_MS);
 });
 
@@ -2229,7 +2271,7 @@ document.getElementById('back-btn').addEventListener('click', async (e) => {
   }
   
   // Close sidebar
-  sidebar.classList.remove('open');
+  closeDrawer();
 });
 
 
@@ -6208,6 +6250,13 @@ function showVaultPrompt() {
     '<button type="button" id="vault-load">Load notes</button>' +
     '<button type="button" id="vault-skip" aria-label="Dismiss">Not now</button>';
   document.body.appendChild(bar);
+  // The update toast may already be sitting in this slot; lift it clear so the
+  // buttons below stay tappable whichever of the two appears first.
+  const toast = document.getElementById('sw-update-toast');
+  if (toast) {
+    toast.style.bottom =
+      'calc(' + (76 + bar.getBoundingClientRect().height + 26) + 'px + env(safe-area-inset-bottom, 0px))';
+  }
   bar.querySelector('#vault-load').addEventListener('click', (e) => loadStarterVault(e.currentTarget));
   bar.querySelector('#vault-skip').addEventListener('click', () => {
     localStorage.setItem(VAULT_DISMISSED_KEY, '1');
@@ -6339,6 +6388,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // registered with a relative URL so it works whatever path the app is served
   // from. When a new version is installed, the user is shown a Refresh prompt
   // instead of being silently stranded on an old build.
+  // Notes live in this origin's storage, which the browser treats as evictable
+  // by default and may clear under device storage pressure. Asking for
+  // persistence marks the origin as one the user would not expect to lose.
+  // Best-effort: the browser may decline, and nothing here depends on it.
+  if (navigator.storage && typeof navigator.storage.persist === 'function') {
+    navigator.storage.persisted()
+      .then((already) => (already ? true : navigator.storage.persist()))
+      .then((granted) => devLog('Persistent storage:', granted ? 'granted' : 'not granted'))
+      .catch((err) => devLog('Persistent storage request failed:', err));
+  }
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').then((reg) => {
       reg.addEventListener('updatefound', () => {
@@ -6365,18 +6425,26 @@ function showUpdateToast(reg) {
   if (document.getElementById('sw-update-toast')) return;
   const toast = document.createElement('div');
   toast.id = 'sw-update-toast';
+  // The first-run prompt owns the same bottom-centre slot. On a new install
+  // with an update pending the toast used to land on top of it and swallow the
+  // taps meant for "Load notes", so it is stacked above whatever is already
+  // there rather than over it.
+  const sitting = document.getElementById('vault-prompt');
+  const lift = sitting ? sitting.getBoundingClientRect().height + 26 : 0;
   toast.style.cssText =
-    'position:fixed;left:50%;bottom:76px;transform:translateX(-50%);' +
-    'display:flex;gap:12px;align-items:center;background:#111;color:#fff;' +
-    'padding:10px 14px;border-radius:8px;font-size:14px;z-index:100000;' +
-    'box-shadow:0 4px 16px rgba(0,0,0,.3);font-family:Inter,Roboto,Arial,sans-serif';
+    'position:fixed;left:50%;transform:translateX(-50%);' +
+    'bottom:calc(' + (76 + lift) + 'px + env(safe-area-inset-bottom, 0px));' +
+    'display:flex;gap:12px;align-items:center;' +
+    'background:var(--sheet);color:var(--ink);border:1px solid var(--rule);' +
+    'padding:10px 14px;border-radius:var(--r);font-size:14px;z-index:1250;' +
+    'box-shadow:var(--shadow-pop);font-family:var(--ui),Inter,Roboto,Arial,sans-serif';
   const label = document.createElement('span');
   label.textContent = 'A new version is available';
   const btn = document.createElement('button');
   btn.textContent = 'Refresh';
   btn.style.cssText =
-    'background:#4CAF50;color:#fff;border:none;border-radius:6px;' +
-    'padding:6px 12px;font-size:14px;cursor:pointer';
+    'background:var(--sage);color:var(--sage-on);border:none;' +
+    'border-radius:var(--r-sm);padding:6px 12px;font-size:14px;cursor:pointer';
   btn.addEventListener('click', () => {
     const worker = reg.waiting || reg.installing;
     if (worker) worker.postMessage({ type: 'SKIP_WAITING' });
@@ -7311,11 +7379,11 @@ document.getElementById('preview')?.addEventListener('click', () => setTimeout((
     css.textContent = `
 #now-strip {
   margin: 0;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-  font-family: Inter, Roboto, Arial, sans-serif;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sheet);
+  font-family: var(--ui), Inter, Roboto, Arial, sans-serif;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -7342,32 +7410,33 @@ body.lotus-events-collapsed #now-strip {
   flex: 0 0 auto;
 }
 .now-strip-actions button.active {
-  background: #111;
-  color: #fff;
-  border-color: #111;
+  background: var(--sage);
+  color: var(--sage-on);
+  border-color: var(--sage);
 }
 .now-strip-head {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #f4f6f8;
-  border-bottom: 1px solid #eee;
+  background: var(--sheet-2);
+  border-bottom: 1px solid var(--rule);
   font-size: 13px;
-  color: #333;
+  color: var(--ink);
 }
 .now-strip-head strong { font-size: 14px; letter-spacing: 0.02em; }
-.now-strip-meta { color: #666; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-strip-meta { color: var(--ink-3); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-strip-actions { display: flex; gap: 4px; align-items: center; }
 .now-strip-actions button {
-  border: 1px solid #ccc;
-  background: #fff;
-  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  color: var(--ink-2);
+  border-radius: var(--r-sm);
   padding: 2px 8px;
   font-size: 12px;
   cursor: pointer;
 }
-.now-strip-actions button:hover { background: #eee; }
+.now-strip-actions button:hover { background: var(--sheet-2); color: var(--ink); }
 .now-strip-body {
   display: block;
   flex: 1 1 auto;
@@ -7384,35 +7453,35 @@ body.lotus-events-collapsed #now-strip {
   gap: 8px;
   align-items: center;
   padding: 7px 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--rule-2);
   cursor: pointer;
   font-size: 14px;
   line-height: 1.25;
 }
 .now-row:first-child { border-top: none; }
-.now-row:hover { background: #f7fbff; }
+.now-row:hover { background: var(--sheet-2); }
 .now-row.today {
-  background: #fff8d6;
+  background: var(--amber-tint);
   font-weight: 600;
 }
-.now-row .delta { color: #888; font-size: 12px; font-variant-numeric: tabular-nums; }
-.now-row.today .delta { color: #8a6d00; }
-.now-row .doy { font-variant-numeric: tabular-nums; font-family: "Times New Roman", Times, serif; }
-.now-row .titles { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #222; }
-.now-row .titles.empty { color: #999; font-weight: 400; }
+.now-row .delta { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.now-row.today .delta { color: var(--amber); }
+.now-row .doy { font-variant-numeric: tabular-nums; font-family: var(--mono); color: var(--ink-2); }
+.now-row .titles { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.now-row .titles.empty { color: var(--ink-3); font-weight: 400; }
 .now-row .titles a.wikilink,
 .now-row .titles a.event-link {
-  color: #1a73e8;
+  color: var(--sage);
   text-decoration: none;
   font-weight: 500;
   cursor: pointer;
 }
 .now-row .titles a.wikilink:hover,
 .now-row .titles a.event-link:hover {
-  background: rgba(26,115,232,0.08);
-  border-bottom: 1px solid #1a73e8;
+  background: var(--sage-tint);
+  border-bottom: 1px solid var(--sage);
 }
-.now-row .place { color: #888; font-size: 12px; white-space: nowrap; }
+.now-row .place { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
 
 /* Tapping a row opens it: the title stops being clipped, and the ordinary
    calendar date for that day appears. Collapsed is the default so the strip
@@ -7432,15 +7501,17 @@ body.lotus-events-collapsed #now-strip {
   grid-column: 4 / -1;
   margin-top: 3px;
   font-size: 12px;
-  color: #6b6b6b;
+  color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
-.now-row.today.expanded .greg { color: #7a6100; }
+.now-row.today.expanded .greg { color: var(--amber); }
 .now-row input.now-inline {
   width: 100%;
   min-width: 0;
-  border: 1px solid #bbb;
-  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background: var(--sheet-2);
+  color: var(--ink);
+  border-radius: var(--r-sm);
   padding: 3px 6px;
   font: inherit;
   font-size: 14px;
