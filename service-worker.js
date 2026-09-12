@@ -11,7 +11,7 @@
  *
  * Bump CACHE whenever the precached asset list changes.
  */
-const CACHE = 'rythos-2026-09-12b';
+const CACHE = 'gpc364-2026-09-12c';
 
 const ASSETS = [
   './',

@@ -1,8 +1,8 @@
 {
   "packageId": "com.rythos.app",
   "host": "eafifon-ux.github.io",
-  "name": "Rythos",
-  "launcherName": "Rythos",
+  "name": "gpc364",
+  "launcherName": "gpc364",
   "display": "standalone",
   "themeColor": "#101A1F",
   "themeColorDark": "#101A1F",
@@ -17,7 +17,7 @@
   "maskableIconUrl": "https://eafifon-ux.github.io/Lotus/icon-maskable-512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
-    "path": "<local path to rythos-upload.keystore \u2014 never committed>",
+    "path": "<local path to rythos-upload.keystore — never committed>",
     "alias": "rythos-upload"
   },
   "appVersionName": "1.0.0",
